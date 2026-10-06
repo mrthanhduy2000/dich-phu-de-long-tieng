@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cài đặt & Tùy chỉnh Phụ đề</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap&subset=vietnamese" rel="stylesheet">
+    <style>
+        /* The design tokens (--primary, --bg-page, ...) are defined once, in the "Claude style" block
+           further down, with its dark-mode overrides. */
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        /* Top Banner Header */
+        .app-header {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .header-content {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+        }
+
+
+        .brand-sub {
+            font-size: 12px;
+        }
+
+        .header-badge {
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            border: 1px solid;
+        }
+
+        /* Layout Container */
+        .layout-main {
+            max-width: 1100px;
+            margin: 24px auto 80px;
+            padding: 0 24px;
+            display: grid;
+            grid-template-columns: 240px 1fr;
+        }
+
+        @media (max-width: 768px) {
+            .layout-main {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .nav-tab {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: transparent;
+            border: 1px solid transparent;
+            font-size: 14px;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.15s ease;
+        }
+
+
+
+        .nav-tab svg {
+            flex-shrink: 0;
+            width: 18px;
+            height: 18px;
+        }
+
+        /* Tab Content Panel */
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        /* Section Cards */
+        .card {
+            margin-bottom: 20px;
+        }
+
+        .card-header {
+            margin-bottom: 16px;
+        }
+
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-desc {
+            font-size: 13px;
+            margin-top: 4px;
+        }
+
+        /* Segmented Mode Selector */
+        .segmented-control {
+            display: flex;
+            padding: 4px;
+            border-radius: var(--radius-md);
+            margin-bottom: 20px;
+            border: 1px solid;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 9px 16px;
+            border: none;
+            background: transparent;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.18s ease;
+        }
+
+
+        /* Live Preview Video Mockup - 100% YouTube Authentic Player */
+        .preview-container {
+            background: #050505;
+            overflow: hidden;
+            position: relative;
+            aspect-ratio: 16 / 9;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            margin-bottom: 24px;
+            user-select: none;
+        }
+
+        /* Nature background backdrop for cinematic feel */
+        .preview-backdrop {
+            position: absolute;
+            inset: 0;
+            background-image: url('images/youtube-cinematic-bg.jpg'), url('images/example-image.png');
+            background-size: cover;
+            background-position: center;
+            opacity: 0.95;
+            filter: saturate(1.05) contrast(1.02);
+            transition: all 0.2s ease;
+        }
+
+        /* YouTube Top Header Overlay */
+        .yt-mock-top {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 10px 14px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.3) 65%, transparent 100%);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 8;
+            pointer-events: none;
+        }
+
+        .yt-mock-title-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            overflow: hidden;
+        }
+
+        .yt-mock-avatar {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: #cc0000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+        }
+
+        .yt-mock-title {
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 500;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.85);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 380px;
+            font-family: Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        .preview-tag {
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(6px);
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 4px;
+            letter-spacing: 0.4px;
+            border: 1px solid rgba(255,255,255,0.22);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+            flex-shrink: 0;
+        }
+
+        /* The Subtitle inside Preview - Snug Fit, Zero Phantom Top Spacing */
+        .preview-subtitle-box {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 86%;
+            padding: 5px 14px;
+            text-align: center;
+            z-index: 10;
+            pointer-events: none;
+            transition: bottom 0.15s ease-out, top 0.15s ease-out;
+            user-select: none;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            border-radius: 4px;
+        }
+
+        .preview-subtitle-box .orig-line {
+            font-size: 0.84em;
+            color: #e2e8f0;
+            opacity: 0.9;
+            margin: 0 0 3px 0;
+            line-height: 1.32;
+            display: block;
+            text-shadow: inherit;
+        }
+
+        .preview-subtitle-box .vi-line {
+            font-size: 1em;
+            line-height: 1.34;
+            display: block;
+            text-shadow: inherit;
+            margin: 0;
+        }
+
+        /* YouTube Bottom Controls Bar Overlay */
+        .yt-mock-bottom {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 70%, transparent 100%);
+            padding: 0 12px 6px 12px;
+            z-index: 8;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .yt-mock-progress-bar {
+            width: 100%;
+            height: 3px;
+            background: rgba(255,255,255,0.25);
+            position: relative;
+            border-radius: 2px;
+        }
+
+        .yt-mock-progress-buffer {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 58%;
+            background: rgba(255,255,255,0.45);
+            border-radius: 2px;
+        }
+
+        .yt-mock-progress-current {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 32%;
+            background: #ff0000;
+            border-radius: 2px;
+        }
+
+        .yt-mock-progress-scrubber {
+            position: absolute;
+            left: 32%;
+            top: 50%;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff0000;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 3px rgba(0,0,0,0.6);
+        }
+
+        .yt-mock-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: #ffffff;
+            font-size: 12px;
+        }
+
+        .yt-mock-controls-left, .yt-mock-controls-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .yt-mock-btn {
+            background: transparent;
+            border: none;
+            color: #ffffff;
+            padding: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0.9;
+        }
+
+        .yt-mock-time {
+            font-size: 11px;
+            color: #ddd;
+            font-family: Roboto, Arial, sans-serif;
+            margin-left: 2px;
+        }
+
+        .yt-mock-cc-badge {
+            background: transparent;
+            border: 1.5px solid #ffffff;
+            color: #ffffff;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 1px 3px;
+            border-radius: 2px;
+            line-height: 1;
+            display: inline-block;
+            position: relative;
+        }
+
+        .yt-mock-cc-badge::after {
+            content: "";
+            position: absolute;
+            bottom: -3px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #ff0000;
+        }
+
+        /* Form Controls */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 18px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-label {
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .form-label span.value-pill {
+            font-size: 12px;
+            font-weight: 500;
+            padding: 1px 7px;
+            border-radius: 4px;
+        }
+
+        .form-select, .form-input {
+            width: 100%;
+            padding: 9px 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            color: #0f172a;
+            background: #ffffff;
+            outline: none;
+            transition: border-color 0.15s ease;
+        }
+
+        .form-select:focus, .form-input:focus {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.15);
+        }
+
+        .form-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            outline: none;
+            margin: 6px 0;
+            cursor: pointer;
+        }
+
+        /* Color Palette & Custom Picker */
+        .color-palette {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 4px;
+        }
+
+        .color-dot {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: transform 0.12s, border-color 0.12s;
+            position: relative;
+        }
+
+        .color-dot:hover {
+            transform: scale(1.12);
+        }
+
+        .color-dot.active {
+            border-color: var(--primary);
+            transform: scale(1.12);
+        }
+
+        .color-dot-custom {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            overflow: hidden;
+            border: 1px solid #cbd5e1;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .color-dot-custom input[type="color"] {
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .field-hint {
+            font-size: 12px;
+            line-height: 1.45;
+        }
+        .field-hint.warn { color: #b45309; }
+
+        .inline-color {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .inline-color input[type="color"] {
+            width: 42px;
+            height: 34px;
+            padding: 2px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: #fff;
+            cursor: pointer;
+        }
+
+        /* Bottom Sticky Action Bar */
+        .bottom-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 12px;
+            z-index: 90;
+        }
+
+        .btn {
+            padding: 9px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid transparent;
+        }
+
+
+
+
+
+        .status-msg {
+            font-size: 13px;
+            font-weight: 500;
+            margin-right: auto;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .status-msg.show {
+            opacity: 1;
+        }
+
+        /* Textarea & Lists for Glossary */
+        textarea.glossary-box {
+            width: 100%;
+            min-height: 130px;
+            padding: 10px 12px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            resize: vertical;
+        }
+
+
+        .example-box {
+            border: 1px solid;
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            font-size: 12px;
+            font-family: ui-monospace, SFMono-Regular, monospace;
+            margin-bottom: 8px;
+            white-space: pre-line;
+        }
+
+        .group-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            padding: 7px 0;
+            cursor: pointer;
+        }
+
+        .group-count {
+            color: var(--text-sub);
+            font-size: 12px;
+            margin-left: auto;
+        }
+
+        /* ============================================================
+           GIAO DIỆN KIỂU CLAUDE (1.1.9): nền ngà, chữ có chân cho tiêu đề,
+           màu nhấn cam đất, viền mảnh, ít bóng đổ; tự đổi sang tối theo máy.
+           Chỉ định nghĩa lại biến và lớp hiển thị, không đổi cấu trúc trang.
+           ============================================================ */
+        :root {
+            --primary: #c96442;
+            --primary-hover: #b5573a;
+            --primary-light: #f6e9e2;
+            --primary-border: #e7c9ba;
+            --accent-blue: #c96442;
+            --bg-page: #f5f4ed;
+            --bg-card: #fffffe;
+            --bg-soft: #efeee6;
+            --text-main: #141413;
+            --text-sub: #6f6d66;
+            --border: #e3e0d4;
+            --border-focus: #c96442;
+            --success: #4f7a3a;
+            --radius-sm: 8px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --shadow-card: none;
+            --shadow-md: 0 2px 10px rgba(20, 20, 19, 0.06);
+            --font-serif: "Source Serif 4", "Tiempos Text", "Iowan Old Style", Georgia, "Noto Serif", serif;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color-scheme: light;
+        }
+        /* MÀU TỐI: theo máy, hoặc do người dùng tự chọn (data-theme="dark") */
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+                --primary: #d97757;
+                --primary-hover: #e08a6d;
+                --primary-light: rgba(217, 119, 87, 0.14);
+                --primary-border: rgba(217, 119, 87, 0.45);
+                --accent-blue: #d97757;
+                --bg-page: #262624;
+                --bg-card: #30302e;
+                --bg-soft: #3a3a37;
+                --text-main: #f5f4ed;
+                --text-sub: #a8a59b;
+                --border: #45443f;
+                --success: #8fbf73;
+                --shadow-md: 0 2px 12px rgba(0, 0, 0, 0.35);
+                color-scheme: dark;
+            }
+        }
+        :root[data-theme="dark"] {
+                --primary: #d97757;
+                --primary-hover: #e08a6d;
+                --primary-light: rgba(217, 119, 87, 0.14);
+                --primary-border: rgba(217, 119, 87, 0.45);
+                --accent-blue: #d97757;
+                --bg-page: #262624;
+                --bg-card: #30302e;
+                --bg-soft: #3a3a37;
+                --text-main: #f5f4ed;
+                --text-sub: #a8a59b;
+                --border: #45443f;
+                --success: #8fbf73;
+                --shadow-md: 0 2px 12px rgba(0, 0, 0, 0.35);
+                color-scheme: dark;
+            }
+        body { font-family: var(--font-sans); background: var(--bg-page); color: var(--text-main); -webkit-font-smoothing: antialiased; }
+        a { color: var(--primary); }
+        ::selection { background: var(--primary-light); }
+
+        .app-header { background: var(--bg-page); border-bottom: 1px solid var(--border); }
+        .brand-icon { background: var(--primary); box-shadow: none; border-radius: 9px; }
+        .brand-title { font-family: var(--font-serif); font-weight: 600; font-size: 19px; letter-spacing: -0.01em; color: var(--text-main); }
+        .brand-sub { color: var(--text-sub); }
+        .header-badge { background: transparent; color: var(--text-sub); border-color: var(--border); font-weight: 500; }
+
+        .layout-main { gap: 36px; }
+        /* Danh mục đứng yên khi cuộn: CHỈ khi trang có 2 cột (khổ hẹp 1 cột thì nằm trên cùng, không đè nội dung) */
+        @media (min-width: 769px) { .sidebar { position: sticky; top: 84px; align-self: start; } }
+        .nav-tab { color: var(--text-sub); border-radius: 8px; padding: 9px 12px; font-weight: 500; }
+        .nav-tab:hover { background: var(--bg-soft); color: var(--text-main); }
+        .nav-tab.active { background: var(--bg-soft); color: var(--text-main); border-color: transparent; box-shadow: none; font-weight: 600; }
+        .nav-tab.active svg { color: var(--primary); }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: none; padding: 24px 26px; }
+        .card-title { font-family: var(--font-serif); font-size: 18px; font-weight: 600; letter-spacing: -0.005em; color: var(--text-main) !important; }
+        .card-title svg { color: var(--primary); }
+        .card-desc, .field-hint { color: var(--text-sub); }
+        .field-hint.ok { color: var(--success); }
+        .form-label { color: var(--text-main); font-weight: 500; }
+        .form-label span.value-pill { background: var(--primary-light); color: var(--primary); border-color: transparent; }
+
+        .form-select, .form-input, textarea.glossary-box {
+            background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border); border-radius: var(--radius-sm);
+        }
+        .form-select:focus, .form-input:focus, textarea.glossary-box:focus {
+            border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); outline: none;
+        }
+        .form-slider, input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
+        .is-off { display: none !important; }
+        .ver-item { border-top: 1px solid var(--border); padding: 16px 0; }
+        .ver-item:first-child { border-top: none; padding-top: 4px; }
+        .ver-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+        .ver-num { font-family: var(--font-sans); font-size: 12px; font-weight: 700; color: var(--primary);
+            background: var(--primary-light); border: 1px solid var(--primary-border); border-radius: 999px; padding: 2px 10px; }
+        .ver-name { font-family: var(--font-serif); font-size: 15px; color: var(--text-main); }
+        .ver-time { font-size: 11.5px; color: var(--text-sub); margin-left: auto; }
+        .ver-list { margin: 10px 0 0; padding-left: 18px; color: var(--text-sub); font-size: 13px; line-height: 1.6; }
+        .ver-list li { margin-bottom: 4px; }
+        .ver-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12.5px; }
+        .ver-table th, .ver-table td { border: 1px solid var(--border); padding: 7px 10px; text-align: left; vertical-align: top; }
+        .ver-table th { background: var(--bg-soft); color: var(--text-main); font-weight: 600; }
+        .ver-table td { color: var(--text-sub); }
+        .ver-empty { color: var(--text-sub); font-size: 13px; padding: 12px 0; }
+        /* the grid column must not grow to a wide table's width: the table scrolls inside instead */
+        .content-area { min-width: 0; }
+        .cost-scroll { overflow-x: auto; margin-top: 10px; }
+        .cost-scroll .ver-table { margin-top: 6px; min-width: 460px; }
+        .ver-table td.num, .ver-table th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .cost-cap { font-size: 12.5px; color: var(--text-main); font-weight: 600; margin-top: 16px; }
+        .cost-currency { margin-bottom: 16px; max-width: 420px; }
+        .cost-currency .mode-btn { padding: 7px 12px; font-size: 13px; }
+        .cost-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+        .cost-kpi { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; background: var(--bg-card); min-width: 0; }
+        .cost-kpi-label { font-size: 12px; color: var(--text-sub); }
+        .cost-kpi-value { font-family: var(--font-serif); font-size: 21px; color: var(--text-main); margin-top: 4px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+        .cost-kpi-sub { font-size: 11.5px; color: var(--text-sub); margin-top: 2px; font-variant-numeric: tabular-nums; }
+        .cost-meter { height: 6px; border-radius: 3px; background: var(--bg-soft); overflow: hidden; margin-top: 12px; }
+        .cost-meter i { display: block; height: 100%; background: var(--success); border-radius: 3px; }
+        .cost-meter.warn i, .cost-meter.over i { background: var(--primary); }
+        .cost-money-sub { display: block; font-size: 11px; color: var(--text-sub); }
+        .cost-section { grid-column: 1 / -1; font-size: 13px; font-weight: 600; color: var(--text-main); margin-top: 8px; padding-top: 14px; border-top: 1px solid var(--border); }
+        .ed-video-title { color: var(--text-main); text-decoration: none; }
+        .ed-video-title:hover { color: var(--primary); text-decoration: underline; }
+        .ed-line { display: grid; grid-template-columns: 52px 1fr auto; gap: 6px 12px; align-items: start; padding: 10px 0; border-top: 1px dashed var(--border); }
+        .ed-line:first-of-type { border-top: none; }
+        .ed-time { font-size: 12px; color: var(--text-sub); font-variant-numeric: tabular-nums; padding-top: 9px; }
+        .ed-machine { grid-column: 2 / 4; font-size: 12.5px; color: var(--text-sub); text-decoration: line-through; text-decoration-color: rgba(127,127,127,.5); }
+        .ed-actions { display: flex; gap: 8px; margin-top: 8px; }
+        .ed-small { padding: 6px 12px; font-size: 12.5px; }
+        .preview-dub-badge { position: absolute; top: 46px; left: 14px; z-index: 3; padding: 4px 10px; border-radius: 4px;
+            background: rgba(0,0,0,.65); color: #fff; font-family: var(--font-sans); font-size: 12px; letter-spacing: .2px; }
+        .preview-dub-badge[hidden] { display: none; }
+        .theme-pick { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-soft); }
+        .theme-btn { padding: 4px 11px; border: none; border-radius: 999px; background: none; color: var(--text-sub);
+            font-family: var(--font-sans); font-size: 11.5px; cursor: pointer; }
+        .theme-btn[aria-pressed="true"] { background: var(--bg-card); color: var(--text-main); font-weight: 600; box-shadow: var(--shadow-md); }
+        .btn:focus-visible, .nav-tab:focus-visible, .mode-btn:focus-visible,
+        .color-dot:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+            outline: 2px solid var(--primary); outline-offset: 2px;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+        }
+
+        .segmented-control { background: var(--bg-soft); border-color: transparent; }
+        .mode-btn { color: var(--text-sub); }
+        .mode-btn.active { background: var(--bg-card); color: var(--text-main); box-shadow: 0 1px 2px rgba(20, 20, 19, 0.08); }
+
+        .btn { border-radius: var(--radius-sm); font-weight: 500; }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-hover); box-shadow: none; }
+        .btn-secondary { background: var(--bg-card); color: var(--text-main); border-color: var(--border); }
+        .btn-secondary:hover { background: var(--bg-soft); color: var(--text-main); }
+
+        .bottom-bar { background: var(--bg-page); border-top: 1px solid var(--border); box-shadow: none; }
+        .status-msg { color: var(--success); }
+        .example-box { background: var(--bg-soft); border-color: var(--border); color: var(--text-sub); }
+        .color-dot.active { box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 4px var(--primary); }
+        .preview-container { border-radius: 12px; box-shadow: var(--shadow-md); }
+        .group-row { color: var(--text-main); }
+        .cst-note { margin-top: 8px; padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-soft); color: var(--text-main); }
+        .cst-note.ok { border-color: color-mix(in srgb, var(--success) 55%, transparent); background: color-mix(in srgb, var(--success) 10%, transparent); }
+        .cst-note.err { border-color: color-mix(in srgb, #c0392b 55%, transparent); background: color-mix(in srgb, #c0392b 9%, transparent); }
+        .cst-note-title { font-weight: 600; font-size: 13px; }
+        .cst-note-body { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
+        .cst-stale-warning { border-color: var(--primary) !important; background: var(--primary-light) !important; }
+        .cst-stale-warning button { background: var(--primary) !important; }
+    </style>
+    <script src="chrome-shim.js"></script>
+    <script src="theme.js"></script>
+</head>
+
+<body>
+    <!-- Top Header -->
+    <header class="app-header">
+        <div class="header-content">
+            <div class="brand">
+                <div class="brand-icon">
+                    <span style="width:22px;height:22px;display:flex;">
+                        <svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" aria-hidden="true">
+                            <path d="M4.2 4.6h15.6c1.55 0 2.8 1.25 2.8 2.8v7.9c0 1.55-1.25 2.8-2.8 2.8h-6.6l-4.3 3.2c-.62.46-1.5.02-1.5-.75V18.1H4.2c-1.55 0-2.8-1.25-2.8-2.8V7.4c0-1.55 1.25-2.8 2.8-2.8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path>
+                            <g transform="translate(12 11.35) scale(0.42) translate(-12 -12)">
+                                <path d="M12 2C12.4 7.2 16.8 11.6 22 12C16.8 12.4 12.4 16.8 12 22C11.6 16.8 7.2 12.4 2 12C7.2 11.6 11.6 7.2 12 2Z" fill="currentColor"></path>
+                            </g>
+                        </svg>
+                    </span>
+                </div>
+                <div>
+                    <h1 class="brand-title">Dịch Phụ Đề & Lồng Tiếng AI</h1>
+                    <p class="brand-sub">YouTube & Coursera</p>
+                </div>
+            </div>
+            <div class="theme-pick" role="group" aria-label="Giao diện sáng tối">
+                <button type="button" class="theme-btn" data-theme-set="light" title="Luôn dùng giao diện sáng">Sáng</button>
+                <button type="button" class="theme-btn" data-theme-set="dark" title="Luôn dùng giao diện tối">Tối</button>
+                <button type="button" class="theme-btn" data-theme-set="auto" title="Theo cài đặt sáng/tối của máy">Theo máy</button>
+            </div>
+            <span class="header-badge" title="Cập nhật lúc 16:34 06/10/2026">Phiên bản v2.4.9 · cập nhật 16:34 06/10/2026</span>
+        </div>
+    </header>
+
+    <!-- Main 2-Column Content -->
+    <main class="layout-main">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <button class="nav-tab active" data-tab="tab-subtitle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                    <path d="M6 15h4M14 15h4M6 11h12"></path>
+                </svg>
+                Kiểu phụ đề
+            </button>
+            <button class="nav-tab" data-tab="tab-gemini">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l2.4 6.8L21 11.2l-5.6 4.8 1.8 7-6.2-4.2-6.2 4.2 1.8-7L1 11.2l6.6-2.4z"/>
+                </svg>
+                Gemini AI & Model
+            </button>
+            <button class="nav-tab" data-tab="tab-glossary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                </svg>
+                Từ điển thuật ngữ
+            </button>
+            <button class="nav-tab" data-tab="tab-dubbing">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                </svg>
+                Lồng tiếng & Giọng đọc
+            </button>
+            <button class="nav-tab" data-tab="tab-edits">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 20h9"></path>
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                </svg>
+                Phụ đề đã sửa
+            </button>
+            <button class="nav-tab" data-tab="tab-history">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="9"></circle>
+                    <polyline points="12 7 12 12 15.5 14"></polyline>
+                </svg>
+                Lịch sử phiên bản
+            </button>
+        </aside>
+
+        <!-- Content Area -->
+        <section class="content-area">
+
+            <!-- TAB 1: KIỂU PHỤ ĐỀ (The main focus requested!) -->
+            <div id="tab-subtitle" class="tab-panel active">
+                
+                <!-- Segmented Mode Control -->
+                <div class="segmented-control">
+                    <button type="button" id="subModeSingle" class="mode-btn active">Chỉ bản dịch</button>
+                    <button type="button" id="subModeDual" class="mode-btn">Song ngữ</button>
+                </div>
+
+                <!-- Live Interactive Subtitle Preview Box (100% YouTube Authentic Mockup) -->
+                <div class="preview-container" id="previewContainer">
+                    <div class="preview-backdrop"></div>
+
+                    <!-- YouTube Top Bar Overlay -->
+                    <div class="yt-mock-top">
+                        <div class="yt-mock-title-group">
+                            <div class="yt-mock-avatar">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="white"><path d="M8 5v14l11-7z"/></svg>
+                            </div>
+                            <span class="yt-mock-title">Bài giảng 3: Dữ liệu thay đổi cách ra quyết định</span>
+                        </div>
+                        <span class="preview-tag">Xem trước</span>
+                    </div>
+
+                    <!-- Nhãn lồng tiếng mô phỏng: đúng như hiện trên video thật (hiện 3 giây rồi mờ) -->
+                    <div class="preview-dub-badge" id="previewDubBadge" hidden>Lồng tiếng: Mỹ Duyên</div>
+                    <!-- Subtitle Box (Snug fit, zero phantom top space) -->
+                    <div class="preview-subtitle-box" id="previewBox"><span class="orig-line" id="previewOrigLine" style="display: none;">But for me personally, the most important thing is consistency.</span><span class="vi-line" id="previewViLine">Nhưng với cá nhân tôi,<br>điều quan trọng nhất là sự nhất quán.</span></div>
+
+                    <!-- YouTube Bottom Controls Bar Overlay -->
+                    <div class="yt-mock-bottom">
+                        <div class="yt-mock-progress-bar">
+                            <div class="yt-mock-progress-buffer"></div>
+                            <div class="yt-mock-progress-current"></div>
+                            <div class="yt-mock-progress-scrubber"></div>
+                        </div>
+                        <div class="yt-mock-controls">
+                            <div class="yt-mock-controls-left">
+                                <button type="button" class="yt-mock-btn" title="Tạm dừng">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="white"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                                </button>
+                                <button type="button" class="yt-mock-btn" title="Video tiếp theo">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="white"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                                </button>
+                                <button type="button" class="yt-mock-btn" title="Âm lượng">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="white"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+                                </button>
+                                <span class="yt-mock-time">04:18 / 24:50</span>
+                            </div>
+                            <div class="yt-mock-controls-right">
+                                <button type="button" class="yt-mock-btn" title="Phụ đề (Đang bật)">
+                                    <span class="yt-mock-cc-badge">CC</span>
+                                </button>
+                                <button type="button" class="yt-mock-btn" title="Cài đặt">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="white"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                                </button>
+                                <button type="button" class="yt-mock-btn" title="Chế độ rạp chiếu phim">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="white"><path d="M19 6H5c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 10H5V8h14v8z"/></svg>
+                                </button>
+                                <button type="button" class="yt-mock-btn" title="Toàn màn hình">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="white"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card: Vị trí -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Vị trí</h2>
+                        <p class="card-desc">Tùy chỉnh vị trí hiển thị dòng phụ đề trên khung phát video.</p>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label" for="subPosition">Vị trí</label>
+                            <select id="subPosition" class="form-select">
+                                <option value="bottom" selected>Dưới (Mặc định)</option>
+                                <option value="top">Trên</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="subOffset">
+                                Khoảng cách lề (%)
+                                <span class="value-pill" id="subOffsetVal">1%</span>
+                            </label>
+                            <input type="range" id="subOffset" class="form-slider" min="0" max="20" value="1">
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label class="group-row" style="padding: 0;">
+                                <input type="checkbox" id="subPinBottom">
+                                <span>Luôn giữ sát lề đã chọn (YouTube)</span>
+                            </label>
+                            <div class="field-hint">Bật: phụ đề không bao giờ dịch lên khi thanh điều khiển hiện ra (thanh có thể che tạm phụ đề lúc rê chuột). Tắt: phụ đề chỉ nhích lên vừa đủ khi bị thanh điều khiển che.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card: Kiểu bản dịch (Typography) -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Kiểu bản dịch</h2>
+                        <p class="card-desc">Cỡ chữ, phông chữ, màu sắc và hiệu ứng viền chữ.</p>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label" for="subFontFamily">Phông chữ</label>
+                            <select id="subFontFamily" class="form-select"></select>
+                            <div class="field-hint" id="fontStatus">Phông web được tải kèm bộ dấu tiếng Việt khi bạn chọn.</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="subFontSize">Cỡ chữ</label>
+                            <select id="subFontSize" class="form-select">
+                                <option value="60">60%</option>
+                                <option value="70">70%</option>
+                                <option value="80">80%</option>
+                                <option value="90">90%</option>
+                                <option value="100" selected>100% (Khuyên dùng)</option>
+                                <option value="110">110%</option>
+                                <option value="120">120%</option>
+                                <option value="130">130%</option>
+                                <option value="140">140%</option>
+                                <option value="150">150%</option>
+                                <option value="170">170%</option>
+                                <option value="190">190%</option>
+                                <option value="210">210%</option>
+                                <option value="240">240%</option>
+                                <option value="270">270%</option>
+                            </select>
+                            <div class="field-hint">Tự co giãn theo khung video. Chữ to đến mức một dòng không vừa khung thì phụ đề được ngắt lại theo cú pháp, không tràn.</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="subFontWeight">Độ dày phông chữ</label>
+                            <select id="subFontWeight" class="form-select">
+                                <option value="300">300 (Mỏng)</option>
+                                <option value="400">400 (Bình thường)</option>
+                                <option value="500" selected>500 (Vừa)</option>
+                                <option value="600">600 (Bán đậm)</option>
+                                <option value="700">700 (Đậm)</option>
+                                <option value="800">800 (Rất đậm)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="subLineHeight">Giãn dòng</label>
+                            <select id="subLineHeight" class="form-select">
+                                <option value="1.25">Gọn (1,25)</option>
+                                <option value="1.38" selected>Chuẩn cho dấu tiếng Việt (1,38)</option>
+                                <option value="1.5">Thoáng (1,5)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="subStrokeStyle">Kiểu viền chữ</label>
+                            <select id="subStrokeStyle" class="form-select"></select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="subStrokeColor">Màu viền / bóng</label>
+                            <div class="inline-color">
+                                <input type="color" id="subStrokeColor" value="#000000">
+                                <span class="field-hint">Viền tính theo tỷ lệ cỡ chữ nên luôn cân đối.</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label class="form-label">Màu chữ bản dịch</label>
+                            <div class="color-palette" id="fontColorPalette">
+                                <button type="button" class="color-dot active" style="background:#ffffff;" data-color="#ffffff" title="Trắng"></button>
+                                <button type="button" class="color-dot" style="background:#ffeb3b;" data-color="#ffeb3b" title="Vàng tươi"></button>
+                                <button type="button" class="color-dot" style="background:#00e5ff;" data-color="#00e5ff" title="Xanh ngọc"></button>
+                                <button type="button" class="color-dot" style="background:#69f0ae;" data-color="#69f0ae" title="Xanh lá"></button>
+                                <button type="button" class="color-dot" style="background:#ff9800;" data-color="#ff9800" title="Cam"></button>
+                                <button type="button" class="color-dot" style="background:#000000; border: 1px solid #94a3b8;" data-color="#000000" title="Đen"></button>
+                                <div class="color-dot-custom" id="fontColorCustom" title="Chọn màu tùy ý">
+                                    <input type="color" id="subFontColorPicker" value="#ffffff">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="subOrigScale">Cỡ dòng gốc (song ngữ)</label>
+                            <select id="subOrigScale" class="form-select">
+                                <option value="65">65%</option>
+                                <option value="72">72%</option>
+                                <option value="80" selected>80% (Khuyên dùng)</option>
+                                <option value="90">90%</option>
+                                <option value="100">100% (Bằng bản dịch)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="subOrigColor">Màu dòng gốc (song ngữ)</label>
+                            <div class="inline-color">
+                                <input type="color" id="subOrigColor" value="#d4d4d8">
+                                <span class="field-hint">Nên nhạt hơn bản dịch để mắt ưu tiên đọc tiếng Việt.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card: Nền chung -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Nền chung</h2>
+                        <p class="card-desc">Màu nền hộp phụ đề, độ mờ nền và góc bo tròn.</p>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label" for="subBgColor">Màu nền</label>
+                            <select id="subBgColor" class="form-select">
+                                <option value="#000000" selected>Màu đen (#000000)</option>
+                                <option value="#1e293b">Xám đậm (#1e293b)</option>
+                                <option value="#0f172a">Xanh đen (#0f172a)</option>
+                                <option value="transparent">Trong suốt</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="subBgOpacity">
+                                Độ mờ nền (%)
+                                <span class="value-pill" id="subBgOpacityVal">75%</span>
+                            </label>
+                            <input type="range" id="subBgOpacity" class="form-slider" min="0" max="100" step="5" value="75">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="subBorderRadius">Bo góc nền</label>
+                            <select id="subBorderRadius" class="form-select">
+                                <option value="0">0px (Vuông góc)</option>
+                                <option value="4">4px</option>
+                                <option value="6" selected>6px (Mặc định)</option>
+                                <option value="8">8px</option>
+                                <option value="12">12px</option>
+                                <option value="16">16px</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: GEMINI AI & MODEL -->
+            <div id="tab-gemini" class="tab-panel">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Chế độ sử dụng</h2>
+                        <p class="card-desc">Cân bằng giữa chất lượng và chi phí Gemini.</p>
+                    </div>
+                    <div class="form-group">
+                        <select id="costMode" class="form-select">
+                            <option value="premium">Cao cấp: dịch kỹ + giọng AI</option>
+                            <option value="balanced" selected>Cân bằng (khuyên dùng)</option>
+                            <option value="economy">Tiết kiệm: giọng hệ thống miễn phí</option>
+                            <option value="subtitles">Chỉ phụ đề</option>
+                        </select>
+                        <div class="field-hint" id="costModeDesc"></div>
+                    </div>
+                    <label class="group-row" style="margin-top: 14px; font-weight: 600;">
+                        <input type="checkbox" id="autoTranslate" checked>
+                        <span>Tự động dịch sang tiếng Việt</span>
+                    </label>
+                    <div class="field-hint">Phụ đề đã là tiếng Việt thì bỏ qua.</div>
+                    <label class="group-row" style="margin-top: 14px; font-weight: 600;">
+                        <input type="checkbox" id="skipSameLang" checked>
+                        <span>Bỏ qua dịch khi video đã có phụ đề tiếng Việt</span>
+                    </label>
+                    <div class="field-hint">Bật: video đã có phụ đề tiếng Việt thì dùng luôn, không dịch, không tốn phí. Tắt: vẫn dịch từ phụ đề gốc (thường là tiếng Anh), hữu ích khi phụ đề Việt có sẵn là bản dịch máy kém.</div>
+                    <label class="group-row" style="margin-top: 14px; font-weight: 600;">
+                        <input type="checkbox" id="autoDub" checked>
+                        <span>Tự động lồng tiếng Việt khi mở video</span>
+                    </label>
+                    <div class="field-hint">Phím tắt: <b>Alt+S</b> bật/tắt phụ đề, <b>Alt+D</b> bật/tắt lồng tiếng, <b>Alt+Shift+V</b> mở bảng điều khiển. Đổi phím tại trang chrome://extensions/shortcuts.</div>
+
+                    <label class="group-row">
+                        <input type="checkbox" id="perCueMode">
+                        <span>Dịch từng dòng phụ đề riêng (khớp mốc thời gian tuyệt đối, câu dịch kém liền mạch hơn)</span>
+                    </label>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title" style="color: var(--accent-blue);">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2l2.4 6.8L21 11.2l-5.6 4.8 1.8 7-6.2-4.2-6.2 4.2 1.8-7L1 11.2l6.6-2.4z"/>
+                            </svg>
+                            Trí tuệ nhân tạo Gemini AI
+                        </h2>
+                        <p class="card-desc">Dịch theo ngữ cảnh nhiều câu, tự nhiên hơn.</p>
+                    </div>
+
+                    <label class="group-row" style="margin-bottom: 16px; font-weight: 600;">
+                        <input type="checkbox" id="optUseAi" checked>
+                        <span>Kích hoạt Dịch thông minh với Gemini AI</span>
+                    </label>
+
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label class="form-label" for="geminiApiKeyInput">Gemini API Key (Tùy chọn):</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="password" id="geminiApiKeyInput" class="form-input" placeholder="Dán API key AIzaSy... (nếu có)">
+                            <button type="button" class="btn btn-secondary" id="testAiKeyBtn" style="white-space: nowrap;">Kiểm tra Key</button>
+                        </div>
+                        <p class="card-desc" style="font-size: 12px; margin-top: 4px;">
+                            Lấy khóa miễn phí tại <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent-blue);">Google AI Studio</a>. Khóa chỉ lưu trong trình duyệt này.
+                        </p>
+                        <div id="aiKeyStatus" style="font-size: 13px; margin-top: 6px; font-weight: 500;"></div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label class="form-label" for="geminiModelSelect">Model dịch thường (dùng cho hầu hết phụ đề):</label>
+                        <!-- Danh sách model dựng từ danh mục duy nhất trong cost-policy.js -->
+                        <select id="geminiModelSelect" class="form-select">
+                            <option value="custom">-- Nhập tên Model tùy chỉnh khác --</option>
+                        </select>
+                        <div class="field-hint" id="modelEffective"></div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label class="form-label" for="geminiStrongModel">Model mạnh (chỉ cho câu khó, ở chế độ Cao cấp):</label>
+                        <select id="geminiStrongModel" class="form-select"></select>
+                        <div class="field-hint">Chỉ dùng cho câu khó.</div>
+                    </div>
+
+                    <div class="form-group" id="customModelRow" style="display: none; margin-bottom: 14px;">
+                        <label class="form-label" for="customModelInput">Tên Model tùy chỉnh:</label>
+                        <input type="text" id="customModelInput" class="form-input" placeholder="Tên model chính xác theo tài liệu Gemini API">
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Sao lưu cài đặt</h2>
+                        <p class="card-desc">Lưu toàn bộ cài đặt, danh sách thuật ngữ và các dòng phụ đề đã sửa ra một tệp. Gỡ tiện ích rồi cài lại sẽ mất hết những thứ này; có tệp sao lưu thì nhập lại là xong.</p>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label class="group-row" style="font-weight: 600;">
+                                <input type="checkbox" id="backupIncludeKey" data-no-save="1" checked>
+                                <span>Kèm Gemini API Key trong tệp</span>
+                            </label>
+                            <div class="field-hint">Khóa được ghi dạng chữ thường trong tệp: đừng gửi tệp cho người khác hay đưa lên mạng. Bỏ chọn nếu chỉ muốn sao lưu phần còn lại.</div>
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1; flex-direction: row; gap: 8px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-secondary" id="backupExport">Xuất tệp sao lưu</button>
+                            <button type="button" class="btn btn-secondary" id="backupImport">Nhập từ tệp…</button>
+                            <input type="file" id="backupFile" accept=".json,application/json" data-no-save="1" hidden>
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <div class="field-hint" id="backupStatus" role="status"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Bộ nhớ đệm</h2>
+                        <p class="card-desc">Lưu trên máy để xem lại không tốn thêm phí.</p>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <div class="form-label">Bản dịch</div>
+                            <div class="field-hint" id="cacheTr">Đang đọc...</div>
+                        </div>
+                        <div class="form-group">
+                            <div class="form-label">Audio lồng tiếng</div>
+                            <div class="field-hint" id="cacheAudio">Đang đọc...</div>
+                        </div>
+                        <div class="form-group">
+                            <div class="form-label">Video YouTube đã lưu</div>
+                            <div class="field-hint" id="cacheVideos">Đang đọc...</div>
+                        </div>
+                        <div class="form-group">
+                            <div class="form-label">Rà soát chất lượng</div>
+                            <div class="field-hint" id="cacheReview">Đang đọc...</div>
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1; flex-direction: row; gap: 8px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-secondary" id="clearTrCache">Xóa bản dịch đã lưu</button>
+                            <button type="button" class="btn btn-secondary" id="clearAudioCache">Xóa audio đã lưu</button>
+                            <button type="button" class="btn btn-secondary" id="clearAllCache">Xóa tất cả</button>
+                            <button type="button" class="btn btn-secondary" id="clearReviewedVideos">Xóa video đã rà soát</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Chi phí &amp; ngân sách (ước tính)</h2>
+                        <p class="card-desc">Tiện ích cộng số token mà Google tính tiền cho từng lượt dịch, kể cả lượt hỏng phải gửi lại và lượt quá giờ, rồi nhân với bảng giá. Số liệu chỉ lưu trên máy này; hóa đơn thật xem ở Google AI Studio.</p>
+                    </div>
+                    <div class="segmented-control cost-currency" role="group" aria-label="Đơn vị tiền hiển thị">
+                        <button type="button" class="mode-btn" data-currency="vnd">VNĐ</button>
+                        <button type="button" class="mode-btn" data-currency="usd">USD</button>
+                        <button type="button" class="mode-btn" data-currency="both">VNĐ và USD</button>
+                    </div>
+                    <div id="costKpis" class="cost-kpis"></div>
+                    <div id="costMeter" class="cost-meter" hidden><i></i></div>
+                    <div class="field-hint" id="costSummary" style="margin-top: 10px;">Đang đọc...</div>
+                    <div id="costTables"></div>
+                    <div class="field-hint" id="costVideos" style="margin-top: 10px;"></div>
+                    <div class="form-grid" style="margin-top: 8px;">
+                        <div class="cost-section">Quy đổi sang tiền Việt</div>
+                        <div class="form-group" id="costRateGroup">
+                            <label class="form-label" for="costUsdVnd">Tỷ giá (đồng cho 1 USD)</label>
+                            <input type="number" id="costUsdVnd" class="form-input" min="5000" max="100000" step="10">
+                            <div class="field-hint" id="costRateHint"></div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="costExtraPct">Thuế và phí cộng thêm (%)</label>
+                            <input type="number" id="costExtraPct" class="form-input" min="0" max="50" step="0.1">
+                            <div class="field-hint">Thuế hoặc phí chuyển đổi ngoại tệ của thẻ, xem trên sao kê hay hóa đơn Google. Để 0 nếu không có. Chỉ đổi con số hiển thị, không đổi ngân sách.</div>
+                        </div>
+                        <div class="cost-section">Ngân sách</div>
+                        <div class="form-group">
+                            <label class="form-label" for="budgetDailyUsd" id="budgetDailyLabel">Ngân sách mỗi ngày (USD)</label>
+                            <input type="number" id="budgetDailyUsd" class="form-input" min="0" step="0.1">
+                            <div class="field-hint" id="budgetDailyHint"></div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="budgetVideoUsd" id="budgetVideoLabel">Ngân sách mỗi video (USD)</label>
+                            <input type="number" id="budgetVideoUsd" class="form-input" min="0" step="0.05">
+                            <div class="field-hint" id="budgetVideoHint"></div>
+                        </div>
+                        <div class="field-hint" style="grid-column: 1 / -1;">Chạm ngân sách thì thôi dịch lại câu khó bằng model mạnh; vượt gấp đôi ngân sách ngày thì tạm dùng Google Dịch miễn phí. Nhập 0 để bỏ giới hạn.</div>
+                        <div class="form-group" style="grid-column: 1 / -1; flex-direction: row; gap: 8px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-secondary" id="costRefresh">Cập nhật số liệu</button>
+                            <button type="button" class="btn btn-secondary" id="costReset">Xóa thống kê</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: TỪ ĐIỂN THUẬT NGỮ -->
+            <div id="tab-glossary" class="tab-panel">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Bảo vệ thuật ngữ chuyên ngành</h2>
+                        <p class="card-desc">Tên riêng và thuật ngữ quen dùng tiếng Anh được giữ nguyên; thuật ngữ đã có tên tiếng Việt chuẩn (như "độ lệch chuẩn", "lãi suất") luôn được dịch thống nhất một cách.</p>
+                    </div>
+
+                    <label class="group-row" style="margin-bottom: 16px; font-weight: 600;">
+                        <input type="checkbox" id="glossaryEnabled" checked>
+                        <span>Bật bảo vệ thuật ngữ khi dịch</span>
+                    </label>
+
+                    <h3 style="font-size: 14px; margin-bottom: 8px;">Nhóm ngành</h3>
+                    <p class="card-desc" style="margin-bottom: 12px;">Chỉ bật các ngành bạn đang học để câu dịch tự nhiên hơn.</p>
+                    <div id="groupList" style="margin-bottom: 24px;"></div>
+
+                    <h3 style="font-size: 14px; margin-bottom: 8px;">Danh sách từ giữ nguyên</h3>
+                    <p class="card-desc" style="margin-bottom: 8px;">Mỗi dòng một từ hoặc cụm từ. Không bị máy dịch biến đổi.</p>
+                    <div class="example-box"># Ví dụ
+Claude Code
+Google Ads
+landing page
+conversion rate</div>
+                    <textarea id="userKeep" class="glossary-box" placeholder="Mỗi dòng một thuật ngữ..."></textarea>
+
+                    <h3 style="font-size: 14px; margin: 20px 0 8px;">Quy tắc dịch riêng (from => to)</h3>
+                    <p class="card-desc" style="margin-bottom: 8px;">Ép một cụm từ hiển thị chính xác theo ý muốn của bạn.</p>
+                    <div class="example-box"># Ví dụ
+machine learning => học máy
+cash flow => dòng tiền
+Claude's code => Claude Code</div>
+                    <textarea id="userNormalize" class="glossary-box" placeholder="từ gốc => dạng muốn hiện"></textarea>
+                </div>
+            </div>
+
+            <!-- TAB 4: LỒNG TIẾNG & GIỌNG ĐỌC -->
+            <div id="tab-edits" class="tab-panel">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Phụ đề đã sửa</h2>
+                        <p class="card-desc" id="editsSummary">Những dòng bạn đã sửa tay trong Bản chép lời. Mỗi lần mở lại video, tiện ích đặt bản sửa của bạn lên trên bản dịch máy, và giọng Việt đọc đúng câu đã sửa.</p>
+                    </div>
+                    <div class="form-group">
+                        <input type="search" id="editsFilter" class="form-input" placeholder="Tìm trong các dòng đã sửa" aria-label="Tìm trong các dòng đã sửa">
+                    </div>
+                    <div id="editsList"></div>
+                    <p class="field-hint">Cách sửa: mở Bản chép lời trong thực đơn trên video, rê chuột vào một dòng rồi bấm biểu tượng bút chì.</p>
+                </div>
+            </div>
+
+            <div id="tab-history" class="tab-panel">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Lịch sử phiên bản</h2>
+                        <p class="card-desc" id="historySummary">Từ bản gốc tới bản đang dùng: mỗi bản ghi rõ đã sửa gì, kèm bảng so sánh trước và sau khi có số đo thật.</p>
+                    </div>
+                    <div class="form-group">
+                        <input type="search" id="historyFilter" class="form-input" placeholder="Tìm trong lịch sử (ví dụ: giọng, phụ đề, phím tắt)" aria-label="Tìm trong lịch sử phiên bản">
+                    </div>
+                    <div id="historyList"></div>
+                </div>
+            </div>
+
+            <div id="tab-dubbing" class="tab-panel">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Lồng tiếng Việt AI</h2>
+                        <p class="card-desc">Đọc bản dịch bằng giọng Việt, khớp nhịp với người nói gốc.</p>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label" for="dubProvider">Nguồn giọng nói</label>
+                            <select id="dubProvider" class="form-select">
+                                <option value="vieneu" selected>VieNeu trên máy (miễn phí, tự nhiên)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label class="group-row" style="font-weight: 600;">
+                                <input type="checkbox" id="dubPrepareWait" checked>
+                                <span>Chờ chuẩn bị trước khi phát (tối đa 5 giây)</span>
+                            </label>
+                            <div class="field-hint">Mở video mới hoặc tua tới đoạn mới: tạm dừng tới khi có giọng Việt cho câu đầu.</div>
+                        </div>
+
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <div class="cst-note" id="localTtsStatus">Đang kiểm tra máy chủ VieNeu...</div>
+                        </div>
+
+
+                        <div class="form-group">
+                            <label class="form-label" for="dubLocalVoice">Giọng VieNeu (người nói chính)</label>
+                            <select id="dubLocalVoice" class="form-select"></select>
+                        </div>
+
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label class="group-row" style="font-weight: 600;">
+                                <input type="checkbox" id="dubSecondVoice">
+                                <span>Dùng giọng thứ hai cho người nói khác</span>
+                            </label>
+                            <div class="field-hint">Khi phụ đề đánh dấu đổi người nói (&gt;&gt;, gạch đầu dòng, TÊN:), câu của người khác được đọc bằng giọng thứ hai. Video chỉ có một người nói thì luôn giữ một giọng, kể cả khi phụ đề tự động đánh dấu nhầm quanh đoạn nhạc. Người nói nhiều nhất luôn dùng giọng chính. Tắt: cả video chỉ một giọng.</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="dubLocalVoice2">Giọng VieNeu (người nói thứ hai)</label>
+                            <select id="dubLocalVoice2" class="form-select"></select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="dubGeminiVoice">Giọng Gemini (người nói chính)</label>
+                            <select id="dubGeminiVoice" class="form-select">
+                                <option value="Kore" selected>Kore: nữ, rõ ràng, chắc chắn</option>
+                                <option value="Aoede">Aoede: nữ, nhẹ nhàng, thoáng</option>
+                                <option value="Leda">Leda: nữ, trẻ trung</option>
+                                <option value="Zephyr">Zephyr: nữ, tươi sáng</option>
+                                <option value="Charon">Charon: nam, trầm, hợp giảng bài</option>
+                                <option value="Orus">Orus: nam, chắc chắn</option>
+                                <option value="Iapetus">Iapetus: nam, rõ ràng</option>
+                                <option value="Puck">Puck: nam, sôi nổi</option>
+                                <option value="Fenrir">Fenrir: nam, hào hứng</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="dubGeminiVoice2">Giọng Gemini (người nói thứ hai)</label>
+                            <select id="dubGeminiVoice2" class="form-select">
+                                <option value="Charon" selected>Charon: nam, trầm</option>
+                                <option value="Kore">Kore: nữ, rõ ràng</option>
+                                <option value="Aoede">Aoede: nữ, nhẹ nhàng</option>
+                                <option value="Puck">Puck: nam, sôi nổi</option>
+                                <option value="Leda">Leda: nữ, trẻ trung</option>
+                                <option value="Orus">Orus: nam, chắc chắn</option>
+                            </select>
+                            <div class="field-hint">Khi phụ đề có đổi người nói.</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="dubVoice">Giọng hệ thống tiếng Việt</label>
+                            <select id="dubVoice" class="form-select"></select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="dubDuck">
+                                Âm lượng tiếng gốc khi có lời Việt
+                                <span class="value-pill" id="dubDuckValue">20%</span>
+                            </label>
+                            <input type="range" id="dubDuck" class="form-slider" min="0" max="60" step="5" value="20">
+                            <div class="field-hint">Mức tiếng gốc trong lúc giọng Việt đang đọc. Để khoảng 10 đến 20% vẫn nghe được nhạc nền; 0% là tắt hẳn.</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="dubVolume">
+                                Âm lượng lồng tiếng
+                                <span class="value-pill" id="dubVolumeValue">100%</span>
+                            </label>
+                            <input type="range" id="dubVolume" class="form-slider" min="40" max="100" step="5" value="100">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="dubMaxRate">Tốc độ đọc tối đa</label>
+                            <select id="dubMaxRate" class="form-select">
+                                <option value="0" selected>Tự động (khuyên dùng)</option>
+                                <option value="1.1">1,1 lần (rất thong thả)</option>
+                                <option value="1.2">1,2 lần</option>
+                                <option value="1.3">1,3 lần</option>
+                                <option value="1.4">1,4 lần</option>
+                                <option value="1.5">1,5 lần</option>
+                            </select>
+                            <div class="field-hint">Tự động: giọng nhanh dần theo tốc độ nói của video, tới khoảng 1,6 lần khi người nói rất nhanh. Chọn mức thấp hơn nếu muốn nghe rõ hơn: giọng Việt có thể trễ sau hình vài giây ở đoạn nói nhanh, nhưng không bao giờ bị bỏ chữ.</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="dubTtsModel">Model Gemini TTS (nâng cao, để trống = tự chọn)</label>
+                            <input type="text" id="dubTtsModel" class="form-input">
+                        </div>
+
+                        <div class="form-group" style="grid-column: 1 / -1; margin-top: 8px;">
+                            <button type="button" class="btn btn-secondary" id="testVoice">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                </svg>
+                                Nghe thử lồng tiếng
+                            </button>
+                            <div class="field-hint" id="testVoiceStatus"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- Bottom Action Bar -->
+    <div class="bottom-bar">
+        <span class="status-msg show" id="saveStatus" role="status" aria-live="polite">Mọi thay đổi được tự lưu và áp dụng ngay</span>
+        <button type="button" class="btn btn-secondary" id="resetDefaultBtn">Khôi phục mặc định</button>
+    </div>
+
+    <script src="version-check.js"></script>
+    <script src="version-history.js"></script>
+    <script src="glossary.js"></script>
+    <script src="vi-segmenter.js"></script>
+    <script src="subtitle-style.js"></script>
+    <script src="cost-policy.js"></script>
+    <script src="dub-planner.js"></script>
+    <script src="dub-prosody.js"></script>
+    <script src="dub-speech.js"></script>
+    <script src="dub-audio.js"></script>
+    <script src="dub-engine.js"></script>
+    <script src="subtitle-edits.js"></script>
+    <script src="settings-backup.js"></script>
+    <script src="options.js"></script>
+</body>
+</html>

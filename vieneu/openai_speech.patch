@@ -1,0 +1,90 @@
+diff --git a/apps/openai_speech.py b/apps/openai_speech.py
+index 530b829..d698911 100644
+--- a/apps/openai_speech.py
++++ b/apps/openai_speech.py
+@@ -242,7 +242,53 @@ class SpeechRequest(BaseModel):
+     max_chars: int = 256
+ 
+ 
+-def _speech_chunks(eng: Engine, req: SpeechRequest, rid: str) -> Iterator[np.ndarray]:
++class _Lease:
++    """[CST patch] One stream slot, released exactly once.
++
++    ``speech()`` takes the slot before the response starts and the generator's
++    ``finally`` gives it back. When the client disconnects (a seek, a client-side
++    timeout) Starlette simply stops iterating the sync generator: it stays
++    suspended at a ``yield``, ``finally`` never runs, the slot stays taken and
++    every later request gets 429 until the server restarts (seen in practice).
++    A watchdog frees the slot when the stream has not advanced for ``idle``
++    seconds; a suspended generator uses no CPU, so this is safe.
++    """
++
++    def __init__(self, eng: "Engine", idle: float = 4.0):
++        self.eng = eng
++        self.idle = idle
++        self.last = time.monotonic()
++        self._done = False
++        self._lock = threading.Lock()
++        self._schedule()
++
++    def _schedule(self) -> None:
++        t = threading.Timer(1.0, self._check)
++        t.daemon = True
++        t.start()
++
++    def touch(self) -> None:
++        self.last = time.monotonic()
++
++    def _check(self) -> None:
++        if self._done:
++            return
++        if time.monotonic() - self.last > self.idle:
++            if self.release():
++                log.warning("released a stream slot idle for %.0fs (client left)", self.idle)
++            return
++        self._schedule()
++
++    def release(self) -> bool:
++        with self._lock:
++            if self._done:
++                return False
++            self._done = True
++        self.eng.release()
++        return True
++
++
++def _speech_chunks(eng: Engine, req: SpeechRequest, rid: str, lease: "_Lease | None" = None) -> Iterator[np.ndarray]:
+     """float32 chunks at ``req.sample_rate``; logs TTFA / RTF; holds one stream slot."""
+     t0 = time.perf_counter()
+     first = None
+@@ -260,13 +306,20 @@ def _speech_chunks(eng: Engine, req: SpeechRequest, rid: str) -> Iterator[np.nda
+                 first = time.perf_counter() - t0
+             emitted += len(chunk)
+             out = rs(chunk)
++            if lease is not None:
++                lease.touch()
+             if len(out):
+                 yield out
++                if lease is not None:
++                    lease.touch()
+         tail = rs(np.zeros(0, np.float32), last=True)
+         if len(tail):
+             yield tail
+     finally:
+-        eng.release()
++        if lease is not None:
++            lease.release()
++        else:
++            eng.release()
+         total = time.perf_counter() - t0
+         audio_s = emitted / SAMPLE_RATE
+         log.info("%s done: ttfa=%s total=%.2fs audio=%.2fs rtf=%s active=%d", rid,
+@@ -308,7 +361,7 @@ def speech(req: SpeechRequest):
+         raise HTTPException(400, f"unknown voice '{req.voice}'; see GET /v1/voices")
+     rid = f"spk-{uuid.uuid4().hex[:8]}"
+     eng.acquire()   # 429 if the server is full; released when the stream ends
+-    chunks = _speech_chunks(eng, req, rid)
++    chunks = _speech_chunks(eng, req, rid, _Lease(eng))
+     headers = {"X-Request-Id": rid, "X-Sample-Rate": str(req.sample_rate), "Cache-Control": "no-store"}
+     ignored = [k for k in ("speed", "instructions") if getattr(req, k) is not None]
+     if ignored:

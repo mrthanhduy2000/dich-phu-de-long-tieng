@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vietnamese Subtitle Translator</title>
+    <link href="popup.css" rel="stylesheet">
+    <script src="chrome-shim.js"></script>
+    <script src="theme.js"></script>
+</head>
+<body>
+    <div class="container" id="appContainer">
+        <!-- 1. Claude Header -->
+        <header class="header anim-entry" style="--delay: 0.02s;">
+            <div class="brand-wrap">
+                <!-- The product mark: a speech bubble with the spark inside, the same one the
+                     toolbar icon and the YouTube button wear -->
+                <div class="sparkle-wrap" id="sparkleWrap" title="Dịch phụ đề & lồng tiếng AI">
+                    <svg class="claude-sparkle" viewBox="0 0 24 24" width="100%" height="100%" fill="none" aria-hidden="true">
+                        <path d="M4.2 4.6h15.6c1.55 0 2.8 1.25 2.8 2.8v7.9c0 1.55-1.25 2.8-2.8 2.8h-6.6l-4.3 3.2c-.62.46-1.5.02-1.5-.75V18.1H4.2c-1.55 0-2.8-1.25-2.8-2.8V7.4c0-1.55 1.25-2.8 2.8-2.8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path>
+                        <g transform="translate(12 11.35) scale(0.42) translate(-12 -12)">
+                            <path d="M12 2C12.4 7.2 16.8 11.6 22 12C16.8 12.4 12.4 16.8 12 22C11.6 16.8 7.2 12.4 2 12C7.2 11.6 11.6 7.2 12 2Z" fill="currentColor"></path>
+                        </g>
+                    </svg>
+                </div>
+                <div class="brand-text-block">
+                    <h1 class="brand-title">Dịch Phụ Đề</h1>
+                    <!-- Live connection radar pill -->
+                    <div class="live-pill" id="livePill">
+                        <span class="live-dot">
+                            <span class="live-ping"></span>
+                        </span>
+                        <span class="live-text" id="liveStatusText">Coursera & YouTube</span>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <button id="headerSettingsBtn" class="header-settings-btn" type="button" title="Mở cài đặt & API Key">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                    Cài đặt
+                </button>
+                <span class="brand-badge" title="Cập nhật lúc 16:34 06/10/2026">v2.4.9</span>
+            </div>
+        </header>
+
+        <!-- What the page in front of you is doing right now: filled from the page's getStatus reply -->
+        <section class="now-card anim-entry" id="nowCard" style="--delay: 0.05s;" aria-live="polite" hidden>
+            <div class="now-kicker"><span>Đang xem</span><span class="now-site" id="nowSite"></span></div>
+            <p class="now-title" id="nowTitle"></p>
+            <div class="now-progress" id="nowProgress" hidden>
+                <div class="now-bar"><i id="nowBar"></i></div>
+                <span class="now-count" id="nowCount"></span>
+            </div>
+            <p class="now-voice" id="nowVoice" hidden></p>
+        </section>
+
+        <!-- Chi phí ước tính hôm nay (chỉ lưu trên máy) -->
+        <button type="button" class="cost-today anim-entry" id="costToday" style="--delay: 0.08s;" title="Xem chi tiết và đặt ngân sách trong Cài đặt" hidden></button>
+
+        <!-- 3. Settings Group Card -->
+        <div class="settings-group anim-entry" style="--delay: 0.10s;">
+            <!-- Dual Subtitles Toggle -->
+            <label class="setting-row" for="dualMode">
+                <div class="setting-icon-box">
+                    <!-- Bilingual Subtitles Icon SVG -->
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <rect x="2" y="4" width="20" height="16" rx="3"></rect>
+                        <line x1="6" y1="10" x2="14" y2="10"></line>
+                        <line x1="6" y1="14" x2="18" y2="14"></line>
+                    </svg>
+                </div>
+                <div class="setting-label-wrap">
+                    <span class="setting-title">Song ngữ</span>
+                    <span class="setting-desc">Thêm câu gốc để đối chiếu</span>
+                </div>
+                <div class="switch-box">
+                    <input type="checkbox" id="dualMode">
+                    <span class="switch-track"></span>
+                </div>
+            </label>
+
+            <!-- Sub Options Accordion Container -->
+            <div class="sub-options-wrapper" id="subOptionsWrapper">
+                <!-- Sub Option: Original First -->
+                <label class="setting-row sub-option" for="originalFirst">
+                    <div class="sub-tree-indicator"></div>
+                    <div class="setting-icon-box sub-icon">
+                        <!-- Reorder / Swap Icon SVG -->
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <polyline points="17 11 12 6 7 11"></polyline>
+                            <polyline points="7 13 12 18 17 13"></polyline>
+                        </svg>
+                    </div>
+                    <div class="setting-label-wrap">
+                        <span class="setting-title">Tiếng Anh ở trên</span>
+                        <span class="setting-desc">Đảo thứ tự câu gốc lên trước tiếng Việt</span>
+                    </div>
+                    <div class="switch-box">
+                        <input type="checkbox" id="originalFirst">
+                        <span class="switch-track"></span>
+                    </div>
+                </label>
+            </div>
+
+            <!-- TTS Dubbing Toggle -->
+            <label class="setting-row" for="dubbingMode">
+                <div class="setting-icon-box">
+                    <!-- Speaker / Sound Wave Icon SVG -->
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                    </svg>
+                </div>
+                <div class="setting-label-wrap">
+                    <span class="setting-title">Lồng tiếng Việt</span>
+                    <span class="setting-desc">Đọc bản dịch, hạ nhỏ tiếng gốc</span>
+                </div>
+                <div class="switch-box">
+                    <input type="checkbox" id="dubbingMode">
+                    <span class="switch-track"></span>
+                </div>
+            </label>
+        </div>
+
+        <!-- 4. Action Section -->
+        <div class="actions-wrap anim-entry" style="--delay: 0.14s;">
+            <!-- Primary Translation Button with dynamic states -->
+            <button id="translateBtn" class="button-primary" type="button">
+                <span class="btn-ripple-container"></span>
+                <span class="btn-shimmer"></span>
+                <div class="btn-content" id="btnContent">
+                    <svg class="btn-icon" viewBox="0 0 24 24" width="100%" height="100%" fill="none" aria-hidden="true">
+                        <path d="M4.2 4.6h15.6c1.55 0 2.8 1.25 2.8 2.8v7.9c0 1.55-1.25 2.8-2.8 2.8h-6.6l-4.3 3.2c-.62.46-1.5.02-1.5-.75V18.1H4.2c-1.55 0-2.8-1.25-2.8-2.8V7.4c0-1.55 1.25-2.8 2.8-2.8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path>
+                        <g transform="translate(12 11.35) scale(0.42) translate(-12 -12)">
+                            <path d="M12 2C12.4 7.2 16.8 11.6 22 12C16.8 12.4 12.4 16.8 12 22C11.6 16.8 7.2 12.4 2 12C7.2 11.6 11.6 7.2 12 2Z" fill="currentColor"></path>
+                        </g>
+                    </svg>
+                    <span class="btn-label" id="btnLabel">Bắt đầu dịch</span>
+                </div>
+            </button>
+
+            <!-- Animated Status Feedback Box -->
+            <div id="statusContainer" class="status-container">
+                <div id="statusIconWrap" class="status-icon-wrap">
+                    <!-- Status Icon injected by JS -->
+                </div>
+                <p id="status" class="status-text"></p>
+            </div>
+
+            <p class="page-status" id="pageStatus" role="status" aria-live="polite" hidden></p>
+            <p class="hint-row">Phím tắt: <kbd>Alt</kbd>+<kbd>S</kbd> phụ đề · <kbd>Alt</kbd>+<kbd>D</kbd> lồng tiếng</p>
+            <button id="forgetAudio" class="link-btn" type="button" hidden title="Xóa audio lồng tiếng đã lưu của video đang mở rồi tạo lại (giọng VieNeu miễn phí; giọng Gemini sẽ tính tiền lại)">Tạo lại giọng đọc cho video này</button>
+        </div>
+
+    </div>
+
+    <script src="version-check.js"></script>
+    <script src="cost-policy.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>
