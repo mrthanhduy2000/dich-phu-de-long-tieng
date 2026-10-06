@@ -1,27 +1,77 @@
 # Cai (hoac cap nhat) tien ich "Dich Phu De & Long Tieng AI" va may chu giong VieNeu tren Windows.
 #   irm https://raw.githubusercontent.com/mrthanhduy2000/dich-phu-de-long-tieng/main/install-windows.ps1 | iex
 # Chay lai bat cu luc nao de cap nhat: cai dat va khoa API trong Chrome duoc giu nguyen.
+# Go bo:
+#   $env:DPD_UNINSTALL='1'; irm https://raw.githubusercontent.com/mrthanhduy2000/dich-phu-de-long-tieng/main/install-windows.ps1 | iex
 #
 # ASCII only on purpose: Windows PowerShell 5.1 reads a BOM-less script as ANSI. Everything sits in
 # one script block that throws instead of calling exit, because `irm | iex` runs in the user's own
 # window and exit would close it. Must stay Windows PowerShell 5.1 compatible (no ??, no ternary).
-# Overrides, for testing only: DPD_SRC, DPD_EXT_DIR, DPD_VIENEU_DIR, DPD_NO_AUTOSTART, DPD_NO_DESKTOP.
+# The outcome is left in $global:DPD_RESULT ('ok' or the error) for the CI install test.
+# Overrides, for testing only: DPD_SRC, DPD_EXT_DIR, DPD_VIENEU_DIR, DPD_NO_AUTOSTART,
+# DPD_NO_DESKTOP, DPD_NO_OPEN.
 & {
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'   # the 5.1 progress bar makes downloads many times slower
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$global:DPD_RESULT = 'running'
 
 $Repo = 'mrthanhduy2000/dich-phu-de-long-tieng'
 # VieNeu is pinned: vieneu\openai_speech.py is a patched copy of this exact commit's file.
 $VieNeuCommit = 'd350c63fceb0792d7b2db9a51d61cc040b1f8efa'
 $ExtDir = if ($env:DPD_EXT_DIR) { $env:DPD_EXT_DIR } else { Join-Path $env:USERPROFILE 'DichPhuDe' }
 $VnDir = if ($env:DPD_VIENEU_DIR) { $env:DPD_VIENEU_DIR } else { Join-Path $env:USERPROFILE 'VieNeu-TTS' }
-$Port = '8000'
+$Port = 8000                                # the extension calls 127.0.0.1:8000 (cost-policy.js)
 $Mark = '.dichphude-vieneu'
+$UpdLink = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Cap nhat Dich Phu De.lnk'
 
 function Say($m) { Write-Host ''; Write-Host "==> $m" -ForegroundColor Cyan }
 
+# What answers on the port: 'vieneu', 'other' (with a name), or $null
+function Test-Port {
+    try {
+        $h = Invoke-RestMethod -UseBasicParsing "http://127.0.0.1:$Port/health" -TimeoutSec 3
+        if ($h.status -eq 'ok' -and $h.sample_rate) { return 'vieneu' }
+    } catch {}
+    $c = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($c) {
+        $p = Get-CimInstance Win32_Process -Filter "ProcessId = $($c.OwningProcess)" -ErrorAction SilentlyContinue
+        if ($p -and $p.CommandLine -match 'run-vieneu|apps\.openai_speech') { return 'vieneu' }
+        $n = if ($p) { $p.Name } else { "PID $($c.OwningProcess)" }
+        return "other:$n"
+    }
+    return $null
+}
+
+function Invoke-Autostart($arg) {
+    $env:VIENEU_DIR = $VnDir
+    $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "$ExtDir\tools\vieneu-autostart.ps1")
+    if ($arg) { $a += $arg }
+    & powershell @a | Out-Host
+    return $LASTEXITCODE
+}
+
 try {
+    # ---- Uninstall ----
+    if ($env:DPD_UNINSTALL) {
+        Say 'Dang go Dich Phu De va VieNeu...'
+        # Only a VieNeu this installer made: someone's own VieNeu is left running
+        if (Test-Path "$VnDir\$Mark") {
+            if (Test-Path "$ExtDir\tools\vieneu-autostart.ps1") { Invoke-Autostart '-Uninstall' | Out-Null }
+            Start-Sleep -Seconds 2
+            Remove-Item $VnDir -Recurse -Force
+            $hf = Join-Path $env:USERPROFILE '.cache\huggingface\hub'
+            Get-ChildItem $hf -Directory -Filter 'models--pnnbao-ump--*' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+        } elseif (Test-Path $VnDir) { Write-Host "  Giu nguyen $VnDir (khong do bo cai nay tao)." }
+        if (Test-Path "$ExtDir\manifest.json") { Remove-Item $ExtDir -Recurse -Force }
+        Remove-Item $UpdLink -ErrorAction SilentlyContinue
+        Write-Host ''
+        Write-Host ' DA GO XONG. Con mot buoc: o trang chrome://extensions, bam "Xoa" tren the'
+        Write-Host ' "Dich Phu De & Long Tieng AI".'
+        $global:DPD_RESULT = 'ok'
+        return
+    }
+
     $arch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
     $withVoice = $arch -eq 'AMD64'
     if (-not $withVoice) { Say 'May chip ARM: VieNeu chi chay tren may Intel/AMD 64-bit. Chi cai phan dich phu de.' }
@@ -58,9 +108,11 @@ try {
             throw "Thu muc $VnDir da co san nhung khong do bo cai nay tao. Bo cai khong ghi de no: doi ten thu muc do roi chay lai."
         }
         # A running server keeps its .pyd files locked, and uv sync would fail on them
-        if (Test-Path "$ExtDir\tools\vieneu-autostart.ps1") {
-            $env:VIENEU_DIR = $VnDir
-            & powershell -NoProfile -ExecutionPolicy Bypass -File "$ExtDir\tools\vieneu-autostart.ps1" -Stop | Out-Null
+        if (Test-Path "$VnDir\$Mark") { Invoke-Autostart '-Stop' | Out-Null; Start-Sleep -Seconds 2 }
+        $busy = Test-Port
+        if ($busy -like 'other:*') {
+            throw ("Cong $Port dang bi chuong trinh khac dung (" + $busy.Substring(6) + "). Tien ich can cong nay cho VieNeu: " +
+                   'tat chuong trinh do (hoac bo no khoi tu khoi dong) roi chay lai bo cai.')
         }
 
         $uv = (Get-Command uv -ErrorAction SilentlyContinue | Select-Object -First 1).Source
@@ -91,32 +143,35 @@ try {
         try { & $uv sync --quiet; $code = $LASTEXITCODE } finally { Pop-Location }
         if ($code -ne 0) { throw 'uv sync khong thanh cong. Xem thong bao o tren.' }
 
-        # onnxruntime needs the Microsoft Visual C++ runtime, absent on some fresh Windows installs
-        # 5.1 turns redirected native stderr into errors, and 'Stop' would make them fatal
-        $ErrorActionPreference = 'Continue'
-        & "$VnDir\.venv\Scripts\python.exe" -c "import onnxruntime" 2>$null
-        $code = $LASTEXITCODE
-        $ErrorActionPreference = 'Stop'
-        if ($code -ne 0) {
-            throw ('Thieu Microsoft Visual C++ Redistributable. Cai tai https://aka.ms/vs/17/release/vc_redist.x64.exe ' +
-                   '(hoac: winget install -e --id Microsoft.VCRedist.2015+.x64) roi chay lai bo cai.')
+        # onnxruntime needs the Microsoft Visual C++ runtime, absent on some fresh Windows installs.
+        # 5.1 turns redirected native stderr into errors, and 'Stop' would make them fatal.
+        $testOrt = {
+            $ErrorActionPreference = 'Continue'
+            & "$VnDir\.venv\Scripts\python.exe" -c "import onnxruntime" 2>$null
+            $LASTEXITCODE
+        }
+        if ((& $testOrt) -ne 0) {
+            Say 'Dang cai Microsoft Visual C++ Redistributable (Windows se hoi quyen, bam Yes)...'
+            Invoke-WebRequest -UseBasicParsing 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile "$tmp\vc_redist.x64.exe"
+            try { Start-Process "$tmp\vc_redist.x64.exe" -ArgumentList '/install', '/passive', '/norestart' -Verb RunAs -Wait } catch {}
+            if ((& $testOrt) -ne 0) {
+                throw 'Thieu Microsoft Visual C++ Redistributable. Cai tai https://aka.ms/vs/17/release/vc_redist.x64.exe roi chay lai bo cai.'
+            }
         }
         Set-Content -Path "$VnDir\$Mark" -Value $VieNeuCommit -NoNewline
 
         if (-not $env:DPD_NO_AUTOSTART) {
             Say 'Dang bat VieNeu tu chay moi khi dang nhap...'
-            $env:VIENEU_DIR = $VnDir
-            & powershell -NoProfile -ExecutionPolicy Bypass -File "$ExtDir\tools\vieneu-autostart.ps1"
-            if ($LASTEXITCODE -ne 0) { throw 'Khong bat duoc tu khoi dong VieNeu.' }
+            if ((Invoke-Autostart $null) -ne 0) { throw 'Khong bat duoc tu khoi dong VieNeu.' }
             Say 'Dang doi VieNeu san sang (lan dau phai tai mo hinh giong, co the toi 10 phut)...'
             $ok = $false
             for ($i = 1; $i -le 900; $i++) {
-                try { Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$Port/health" -TimeoutSec 2 | Out-Null; $ok = $true; break } catch {}
+                if ((Test-Port) -eq 'vieneu') { try { Invoke-RestMethod -UseBasicParsing "http://127.0.0.1:$Port/health" -TimeoutSec 3 | Out-Null; $ok = $true; break } catch {} }
                 if ($i % 30 -eq 0) { Write-Host "  ... $i giay" }
                 Start-Sleep -Seconds 1
             }
             if (-not $ok) {
-                Get-Content "$VnDir\server.log" -Tail 20 -ErrorAction SilentlyContinue
+                Get-Content "$VnDir\server.log" -Tail 25 -ErrorAction SilentlyContinue | Out-Host
                 throw "VieNeu chua phan hoi sau 15 phut. Nhat ky: $VnDir\server.log"
             }
             Say 'VieNeu da san sang.'
@@ -126,15 +181,17 @@ try {
     # 4. A desktop shortcut that updates by running this installer again
     if (-not $env:DPD_NO_DESKTOP) {
         $shell = New-Object -ComObject WScript.Shell
-        $lnk = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desktop')) 'Cap nhat Dich Phu De.lnk'))
+        $lnk = $shell.CreateShortcut($UpdLink)
         $lnk.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
         $lnk.Arguments = "-NoProfile -ExecutionPolicy Bypass -NoExit -Command `"irm https://raw.githubusercontent.com/$Repo/main/install-windows.ps1 | iex`""
         $lnk.Save()
     }
 
     # 5. Chrome
-    try { Set-Clipboard -Value $ExtDir } catch {}
-    try { Start-Process 'chrome.exe' 'chrome://extensions' } catch {}
+    if (-not $env:DPD_NO_OPEN) {
+        try { Set-Clipboard -Value $ExtDir } catch {}
+        try { Start-Process 'chrome.exe' 'chrome://extensions' } catch {}
+    }
 
     Write-Host ''
     Write-Host '=================================================================='
@@ -146,8 +203,8 @@ try {
         Write-Host '  Dung go tien ich roi cai lai: se mat cai dat va khoa API.'
     } else {
         Write-Host " DA CAI ban $version. Buoc cuoi lam bang tay trong Chrome:"
-        Write-Host '  1. O trang chrome://extensions (vua mo), bat "Che do danh cho nha'
-        Write-Host '     phat trien" o goc tren ben phai.'
+        Write-Host '  1. Mo trang chrome://extensions (neu chua tu mo), bat "Che do danh'
+        Write-Host '     cho nha phat trien" o goc tren ben phai.'
         Write-Host '  2. Bam "Tai tien ich da giai nen".'
         Write-Host '  3. Dan (Ctrl+V) duong dan da chep san vao o dia chi cua cua so chon'
         Write-Host '     thu muc, nhan Enter, roi bam "Select Folder":'
@@ -157,10 +214,12 @@ try {
     if ($withVoice) { Write-Host ' Giong VieNeu tu chay moi khi bat may, khong can mo gi them.' }
     Write-Host ' Cap nhat ve sau: nhap dup "Cap nhat Dich Phu De" tren man hinh chinh.'
     Write-Host '=================================================================='
+    $global:DPD_RESULT = 'ok'
 }
 catch {
     Write-Host ''
     Write-Host "LOI: $($_.Exception.Message)" -ForegroundColor Red
+    $global:DPD_RESULT = "LOI: $($_.Exception.Message)"
 }
 finally {
     if ($tmp -and (Test-Path $tmp)) { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }

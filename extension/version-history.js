@@ -4,6 +4,14 @@
 (function (root) {
     const HISTORY = [
         {
+            v: "2.5.0", luc: "", ten: "Coursera có giọng Việt ngay từ câu đầu",
+            y: [
+                "Coursera tự phát bài giảng chỉ 2 đến 3 giây sau khi mở, lúc phụ đề còn đang dịch và giọng chưa kịp tạo. Đo thật trên một bài đã dịch sẵn: câu chào đầu bài không được đọc, giọng chỉ vào từ câu thứ hai; bài chưa dịch thì phải tới khoảng giây thứ 7 mới có giọng.",
+                "Nay, như trên YouTube, lần phát đầu của mỗi bài giảng (Coursera tự phát hay bạn bấm phát) tạm dừng tối đa 5 giây cho tới khi câu đang tới có giọng Việt, rồi phát từ đầu bài. Trên video hiện dòng \"Đang chuẩn bị phụ đề và giọng Việt…\".",
+                "Bài không cần dịch hay không lồng tiếng được thì phát ngay, không bắt chờ. Tắt ô \"Chờ chuẩn bị trước khi phát\" trong Cài đặt > Lồng tiếng nếu muốn phát ngay như trước."
+            ],
+        },
+        {
             v: "2.4.9", luc: "", ten: "Chia sẻ cho bạn bè, có cả máy Windows",
             y: [
                 "Có bộ cài một lệnh cho Mac và Windows: tự tải tiện ích, tải và cài giọng VieNeu, bật VieNeu tự chạy cùng máy rồi chờ tới khi giọng sẵn sàng. Không cần git, không cần quyền quản trị. Chạy lại bộ cài là cập nhật, cài đặt và khóa API được giữ nguyên.",

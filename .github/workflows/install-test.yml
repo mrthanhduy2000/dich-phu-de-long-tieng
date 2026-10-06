@@ -1,0 +1,169 @@
+# Runs the exact one-line install a friend runs, on clean GitHub machines, after every update:
+# install, a spoken line, the server coming back after it is killed, an update, an uninstall.
+# Built from tools/share/ in the private repo by tools/publish-share.js; edit it there.
+name: Install test
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: install-test
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: x64, os: windows-latest, voice: "1" }
+          # A Vietnamese user name: every path the installer, uv, Python and the runner touch
+          - { name: x64 Vietnamese path, os: windows-latest, voice: "1", ext: "C:\\Người dùng\\Đàm Thử\\DichPhuDe", vn: "C:\\Người dùng\\Đàm Thử\\VieNeu-TTS" }
+          - { name: ARM, os: windows-11-arm, voice: "0" }
+    env:
+      DPD_NO_OPEN: "1"
+      DPD_EXT_DIR: ${{ matrix.ext }}
+      DPD_VIENEU_DIR: ${{ matrix.vn }}
+      URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/install-windows.ps1
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Install with the one-line command (Windows PowerShell 5.1)
+        run: |
+          $PSVersionTable.PSVersion.ToString()
+          irm $env:URL | iex
+          if ($global:DPD_RESULT -ne 'ok') { throw "installer: $global:DPD_RESULT" }
+
+      - name: Check the install
+        run: |
+          $ext = if ($env:DPD_EXT_DIR) { $env:DPD_EXT_DIR } else { "$env:USERPROFILE\DichPhuDe" }
+          $vn = if ($env:DPD_VIENEU_DIR) { $env:DPD_VIENEU_DIR } else { "$env:USERPROFILE\VieNeu-TTS" }
+          if (-not (Test-Path "$ext\manifest.json")) { throw 'extension missing' }
+          if (-not (Test-Path "$ext\tools\vieneu-runner.pyw")) { throw 'runner missing' }
+          if (-not (Test-Path (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Cap nhat Dich Phu De.lnk'))) { throw 'updater shortcut missing' }
+          if ($env:VOICE -eq '0') {
+            if (Test-Path $vn) { throw 'VieNeu installed on ARM' }
+            return
+          }
+          if (-not (Test-Path (Join-Path ([Environment]::GetFolderPath('Startup')) 'VieNeu (Dich Phu De).lnk'))) { throw 'autostart missing' }
+          $names = (Get-ChildItem "$vn\src\vieneu\assets\samples").Name -join ' | '
+          if ($names -notmatch [string][char]0x1EAF) { throw "Vietnamese file names lost: $names" }
+          Invoke-RestMethod http://127.0.0.1:8000/health | ConvertTo-Json -Compress
+          $body = [Text.Encoding]::UTF8.GetBytes('{"model":"x","input":"Xin ch\u00e0o, \u0111\u00e2y l\u00e0 th\u1eed nghi\u1ec7m gi\u1ecdng \u0111\u1ecdc.","response_format":"wav"}')
+          $t = Measure-Command { Invoke-WebRequest -UseBasicParsing -Method Post -Uri http://127.0.0.1:8000/v1/audio/speech -ContentType 'application/json' -Body $body -OutFile "$env:RUNNER_TEMP\t.wav" }
+          $n = (Get-Item "$env:RUNNER_TEMP\t.wav").Length
+          "speech: $n bytes in $([math]::Round($t.TotalSeconds, 2)) s"
+          if ($n -lt 50000) { throw 'speech too short' }
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'run-vieneu|openai_speech' } | ForEach-Object { "$($_.Name)  $($_.CommandLine)" }
+        env:
+          VOICE: ${{ matrix.voice }}
+
+      - name: The server comes back after it is killed
+        if: matrix.voice == '1'
+        run: |
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'run-vieneu\.pyw.*--serve' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+          Start-Sleep -Seconds 3
+          $ok = $false
+          for ($i = 0; $i -lt 180; $i++) { try { Invoke-RestMethod http://127.0.0.1:8000/health -TimeoutSec 2 | Out-Null; $ok = $true; break } catch {}; Start-Sleep -Seconds 1 }
+          if (-not $ok) { throw 'server did not come back' }
+          "back after about $($i + 3) s"
+
+      - name: Update (run the same command again)
+        run: |
+          $o = & { irm $env:URL | iex } 6>&1 | Out-String
+          $o
+          if ($global:DPD_RESULT -ne 'ok') { throw "installer: $global:DPD_RESULT" }
+          if ($o -notmatch 'DA CAP NHAT') { throw 'not seen as an update' }
+          if ($env:VOICE -eq '1') { Invoke-RestMethod http://127.0.0.1:8000/health | Out-Null }
+        env:
+          VOICE: ${{ matrix.voice }}
+
+      - name: Uninstall
+        run: |
+          $env:DPD_UNINSTALL = '1'
+          irm $env:URL | iex
+          if ($global:DPD_RESULT -ne 'ok') { throw "uninstall: $global:DPD_RESULT" }
+          $ext = if ($env:DPD_EXT_DIR) { $env:DPD_EXT_DIR } else { "$env:USERPROFILE\DichPhuDe" }
+          $vn = if ($env:DPD_VIENEU_DIR) { $env:DPD_VIENEU_DIR } else { "$env:USERPROFILE\VieNeu-TTS" }
+          $left = @($ext, $vn, (Join-Path ([Environment]::GetFolderPath('Startup')) 'VieNeu (Dich Phu De).lnk'),
+                    (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Cap nhat Dich Phu De.lnk')) | Where-Object { Test-Path $_ }
+          if ($left) { throw "left behind: $($left -join ', ')" }
+          Start-Sleep -Seconds 12
+          if (Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'run-vieneu|openai_speech' }) { throw 'still running' }
+
+      - name: Server log on failure
+        if: failure()
+        run: |
+          $vn = if ($env:DPD_VIENEU_DIR) { $env:DPD_VIENEU_DIR } else { "$env:USERPROFILE\VieNeu-TTS" }
+          Get-Content "$vn\server.log" -Tail 60 -ErrorAction SilentlyContinue
+
+  macos:
+    name: macOS (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Apple chip, os: macos-latest, voice: "1" }
+          - { name: Intel, os: macos-15-intel, voice: "0" }
+    env:
+      DPD_NO_OPEN: "1"
+      VOICE: ${{ matrix.voice }}
+      URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/install-mac.sh
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install with the one-line command (macOS /bin/bash)
+        run: curl -fsSL "$URL" | /bin/bash
+
+      - name: Check the install
+        run: |
+          set -x
+          test -f ~/DichPhuDe/manifest.json
+          test -x ~/Desktop/"Cập nhật Dịch Phụ Đề.command"
+          if [ "$VOICE" = 0 ]; then test ! -e ~/VieNeu-TTS; exit 0; fi
+          test -f ~/Library/LaunchAgents/com.damduy.vieneu.plist
+          ls ~/VieNeu-TTS/src/vieneu/assets/samples | grep "Bắc"
+          curl -fsS 127.0.0.1:8000/health; echo
+          curl -fsS -o "$RUNNER_TEMP/t.wav" -w 'speech: %{size_download} bytes in %{time_total} s\n' 127.0.0.1:8000/v1/audio/speech \
+            -H 'content-type: application/json' -d '{"model":"x","input":"Xin chào, đây là thử nghiệm giọng đọc.","response_format":"wav"}'
+          test "$(stat -f%z "$RUNNER_TEMP/t.wav")" -gt 50000
+
+      - name: The server comes back after it is killed
+        if: matrix.voice == '1'
+        run: |
+          pkill -f apps.openai_speech
+          sleep 3
+          for i in $(seq 1 180); do curl -fs -m 2 127.0.0.1:8000/health >/dev/null && { echo "back after about $((i + 3)) s"; exit 0; }; sleep 1; done
+          echo "server did not come back"; exit 1
+
+      - name: Update (run the same command again)
+        run: |
+          out="$(curl -fsSL "$URL" | /bin/bash)"
+          echo "$out"
+          echo "$out" | grep -q "ĐÃ CẬP NHẬT"
+          if [ "$VOICE" = 1 ]; then curl -fsS 127.0.0.1:8000/health; fi
+
+      - name: Uninstall
+        run: |
+          curl -fsSL "$URL" | /bin/bash -s -- --uninstall
+          test ! -e ~/DichPhuDe
+          test ! -e ~/VieNeu-TTS
+          test ! -e ~/Library/LaunchAgents/com.damduy.vieneu.plist
+          test ! -e ~/Desktop/"Cập nhật Dịch Phụ Đề.command"
+          sleep 15
+          # not `! cmd`: bash -e ignores a failure under `!`
+          if pgrep -f apps.openai_speech; then echo "still running"; exit 1; fi
+          if curl -fs -m 2 127.0.0.1:8000/health; then echo "still answering"; exit 1; fi
+
+      - name: Server log on failure
+        if: failure()
+        run: tail -60 ~/VieNeu-TTS/server.log || true

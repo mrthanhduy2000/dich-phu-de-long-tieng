@@ -2190,9 +2190,10 @@ async function loadSettings() {
         const saved = await chrome.storage.sync.get({
             dualMode: null, perCueMode: false, originalFirst: false,
             subStyle: null, costMode: "balanced", autoTranslate: true, dubEnabled: true, skipSameLang: true,
-            uiTheme: "auto"
+            uiTheme: "auto", dubPrepareWait: true
         });
         state.dubEnabled = saved.dubEnabled !== false;
+        state.prepareWait = saved.dubPrepareWait !== false;
         state.costMode = saved.costMode;
         state.autoTranslate = saved.autoTranslate !== false;
         state.skipSameLang = saved.skipSameLang !== false;
@@ -2243,6 +2244,7 @@ async function init() {
                 if (changes.costMode) state.costMode = changes.costMode.newValue;
                 if (changes.autoTranslate) state.autoTranslate = changes.autoTranslate.newValue !== false;
                 if (changes.skipSameLang) state.skipSameLang = changes.skipSameLang.newValue !== false;
+                if (changes.dubPrepareWait) state.prepareWait = changes.dubPrepareWait.newValue !== false;
                 // Tu dien thay doi: ap dung cho cac cau dich tiep theo, khong can tai lai trang
                 if (changes.glossaryEnabled || changes.enabledGroups || changes.userKeep || changes.userNormalize) {
                     loadGlossary();
@@ -2317,9 +2319,48 @@ async function init() {
 async function courseraAutoTranslate() {
     // generic pages: the viewer just asked for a translation, nothing to decide automatically
     if (getCurrentSite() !== "coursera") return null;
-    if (!state.autoTranslate || state.active) return null;
+    if (!state.autoTranslate || state.active || state.autoTriedUrl === location.href) return null;
+    const release = courseraHoldFirstPlay(location.href);
+    try {
+        return await courseraAutoTranslateNow();
+    } finally {
+        // Not translated or no voice: play now, do not make the viewer sit out the 5 s
+        if (!(window.CST_DUB && window.CST_DUB.dub.enabled)) release();
+    }
+}
+
+// Coursera plays a lecture by itself 2 to 3 s after it opens, before its first lines are translated
+// and voiced. Measured 2026-10-06 (in-page move to the next lecture, translation cached): playing at
+// 2.8 s, the engine up at 4.5 s with the video at 1.7 s, the greeting never voiced, the first voice
+// on the second line; uncached, Gemini adds seconds and the voice came in around 7 s. YouTube has
+// held its start since "Chờ chuẩn bị" (dubPrepareWait); Coursera never did. The lecture's first play
+// (its own autoplay or the viewer's click) now waits, up to 5 s, for the voice of the line it starts
+// on, then plays from 0 (prepareHold initial). Returns a function that drops the hold.
+function courseraHoldFirstPlay(url) {
+    const api = window.CST_DUB;
+    if (!state.dubEnabled || !state.prepareWait || !api || !api.prepareHold) return () => {};
+    let armed = true;
+    const hold = v => {
+        if (!armed) return;
+        armed = false;
+        document.removeEventListener("play", onPlay, true);
+        if (location.href !== url) return;
+        api.prepareHold(v, () => { const e = api.dub.engine; return !!(e && e.isReadyAt(v.currentTime)); },
+            { initial: true, container: csPlayerBox() || v.parentElement });
+    };
+    // Media events do not bubble, but a capturing listener on the document still sees them
+    const onPlay = e => { if (e.target instanceof HTMLVideoElement) hold(e.target); };
+    document.addEventListener("play", onPlay, true);
+    const v = csVideo();
+    if (v && !v.paused) hold(v);                // already playing by the time we got here
+    return () => {
+        if (armed) { armed = false; document.removeEventListener("play", onPlay, true); }
+        if (api.hold.active) api.hold.release();
+    };
+}
+
+async function courseraAutoTranslateNow() {
     const url = location.href;
-    if (state.autoTriedUrl === url) return null;
     // The lecture just left may still be finishing its window in flight (up to Gemini's 15 s
     // timeout): wait for it instead of giving up on this lecture for good
     for (let i = 0; i < 80 && state.busy && location.href === url; i++) await sleep(250);
