@@ -46,12 +46,14 @@ jobs:
           $vn = if ($env:DPD_VIENEU_DIR) { $env:DPD_VIENEU_DIR } else { "$env:USERPROFILE\VieNeu-TTS" }
           if (-not (Test-Path "$ext\manifest.json")) { throw 'extension missing' }
           if (-not (Test-Path "$ext\tools\vieneu-runner.pyw")) { throw 'runner missing' }
-          if (-not (Test-Path (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Cap nhat Dich Phu De.lnk'))) { throw 'updater shortcut missing' }
+          if (-not (Test-Path (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Cap nhat Dich Phu De.cmd'))) { throw 'updater missing' }
           if ($env:VOICE -eq '0') {
             if (Test-Path $vn) { throw 'VieNeu installed on ARM' }
             return
           }
-          if (-not (Test-Path (Join-Path ([Environment]::GetFolderPath('Startup')) 'VieNeu (Dich Phu De).lnk'))) { throw 'autostart missing' }
+          $run = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue).'DichPhuDe VieNeu'
+          "autostart: $run"
+          if (-not $run -or -not $run.Contains("$vn\run-vieneu.pyw")) { throw 'autostart missing' }
           $names = (Get-ChildItem "$vn\src\vieneu\assets\samples").Name -join ' | '
           if ($names -notmatch [string][char]0x1EAF) { throw "Vietnamese file names lost: $names" }
           Invoke-RestMethod http://127.0.0.1:8000/health | ConvertTo-Json -Compress
@@ -91,9 +93,9 @@ jobs:
           if ($global:DPD_RESULT -ne 'ok') { throw "uninstall: $global:DPD_RESULT" }
           $ext = if ($env:DPD_EXT_DIR) { $env:DPD_EXT_DIR } else { "$env:USERPROFILE\DichPhuDe" }
           $vn = if ($env:DPD_VIENEU_DIR) { $env:DPD_VIENEU_DIR } else { "$env:USERPROFILE\VieNeu-TTS" }
-          $left = @($ext, $vn, (Join-Path ([Environment]::GetFolderPath('Startup')) 'VieNeu (Dich Phu De).lnk'),
-                    (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Cap nhat Dich Phu De.lnk')) | Where-Object { Test-Path $_ }
+          $left = @($ext, $vn, (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Cap nhat Dich Phu De.cmd')) | Where-Object { Test-Path $_ }
           if ($left) { throw "left behind: $($left -join ', ')" }
+          if ((Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue).'DichPhuDe VieNeu') { throw 'autostart left behind' }
           Start-Sleep -Seconds 12
           if (Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'run-vieneu|openai_speech' }) { throw 'still running' }
 

@@ -23,7 +23,9 @@ $ExtDir = if ($env:DPD_EXT_DIR) { $env:DPD_EXT_DIR } else { Join-Path $env:USERP
 $VnDir = if ($env:DPD_VIENEU_DIR) { $env:DPD_VIENEU_DIR } else { Join-Path $env:USERPROFILE 'VieNeu-TTS' }
 $Port = 8000                                # the extension calls 127.0.0.1:8000 (cost-policy.js)
 $Mark = '.dichphude-vieneu'
-$UpdLink = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Cap nhat Dich Phu De.lnk'
+# A .cmd, not a .lnk: WScript.Shell rejects paths outside the ANSI code page (a Vietnamese user name)
+$UpdCmd = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Cap nhat Dich Phu De.cmd'
+$OldUpdLink = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Cap nhat Dich Phu De.lnk'   # 2.4.9 to 2.5.0
 
 function Say($m) { Write-Host ''; Write-Host "==> $m" -ForegroundColor Cyan }
 
@@ -64,7 +66,7 @@ try {
             Get-ChildItem $hf -Directory -Filter 'models--pnnbao-ump--*' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
         } elseif (Test-Path $VnDir) { Write-Host "  Giu nguyen $VnDir (khong do bo cai nay tao)." }
         if (Test-Path "$ExtDir\manifest.json") { Remove-Item $ExtDir -Recurse -Force }
-        Remove-Item $UpdLink -ErrorAction SilentlyContinue
+        Remove-Item $UpdCmd, $OldUpdLink -ErrorAction SilentlyContinue
         Write-Host ''
         Write-Host ' DA GO XONG. Con mot buoc: o trang chrome://extensions, bam "Xoa" tren the'
         Write-Host ' "Dich Phu De & Long Tieng AI".'
@@ -178,13 +180,12 @@ try {
         }
     }
 
-    # 4. A desktop shortcut that updates by running this installer again
+    # 4. A desktop file that updates by running this installer again
     if (-not $env:DPD_NO_DESKTOP) {
-        $shell = New-Object -ComObject WScript.Shell
-        $lnk = $shell.CreateShortcut($UpdLink)
-        $lnk.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-        $lnk.Arguments = "-NoProfile -ExecutionPolicy Bypass -NoExit -Command `"irm https://raw.githubusercontent.com/$Repo/main/install-windows.ps1 | iex`""
-        $lnk.Save()
+        @('@echo off',
+          "powershell -NoProfile -ExecutionPolicy Bypass -NoExit -Command `"irm https://raw.githubusercontent.com/$Repo/main/install-windows.ps1 | iex`"") |
+            Set-Content -Path $UpdCmd -Encoding ASCII
+        Remove-Item $OldUpdLink -ErrorAction SilentlyContinue
     }
 
     # 5. Chrome

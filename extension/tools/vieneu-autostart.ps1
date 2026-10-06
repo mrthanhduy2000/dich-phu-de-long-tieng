@@ -1,7 +1,9 @@
 # VieNeu voice server on Windows: start at sign-in, restart if it stops. The Windows twin of
-# vieneu-autostart.command. No admin rights: a shortcut in the user's Startup folder runs
-# .venv\Scripts\pythonw.exe run-vieneu.pyw (copied from vieneu-runner.pyw next to this file), which
-# keeps the server alive without any window.
+# vieneu-autostart.command. No admin rights: a value under the user's Run key (Task Manager lists it
+# under Startup apps) runs .venv\Scripts\pythonw.exe run-vieneu.pyw (copied from vieneu-runner.pyw
+# next to this file), which keeps the server alive without any window. Not a Startup-folder shortcut:
+# WScript.Shell rejects a target outside the ANSI code page, so a Vietnamese user name ("Dam" with
+# its marks) failed there (CI, 2026-10-07); the registry takes any path.
 # ASCII only on purpose: Windows PowerShell 5.1 reads a BOM-less .ps1 as ANSI and garbles Vietnamese.
 #   powershell -ExecutionPolicy Bypass -File vieneu-autostart.ps1            install and start
 #   powershell -ExecutionPolicy Bypass -File vieneu-autostart.ps1 -Stop      stop the server now
@@ -11,7 +13,9 @@ $ErrorActionPreference = 'Stop'
 
 $App = if ($env:VIENEU_DIR) { $env:VIENEU_DIR } else { Join-Path $env:USERPROFILE 'VieNeu-TTS' }
 $Runner = Join-Path $App 'run-vieneu.pyw'
-$Link = Join-Path ([Environment]::GetFolderPath('Startup')) 'VieNeu (Dich Phu De).lnk'
+$RunKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+$RunName = 'DichPhuDe VieNeu'
+$OldLink = Join-Path ([Environment]::GetFolderPath('Startup')) 'VieNeu (Dich Phu De).lnk'   # 2.4.9 to 2.5.0
 
 function Stop-VieNeu {
     # The supervisor first, or it restarts the server it just lost. Matched on the command line: a
@@ -27,7 +31,11 @@ function Stop-VieNeu {
 
 if ($Stop -or $Uninstall) {
     Stop-VieNeu
-    if ($Uninstall) { Remove-Item $Link -ErrorAction SilentlyContinue; Write-Host 'Da go tu khoi dong VieNeu.' }
+    if ($Uninstall) {
+        Remove-ItemProperty -Path $RunKey -Name $RunName -ErrorAction SilentlyContinue
+        Remove-Item $OldLink -ErrorAction SilentlyContinue
+        Write-Host 'Da go tu khoi dong VieNeu.'
+    }
     else { Write-Host 'Da tat VieNeu.' }
     return
 }
@@ -37,12 +45,9 @@ if (-not (Test-Path $Pyw)) { throw "Khong tim thay $Pyw. Hay chay lai bo cai." }
 Copy-Item (Join-Path $PSScriptRoot 'vieneu-runner.pyw') $Runner -Force
 Remove-Item (Join-Path $App 'run-vieneu.ps1') -ErrorAction SilentlyContinue
 
-$shell = New-Object -ComObject WScript.Shell
-$lnk = $shell.CreateShortcut($Link)
-$lnk.TargetPath = $Pyw
-$lnk.Arguments = "`"$Runner`""
-$lnk.WorkingDirectory = $App
-$lnk.Save()
+if (-not (Test-Path $RunKey)) { New-Item -Path $RunKey -Force | Out-Null }
+Set-ItemProperty -Path $RunKey -Name $RunName -Value "`"$Pyw`" `"$Runner`""
+Remove-Item $OldLink -ErrorAction SilentlyContinue
 
 # Restart so an update takes effect now, not at the next sign-in
 Stop-VieNeu

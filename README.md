@@ -113,5 +113,5 @@ Cuối cùng bấm **Xóa** trên thẻ tiện ích ở `chrome://extensions`.
   phóng chỗ khi người xem tua video, nếu không mọi yêu cầu sau đó đều bị từ chối cho tới khi khởi động
   lại. `openai_speech.patch` là phần thay đổi so với bản gốc.
 - Giọng VieNeu chỉ mở ở `127.0.0.1:8000`, máy khác trong mạng không gọi được.
-- Trên Windows, VieNeu chạy ẩn bằng `pythonw.exe` (không có cửa sổ), khởi động cùng Windows qua một
-  lối tắt trong thư mục Startup.
+- Trên Windows, VieNeu chạy ẩn bằng `pythonw.exe` (không có cửa sổ) và khởi động cùng Windows; muốn
+  tạm tắt thì vào Task Manager, mục Startup apps, mục "DichPhuDe VieNeu".
