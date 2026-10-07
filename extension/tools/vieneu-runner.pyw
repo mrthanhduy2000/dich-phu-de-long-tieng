@@ -1,14 +1,16 @@
-# VieNeu voice server on Windows, started at sign-in by a Startup shortcut that
-# vieneu-autostart.ps1 makes (target: .venv\Scripts\pythonw.exe run-vieneu.pyw). pythonw has no
-# console, so nothing flashes at sign-in, and no hidden "powershell -ExecutionPolicy Bypass" sits in
-# Startup for an antivirus to flag.
-#   run-vieneu.pyw            supervisor: one per user (mutex), restarts the server 10 s after it stops
+# VieNeu voice server on Windows, started at sign-in by the HKCU Run value that
+# vieneu-autostart.ps1 writes (.venv\Scripts\pythonw.exe run-vieneu.pyw). pythonw has no console, so
+# nothing flashes at sign-in, and no hidden "powershell -ExecutionPolicy Bypass" sits in Startup for
+# an antivirus to flag.
+#   run-vieneu.pyw            supervisor: one per user (mutex), restarts the server 10 s after it stops,
+#                             and runs dichphude-update.py every 30 min (the macOS twin is a LaunchAgent)
 #   run-vieneu.pyw --serve    the server itself, in this process
 # ASCII only, like the other Windows helpers.
 import ctypes
 import os
 import subprocess
 import sys
+import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -54,6 +56,18 @@ def serve():
     runpy.run_module("apps.openai_speech", run_name="__main__", alter_sys=True)
 
 
+def update_loop():
+    updater = os.path.join(HERE, "dichphude-update.py")
+    time.sleep(5)                            # at sign-in, before Chrome opens: a staged update lands now
+    while True:
+        if os.path.exists(updater):
+            try:
+                subprocess.run([sys.executable, updater], cwd=HERE, creationflags=CREATE_NO_WINDOW, timeout=1800)
+            except Exception:
+                pass
+        time.sleep(1800)
+
+
 def supervise():
     k = ctypes.WinDLL("kernel32", use_last_error=True)
     k.CreateMutexW.restype = ctypes.c_void_p
@@ -61,6 +75,7 @@ def supervise():
     mutex = k.CreateMutexW(None, 0, "Local\\DichPhuDeVieNeu")
     if not mutex or ctypes.get_last_error() == ERROR_ALREADY_EXISTS:
         return                               # already running for this user
+    threading.Thread(target=update_loop, daemon=True).start()
     while True:
         p = subprocess.Popen([sys.executable, os.path.abspath(__file__), "--serve"], cwd=HERE,
                              creationflags=CREATE_NO_WINDOW)

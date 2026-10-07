@@ -45,12 +45,15 @@ jobs:
           $ext = if ($env:DPD_EXT_DIR) { $env:DPD_EXT_DIR } else { "$env:USERPROFILE\DichPhuDe" }
           $vn = if ($env:DPD_VIENEU_DIR) { $env:DPD_VIENEU_DIR } else { "$env:USERPROFILE\VieNeu-TTS" }
           if (-not (Test-Path "$ext\manifest.json")) { throw 'extension missing' }
-          if (-not (Test-Path "$ext\tools\vieneu-runner.pyw")) { throw 'runner missing' }
-          if (-not (Test-Path (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Cap nhat Dich Phu De.cmd'))) { throw 'updater missing' }
+          if (-not (Test-Path "$ext\tools\huong-dan-cai-dat.html")) { throw 'guide page missing' }
+          $desk = Test-Path (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Cap nhat Dich Phu De.cmd')
           if ($env:VOICE -eq '0') {
             if (Test-Path $vn) { throw 'VieNeu installed on ARM' }
+            if (-not $desk) { throw 'desktop updater missing (no VieNeu, so no background updater)' }
             return
           }
+          if ($desk) { throw 'desktop updater present although updates run by themselves' }
+          if ((Get-Content "$vn\.dichphude-ext" -Raw -Encoding UTF8).Trim() -ne $ext) { throw 'updater does not know the extension folder' }
           $run = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue).'DichPhuDe VieNeu'
           "autostart: $run"
           if (-not $run -or -not $run.Contains("$vn\run-vieneu.pyw")) { throw 'autostart missing' }
@@ -75,6 +78,21 @@ jobs:
           for ($i = 0; $i -lt 180; $i++) { try { Invoke-RestMethod http://127.0.0.1:8000/health -TimeoutSec 2 | Out-Null; $ok = $true; break } catch {}; Start-Sleep -Seconds 1 }
           if (-not $ok) { throw 'server did not come back' }
           "back after about $($i + 3) s"
+
+      - name: The background updater brings an old install up to date
+        if: matrix.voice == '1'
+        run: |
+          $ext = if ($env:DPD_EXT_DIR) { $env:DPD_EXT_DIR } else { "$env:USERPROFILE\DichPhuDe" }
+          $vn = if ($env:DPD_VIENEU_DIR) { $env:DPD_VIENEU_DIR } else { "$env:USERPROFILE\VieNeu-TTS" }
+          $want = (Invoke-RestMethod "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/extension/manifest.json").version
+          $mf = "$ext\manifest.json"
+          [IO.File]::WriteAllText($mf, ([IO.File]::ReadAllText($mf) -replace '"version": "[^"]+"', '"version": "0.0.1"'))
+          New-Item "$ext\stale-file.js" -ItemType File | Out-Null
+          & "$vn\.venv\Scripts\python.exe" "$vn\dichphude-update.py" --now
+          Get-Content "$vn\update.log" -Tail 5
+          $got = (Get-Content $mf -Raw -Encoding UTF8 | ConvertFrom-Json).version
+          if ($got -ne $want) { throw "updater left $got, expected $want" }
+          if (Test-Path "$ext\stale-file.js") { throw 'a file gone from the release stayed' }
 
       - name: Update (run the same command again)
         run: |
@@ -130,9 +148,13 @@ jobs:
         run: |
           set -x
           test -f ~/DichPhuDe/manifest.json
-          test -x ~/Desktop/"Cập nhật Dịch Phụ Đề.command"
-          if [ "$VOICE" = 0 ]; then test ! -e ~/VieNeu-TTS; exit 0; fi
+          test -f ~/DichPhuDe/tools/huong-dan-cai-dat.html
+          if [ "$VOICE" = 0 ]; then test ! -e ~/VieNeu-TTS; test -x ~/Desktop/"Cập nhật Dịch Phụ Đề.command"; exit 0; fi
+          test ! -e ~/Desktop/"Cập nhật Dịch Phụ Đề.command"
           test -f ~/Library/LaunchAgents/com.damduy.vieneu.plist
+          test -f ~/Library/LaunchAgents/com.damduy.dichphude.update.plist
+          launchctl print "gui/$(id -u)/com.damduy.dichphude.update" | grep -E "state|run interval" || true
+          test "$(cat ~/VieNeu-TTS/.dichphude-ext)" = "$HOME/DichPhuDe"
           ls ~/VieNeu-TTS/src/vieneu/assets/samples | grep "Bắc"
           curl -fsS 127.0.0.1:8000/health; echo
           curl -fsS -o "$RUNNER_TEMP/t.wav" -w 'speech: %{size_download} bytes in %{time_total} s\n' 127.0.0.1:8000/v1/audio/speech \
@@ -147,6 +169,19 @@ jobs:
           for i in $(seq 1 180); do curl -fs -m 2 127.0.0.1:8000/health >/dev/null && { echo "back after about $((i + 3)) s"; exit 0; }; sleep 1; done
           echo "server did not come back"; exit 1
 
+      - name: The background updater brings an old install up to date
+        if: matrix.voice == '1'
+        run: |
+          want="$(curl -fsSL "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_SHA/extension/manifest.json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')"
+          sed -i '' 's/"version": "[^"]*"/"version": "0.0.1"/' ~/DichPhuDe/manifest.json
+          touch ~/DichPhuDe/stale-file.js
+          ~/VieNeu-TTS/.venv/bin/python ~/VieNeu-TTS/dichphude-update.py --now
+          tail -5 ~/VieNeu-TTS/update.log
+          got="$(python3 -c 'import json,os; print(json.load(open(os.path.expanduser("~/DichPhuDe/manifest.json")))["version"])')"
+          echo "updated to $got (expected $want)"
+          test "$got" = "$want"
+          test ! -e ~/DichPhuDe/stale-file.js
+
       - name: Update (run the same command again)
         run: |
           out="$(curl -fsSL "$URL" | /bin/bash)"
@@ -160,6 +195,7 @@ jobs:
           test ! -e ~/DichPhuDe
           test ! -e ~/VieNeu-TTS
           test ! -e ~/Library/LaunchAgents/com.damduy.vieneu.plist
+          test ! -e ~/Library/LaunchAgents/com.damduy.dichphude.update.plist
           test ! -e ~/Desktop/"Cập nhật Dịch Phụ Đề.command"
           sleep 15
           # not `! cmd`: bash -e ignores a failure under `!`

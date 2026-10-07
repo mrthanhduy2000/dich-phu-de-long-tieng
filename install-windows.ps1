@@ -69,7 +69,7 @@ try {
         Remove-Item $UpdCmd, $OldUpdLink -ErrorAction SilentlyContinue
         Write-Host ''
         Write-Host ' DA GO XONG. Con mot buoc: o trang chrome://extensions, bam "Xoa" tren the'
-        Write-Host ' "Dich Phu De & Long Tieng AI".'
+        Write-Host ' "Vietnamese Subtitle Translator".'
         $global:DPD_RESULT = 'ok'
         return
     }
@@ -178,42 +178,45 @@ try {
             }
             Say 'VieNeu da san sang.'
         }
+
+        # Updates by themselves: the run-vieneu.pyw supervisor runs dichphude-update.py every 30 min;
+        # it stages a new version and lays it over the extension while Chrome is closed.
+        [IO.File]::WriteAllText("$VnDir\.dichphude-ext", $ExtDir, (New-Object Text.UTF8Encoding $false))
+        Copy-Item "$ExtDir\tools\dichphude-update.py" "$VnDir\dichphude-update.py" -Force
     }
 
-    # 4. A desktop file that updates by running this installer again
-    if (-not $env:DPD_NO_DESKTOP) {
+    # 4. A desktop file that updates by running this installer again: only where nothing updates by
+    # itself (no VieNeu, so no updater). Elsewhere one left by an older install goes.
+    if ($withVoice) { Remove-Item $UpdCmd, $OldUpdLink -ErrorAction SilentlyContinue }
+    elseif (-not $env:DPD_NO_DESKTOP) {
         @('@echo off',
           "powershell -NoProfile -ExecutionPolicy Bypass -NoExit -Command `"irm https://raw.githubusercontent.com/$Repo/main/install-windows.ps1 | iex`"") |
             Set-Content -Path $UpdCmd -Encoding ASCII
         Remove-Item $OldUpdLink -ErrorAction SilentlyContinue
     }
 
-    # 5. Chrome
-    if (-not $env:DPD_NO_OPEN) {
+    # 5. Chrome: a first install opens the step-by-step page (tools\huong-dan-cai-dat.html)
+    $guide = "$ExtDir\tools\huong-dan-cai-dat.html"
+    if (-not $env:DPD_NO_OPEN -and -not $update) {
         try { Set-Clipboard -Value $ExtDir } catch {}
-        try { Start-Process 'chrome.exe' 'chrome://extensions' } catch {}
+        try { Start-Process 'chrome.exe' "`"$guide`"" } catch { try { Start-Process $guide } catch {} }
     }
 
     Write-Host ''
     Write-Host '=================================================================='
     if ($update) {
-        Write-Host " DA CAP NHAT len ban $version. Con 2 buoc:"
-        Write-Host '  1. O trang chrome://extensions, bam nut Tai lai (mui ten tron) tren'
-        Write-Host '     the "Dich Phu De & Long Tieng AI".'
-        Write-Host '  2. Tai lai (F5) tab YouTube hay Coursera dang mo.'
-        Write-Host '  Dung go tien ich roi cai lai: se mat cai dat va khoa API.'
+        Write-Host " DA CAP NHAT len ban $version. Thoat Chrome roi mo lai la dung ban moi"
+        Write-Host ' (hoac bam Tai lai tren the "Vietnamese Subtitle Translator" o'
+        Write-Host ' chrome://extensions). Dung go tien ich roi cai lai: se mat cai dat va khoa API.'
     } else {
-        Write-Host " DA CAI ban $version. Buoc cuoi lam bang tay trong Chrome:"
-        Write-Host '  1. Mo trang chrome://extensions (neu chua tu mo), bat "Che do danh'
-        Write-Host '     cho nha phat trien" o goc tren ben phai.'
-        Write-Host '  2. Bam "Tai tien ich da giai nen".'
-        Write-Host '  3. Dan (Ctrl+V) duong dan da chep san vao o dia chi cua cua so chon'
-        Write-Host '     thu muc, nhan Enter, roi bam "Select Folder":'
-        Write-Host "       $ExtDir"
-        Write-Host '  4. Mo Cai dat cua tien ich va dan khoa Gemini API.'
+        Write-Host " DA CAI ban $version. Con mot buoc lam bang tay trong Chrome: lam theo"
+        Write-Host ' trang huong dan vua mo (neu chua thay, mo tep nay bang Chrome):'
+        Write-Host "   $guide"
+        Write-Host ' Tom tat: chrome://extensions > bat Che do danh cho nha phat trien >'
+        Write-Host " Tai tien ich da giai nen > chon thu muc $ExtDir"
     }
-    if ($withVoice) { Write-Host ' Giong VieNeu tu chay moi khi bat may, khong can mo gi them.' }
-    Write-Host ' Cap nhat ve sau: nhap dup "Cap nhat Dich Phu De" tren man hinh chinh.'
+    if ($withVoice) { Write-Host ' Giong VieNeu tu chay moi khi bat may. Ban moi tu cai vao lan mo Chrome ke tiep.' }
+    else { Write-Host ' Cap nhat ve sau: nhap dup "Cap nhat Dich Phu De" tren man hinh chinh.' }
     Write-Host '=================================================================='
     $global:DPD_RESULT = 'ok'
 }

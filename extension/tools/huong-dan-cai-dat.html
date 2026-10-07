@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bật tiện ích Dịch Phụ Đề</title>
+<!-- Opened by the installers right after a first install (file://, from extension/tools/). The
+     folder path is worked out from this page's own location, so nothing is generated per machine. -->
+<style>
+  :root { --bg: #f6f4f0; --card: #fff; --ink: #24211d; --muted: #6b655c; --line: #e4dfd6; --accent: #1a73e8; --ok: #1e8e3e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1d1b18; --card: #282521; --ink: #ece8e1; --muted: #a59e93; --line: #3a3732; --accent: #8ab4f8; --ok: #81c995; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { font-size: 26px; margin: 0 0 6px; }
+  .lead { color: var(--muted); margin: 0 0 24px; }
+  ol { list-style: none; padding: 0; margin: 0; counter-reset: s; }
+  li { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 18px 18px 64px; margin: 0 0 14px; position: relative; counter-increment: s; }
+  li::before { content: counter(s); position: absolute; left: 18px; top: 16px; width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--card); font-weight: 700; display: grid; place-items: center; }
+  li b { font-weight: 650; }
+  .row { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  code { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font: 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all; flex: 1 1 260px; }
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 8px; padding: 8px 14px; background: var(--accent); color: var(--card); cursor: pointer; }
+  button.done { background: var(--ok); }
+  .note { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .foot { color: var(--muted); font-size: 14px; margin-top: 22px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Còn một bước: bật tiện ích trong Chrome</h1>
+  <p class="lead">Bộ cài đã xong. Chrome không cho chương trình nào tự bật tiện ích, nên bạn làm 4 bước dưới đây một lần duy nhất.</p>
+  <ol>
+    <li>Chép địa chỉ này, dán vào thanh địa chỉ của Chrome rồi nhấn Enter.
+      <div class="row"><code id="ext-url">chrome://extensions</code><button data-copy="ext-url">Chép</button></div>
+    </li>
+    <li>Ở góc trên bên phải trang vừa mở, bật <b>Chế độ dành cho nhà phát triển</b> (Developer mode).</li>
+    <li>Bấm nút <b>Tải tiện ích đã giải nén</b> (Load unpacked), rồi chọn thư mục này:
+      <div class="row"><code id="folder"></code><button data-copy="folder">Chép</button></div>
+      <p class="note" id="pick-hint"></p>
+    </li>
+    <li>Bấm biểu tượng mảnh ghép trên thanh công cụ, ghim <b>Vietnamese Subtitle Translator</b> (tên tiện ích trong Chrome), mở Cài đặt của tiện ích và dán khóa Gemini API. Chưa có khóa thì lấy miễn phí tại <a href="https://aistudio.google.com/apikey">Google AI Studio</a>.</li>
+  </ol>
+  <p class="foot">Từ giờ không cần làm gì thêm: giọng đọc tự chạy mỗi khi bật máy, và bản mới tự được cài vào lần mở Chrome kế tiếp.</p>
+</main>
+<script>
+  // This page sits in <extension folder>/tools/
+  const isWin = /Windows/i.test(navigator.userAgent);
+  let p = decodeURIComponent(location.pathname).replace(/\/tools\/[^/]*$/, "");
+  if (isWin) p = p.replace(/^\/([A-Za-z]:)/, "$1").replace(/\//g, "\\");
+  document.getElementById("folder").textContent = p;
+  document.getElementById("pick-hint").textContent = isWin
+    ? "Trong cửa sổ chọn thư mục: dán đường dẫn vào ô địa chỉ ở trên cùng, nhấn Enter, rồi bấm “Select Folder”."
+    : "Trong cửa sổ chọn thư mục: nhấn Cmd+Shift+G, dán đường dẫn (Cmd+V), nhấn Enter, rồi bấm “Chọn”.";
+  for (const b of document.querySelectorAll("button[data-copy]")) {
+    b.addEventListener("click", async () => {
+      const text = document.getElementById(b.dataset.copy).textContent;
+      try { await navigator.clipboard.writeText(text); }
+      catch (e) {                                   // older Chrome on file://: the selection route
+        const r = document.createRange(); r.selectNodeContents(document.getElementById(b.dataset.copy));
+        const s = getSelection(); s.removeAllRanges(); s.addRange(r); document.execCommand("copy");
+      }
+      b.textContent = "Đã chép"; b.classList.add("done");
+      setTimeout(() => { b.textContent = "Chép"; b.classList.remove("done"); }, 2000);
+    });
+  }
+</script>
+</body>
+</html>

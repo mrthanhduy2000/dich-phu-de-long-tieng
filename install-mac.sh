@@ -22,6 +22,8 @@ PORT=8000                                   # the extension calls 127.0.0.1:8000
 MARK=".dichphude-vieneu"
 LABEL="com.damduy.vieneu"                   # tools/vieneu-autostart.command
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+UPD_LABEL="com.damduy.dichphude.update"     # the background updater (tools/dichphude-update.py)
+UPD_PLIST="$HOME/Library/LaunchAgents/$UPD_LABEL.plist"
 UPD="$HOME/Desktop/Cập nhật Dịch Phụ Đề.command"
 
 say() { printf '\n==> %s\n' "$*"; }
@@ -32,6 +34,7 @@ is_vieneu() { curl -s -m 3 "http://127.0.0.1:$PORT/health" 2>/dev/null | grep -q
 # service only when it runs this installer's VieNeu. Learned the hard way: a test uninstall took
 # down the author's own voice server.
 service_is_ours() { grep -qF "$VN_DIR/.venv/bin/python" "$PLIST" 2>/dev/null; }
+updater_is_ours() { grep -qF "$VN_DIR/dichphude-update.py" "$UPD_PLIST" 2>/dev/null; }
 
 [[ "$(uname -s)" == Darwin ]] || die "Tệp này dành cho macOS. Máy Windows dùng install-windows.ps1."
 
@@ -44,6 +47,10 @@ if [[ "${1:-}" == "--uninstall" ]]; then
             launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
             rm -f "$PLIST"
         fi
+        if updater_is_ours; then
+            launchctl bootout "gui/$(id -u)/$UPD_LABEL" 2>/dev/null || true
+            rm -f "$UPD_PLIST"
+        fi
         pkill -f "$VN_DIR/.venv/bin/python -m apps.openai_speech" 2>/dev/null || true
         rm -rf "$VN_DIR"
         rm -rf "$HOME/.cache/huggingface/hub/models--pnnbao-ump--"* 2>/dev/null || true
@@ -52,7 +59,7 @@ if [[ "${1:-}" == "--uninstall" ]]; then
     rm -f "$UPD"
     echo
     echo " ĐÃ GỠ XONG. Còn một bước: ở trang chrome://extensions, bấm \"Xóa\" trên thẻ"
-    echo " \"Dịch Phụ Đề & Lồng Tiếng AI\"."
+    echo " \"Vietnamese Subtitle Translator\"."
     return 0
 fi
 
@@ -156,11 +163,48 @@ EOF
             tail -25 "$VN_DIR/server.log" 2>/dev/null || true
             die "VieNeu chưa phản hồi sau 15 phút. Nhật ký: $VN_DIR/server.log"
         fi
+
+        # Updates by themselves: staged in the background, laid over the extension while Chrome is
+        # closed (Chrome reads it from disk at its next start). See tools/dichphude-update.py.
+        printf '%s' "$EXT_DIR" > "$VN_DIR/.dichphude-ext"
+        cp "$EXT_DIR/tools/dichphude-update.py" "$VN_DIR/dichphude-update.py"
+        if [[ -f "$UPD_PLIST" ]] && ! updater_is_ours; then
+            say "Bỏ qua tự cập nhật: máy đã có $UPD_PLIST của một bản cài khác."
+        else
+            mkdir -p "$HOME/Library/LaunchAgents"
+            cat > "$UPD_PLIST" <<PLISTEOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>$UPD_LABEL</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$VN_DIR/.venv/bin/python</string>
+        <string>$VN_DIR/dichphude-update.py</string>
+    </array>
+    <key>WorkingDirectory</key><string>$VN_DIR</string>
+    <key>RunAtLoad</key><true/>
+    <key>StartInterval</key><integer>1800</integer>
+    <key>ProcessType</key><string>Background</string>
+    <key>StandardOutPath</key><string>/dev/null</string>
+    <key>StandardErrorPath</key><string>/dev/null</string>
+</dict>
+</plist>
+PLISTEOF
+            launchctl bootout "gui/$(id -u)/$UPD_LABEL" 2>/dev/null || true
+            sleep 1
+            launchctl bootstrap "gui/$(id -u)" "$UPD_PLIST" 2>/dev/null \
+                || say "Chưa bật được tự cập nhật (sẽ bật ở lần chạy lại bộ cài)."
+        fi
     fi
 fi
 
-# 4. A desktop launcher that updates by running this installer again
-if [[ -z "${DPD_NO_DESKTOP:-}" && -d "$HOME/Desktop" ]]; then
+# 4. A desktop launcher that updates by running this installer again: only where nothing updates by
+# itself (no VieNeu, so no updater). Elsewhere one left by an older install goes.
+if [[ $WITH_VOICE == 1 ]]; then
+    rm -f "$UPD"
+elif [[ -z "${DPD_NO_DESKTOP:-}" && -d "$HOME/Desktop" ]]; then
     cat > "$UPD" <<EOF
 #!/bin/bash
 curl -fsSL https://raw.githubusercontent.com/$REPO/main/install-mac.sh | bash
@@ -170,34 +214,31 @@ EOF
     chmod +x "$UPD"
 fi
 
-# 5. Chrome
-if [[ -z "${DPD_NO_OPEN:-}" ]]; then
+# 5. Chrome: a first install opens the step-by-step page (tools/huong-dan-cai-dat.html)
+GUIDE="$EXT_DIR/tools/huong-dan-cai-dat.html"
+if [[ -z "${DPD_NO_OPEN:-}" && $UPDATE == 0 ]]; then
     printf '%s' "$EXT_DIR" | pbcopy 2>/dev/null || true
-    open -a "Google Chrome" "chrome://extensions" 2>/dev/null || true
+    open -a "Google Chrome" "$GUIDE" 2>/dev/null || open "$GUIDE" 2>/dev/null || true
 fi
 
 echo
 echo "=================================================================="
 if [[ $UPDATE == 1 ]]; then
-    echo " ĐÃ CẬP NHẬT lên bản $VERSION. Còn 2 bước:"
-    echo "  1. Ở trang chrome://extensions, bấm nút Tải lại (mũi tên tròn) trên"
-    echo "     thẻ \"Dịch Phụ Đề & Lồng Tiếng AI\"."
-    echo "  2. Tải lại (F5) tab YouTube hay Coursera đang mở."
-    echo "  Đừng gỡ tiện ích rồi cài lại: sẽ mất cài đặt và khóa API."
+    echo " ĐÃ CẬP NHẬT lên bản $VERSION. Thoát Chrome rồi mở lại là dùng bản mới"
+    echo " (hoặc bấm Tải lại trên thẻ \"Vietnamese Subtitle Translator\" ở"
+    echo " chrome://extensions). Đừng gỡ tiện ích rồi cài lại: sẽ mất cài đặt và khóa API."
 else
-    echo " ĐÃ CÀI bản $VERSION. Bước cuối làm bằng tay trong Chrome:"
-    echo "  1. Mở trang chrome://extensions (nếu chưa tự mở), bật \"Chế độ dành"
-    echo "     cho nhà phát triển\" ở góc trên bên phải."
-    echo "  2. Bấm \"Tải tiện ích đã giải nén\"."
-    echo "  3. Nhấn Cmd+Shift+G, dán (Cmd+V) đường dẫn đã chép sẵn, nhấn Enter,"
-    echo "     rồi bấm Chọn:"
-    echo "       $EXT_DIR"
-    echo "  4. Mở Cài đặt của tiện ích và dán khóa Gemini API."
+    echo " ĐÃ CÀI bản $VERSION. Còn một bước làm bằng tay trong Chrome: làm theo"
+    echo " trang hướng dẫn vừa mở (nếu chưa thấy, mở tệp này bằng Chrome):"
+    echo "   $GUIDE"
+    echo " Tóm tắt: chrome://extensions > bật Chế độ dành cho nhà phát triển >"
+    echo " Tải tiện ích đã giải nén > chọn thư mục $EXT_DIR"
 fi
 if [[ $WITH_VOICE == 1 ]]; then
-    echo " Giọng VieNeu tự chạy mỗi khi bật máy, không cần mở gì thêm."
+    echo " Giọng VieNeu tự chạy mỗi khi bật máy. Bản mới tự cài vào lần mở Chrome kế tiếp."
+else
+    echo " Cập nhật về sau: nhấp đúp \"Cập nhật Dịch Phụ Đề\" trên màn hình chính."
 fi
-echo " Cập nhật về sau: nhấp đúp \"Cập nhật Dịch Phụ Đề\" trên màn hình chính."
 echo "=================================================================="
 }
 

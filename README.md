@@ -6,112 +6,82 @@ Tiện ích Chrome dịch phụ đề YouTube và Coursera sang tiếng Việt b
 giọng [VieNeu-TTS](https://github.com/pnnbao97/VieNeu-TTS) chạy ngay trên máy (miễn phí, không gửi
 lời thoại ra ngoài).
 
-Huy hiệu ở trên là kết quả cài thử tự động: mỗi lần có bản mới, GitHub chạy đúng lệnh cài bên dưới
-trên máy Windows và Mac sạch (cài, đọc thử một câu, tắt máy chủ giọng xem nó tự bật lại, cập nhật,
-gỡ bỏ).
+## Cài đặt: một lệnh
 
-## Máy dùng được
-
-| Máy | Dịch phụ đề | Lồng tiếng VieNeu |
-|---|---|---|
-| Mac chip Apple (M1 trở lên) | Có | Có |
-| Mac chip Intel | Có | Không |
-| Windows 10/11, máy Intel hoặc AMD 64-bit | Có | Có |
-| Windows chip ARM (Snapdragon) | Có | Không |
-
-Cần Google Chrome và khoảng 3 GB trống. Giọng đọc chạy bằng CPU: máy càng mạnh thì giọng càng theo kịp
-phụ đề. Trang Cài đặt của tiện ích có báo tốc độ đo được trên máy bạn (dưới 0,4 là thoải mái).
-
-## Cài đặt
-
-### Cách 1: nhờ AI cài (Claude Code, Codex, hay AI nào chạy được lệnh trên máy)
-
-Chép nguyên đoạn dưới đây gửi cho AI:
-
-```text
-Hãy cài cho tôi tiện ích Chrome "Dịch Phụ Đề & Lồng Tiếng AI" theo hướng dẫn tại
-https://github.com/mrthanhduy2000/dich-phu-de-long-tieng
-
-1. Xác định máy tôi là macOS hay Windows, rồi chạy đúng MỘT lệnh cài trong mục "Cách 2" của trang
-   đó. Đừng tự cài từng bước bằng tay: bộ cài đã lo hết (tải tiện ích, tải và cài VieNeu, bật
-   VieNeu tự chạy cùng máy, chờ VieNeu sẵn sàng). Lần đầu mất 5 đến 15 phút, cứ để nó chạy hết.
-   Nếu công cụ chạy lệnh của bạn có giới hạn thời gian, đặt giới hạn 20 phút hoặc chạy nền rồi
-   theo dõi.
-2. Nếu bộ cài báo "LỖI" hay "LOI", tra bảng "Khi gặp lỗi" trên trang đó, sửa đúng nguyên nhân,
-   rồi chạy lại đúng lệnh cài. Chạy lại bao nhiêu lần cũng an toàn. Không sửa tệp trong thư mục
-   tiện ích hay VieNeu. Việc gì cần tôi đồng ý (tắt một chương trình, bấm Yes khi Windows hỏi
-   quyền) thì hỏi tôi trước.
-3. Chrome không cho AI tự bật tiện ích. Khi bộ cài xong, đọc phần hướng dẫn cuối cùng nó in ra và
-   chỉ tôi làm từng bước, chờ tôi báo xong mới sang bước sau.
-4. Không hỏi tôi khóa API, tôi sẽ tự dán sau. Trả lời tôi bằng tiếng Việt.
-```
-
-### Cách 2: tự chạy một lệnh
-
-**Mac:** mở ứng dụng Terminal, dán lệnh này rồi nhấn Enter:
+**Mac:** mở ứng dụng **Terminal**, dán lệnh này, nhấn Enter.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mrthanhduy2000/dich-phu-de-long-tieng/main/install-mac.sh | bash
 ```
 
-**Windows:** bấm Start, gõ `PowerShell`, mở **Windows PowerShell**, dán lệnh này rồi nhấn Enter:
+**Windows:** bấm Start, gõ `PowerShell`, mở **Windows PowerShell**, dán lệnh này, nhấn Enter.
 
 ```powershell
 irm https://raw.githubusercontent.com/mrthanhduy2000/dich-phu-de-long-tieng/main/install-windows.ps1 | iex
 ```
 
-Bộ cài không cần quyền quản trị (riêng Windows thiếu gói Microsoft Visual C++ thì Windows hỏi quyền
-một lần để cài gói đó). Khi xong, nó mở trang `chrome://extensions` và in ra 4 bước cuối:
+Lần đầu mất 5 đến 15 phút. Không cần quyền quản trị. Khi xong, Chrome tự mở một trang hướng dẫn 4 bước
+(có nút chép sẵn): bật **Chế độ dành cho nhà phát triển**, bấm **Tải tiện ích đã giải nén**, chọn thư
+mục `DichPhuDe`, rồi dán khóa Gemini (miễn phí tại [Google AI Studio](https://aistudio.google.com/apikey)).
+Chrome không cho chương trình nào tự làm bước này, nên đây là việc tay duy nhất.
 
-1. Bật **Chế độ dành cho nhà phát triển** ở góc trên bên phải.
-2. Bấm **Tải tiện ích đã giải nén**.
-3. Chọn thư mục `DichPhuDe` trong thư mục người dùng của bạn (đường dẫn đã được chép sẵn, chỉ cần dán).
-4. Mở Cài đặt của tiện ích, dán khóa Gemini API, để model là **Tự động**.
+**Sau đó không cần làm gì nữa:** giọng đọc tự chạy mỗi khi bật máy, và bản mới tự được tải về rồi
+cài vào lần mở Chrome kế tiếp.
 
-Khóa Gemini miễn phí lấy tại [Google AI Studio](https://aistudio.google.com/apikey).
+### Nhờ AI cài giúp
 
-## Cập nhật
+Gửi nguyên đoạn này cho AI chạy được lệnh trên máy (Claude Code, Codex...):
 
-Nhấp đúp **Cập nhật Dịch Phụ Đề** trên màn hình chính (hoặc chạy lại lệnh cài), rồi ở
-`chrome://extensions` bấm nút **Tải lại** trên thẻ tiện ích và F5 tab video.
+```text
+Cài cho tôi tiện ích theo https://github.com/mrthanhduy2000/dich-phu-de-long-tieng : xác định máy
+là Mac hay Windows rồi chạy đúng MỘT lệnh cài ở mục "Cài đặt: một lệnh" (lần đầu tới 15 phút, đặt
+giới hạn thời gian 20 phút hoặc chạy nền). Nếu bộ cài báo "LỖI"/"LOI", tra bảng "Khi gặp lỗi" ở trang
+đó, sửa đúng nguyên nhân rồi chạy lại lệnh cài; việc gì cần tôi đồng ý thì hỏi trước. Xong thì chỉ tôi
+làm theo trang hướng dẫn Chrome vừa mở, từng bước. Không hỏi khóa API. Trả lời bằng tiếng Việt.
+```
 
-**Đừng gỡ tiện ích rồi cài lại:** Chrome sẽ xóa hết cài đặt và khóa API.
+## Máy dùng được
+
+| Máy | Dịch phụ đề | Lồng tiếng VieNeu | Tự cập nhật |
+|---|---|---|---|
+| Mac chip Apple (M1 trở lên) | Có | Có | Có |
+| Windows 10/11, Intel hoặc AMD | Có | Có | Có |
+| Mac chip Intel, Windows chip ARM | Có | Không | Không: nhấp đúp **Cập nhật Dịch Phụ Đề** trên màn hình chính |
+
+Cần Google Chrome và khoảng 3 GB trống. Giọng đọc chạy bằng CPU; trang Cài đặt của tiện ích báo tốc
+độ đo được trên máy bạn (dưới 0,4 là thoải mái, trên 0,8 thì giọng sẽ trễ dần).
+
+Huy hiệu ở đầu trang là kết quả cài thử tự động: mỗi bản mới được GitHub cài thử bằng đúng lệnh trên,
+trên máy Windows và Mac sạch (kể cả thư mục người dùng có tên tiếng Việt có dấu), rồi đọc thử, tắt
+máy chủ giọng xem nó tự bật lại, tự cập nhật, gỡ bỏ.
 
 ## Khi gặp lỗi
 
 | Bộ cài báo | Cách xử lý |
 |---|---|
-| Cổng 8000 đang bị chương trình khác dùng | Tiện ích gọi giọng VieNeu ở cổng 8000. Tắt chương trình được nêu tên (thường là một máy chủ lập trình đang chạy), rồi chạy lại lệnh cài |
-| Thư mục `VieNeu-TTS` hoặc `DichPhuDe` đã có sẵn | Đó là thư mục bạn tự tạo trước đây. Đổi tên nó (ví dụ thêm `-cu`), rồi chạy lại lệnh cài |
+| Cổng 8000 đang bị chương trình khác dùng | Tắt chương trình được nêu tên (thường là một máy chủ lập trình), rồi chạy lại lệnh cài |
+| Thư mục `VieNeu-TTS` hoặc `DichPhuDe` đã có sẵn | Thư mục bạn tự tạo trước đây: đổi tên nó (ví dụ thêm `-cu`), rồi chạy lại lệnh cài |
 | Thiếu Microsoft Visual C++ Redistributable (Windows) | Cài tại https://aka.ms/vs/17/release/vc_redist.x64.exe, rồi chạy lại lệnh cài |
-| VieNeu chưa phản hồi sau 15 phút | Thường do mạng chậm khi tải mô hình giọng (khoảng 600 MB). Chạy lại lệnh cài: phần đã tải được giữ lại |
-| `uv sync` không thành công | Thường do mạng. Chạy lại lệnh cài |
+| VieNeu chưa phản hồi sau 15 phút, hoặc `uv sync` không thành công | Thường do mạng chậm. Chạy lại lệnh cài: phần đã tải được giữ lại |
 
-Giọng bị trễ dần so với phụ đề: mở Cài đặt của tiện ích, xem dòng "Tốc độ tạo giọng". Trên 0,8 là máy
-quá chậm cho giọng đọc; vẫn dùng được phần dịch phụ đề.
+Chạy lại lệnh cài bao nhiêu lần cũng an toàn; nó cũng là cách cập nhật ngay. Cài đặt và khóa API
+trong Chrome luôn được giữ. **Đừng gỡ tiện ích trong Chrome rồi cài lại:** làm thế mất hết cài đặt.
 
 ## Gỡ bỏ
 
-**Mac:**
+**Mac:** `curl -fsSL https://raw.githubusercontent.com/mrthanhduy2000/dich-phu-de-long-tieng/main/install-mac.sh | bash -s -- --uninstall`
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/mrthanhduy2000/dich-phu-de-long-tieng/main/install-mac.sh | bash -s -- --uninstall
-```
+**Windows:** `$env:DPD_UNINSTALL='1'; irm https://raw.githubusercontent.com/mrthanhduy2000/dich-phu-de-long-tieng/main/install-windows.ps1 | iex`
 
-**Windows** (Windows PowerShell):
-
-```powershell
-$env:DPD_UNINSTALL='1'; irm https://raw.githubusercontent.com/mrthanhduy2000/dich-phu-de-long-tieng/main/install-windows.ps1 | iex
-```
-
-Lệnh gỡ tắt VieNeu, bỏ tự khởi động, xóa thư mục `DichPhuDe`, `VieNeu-TTS` và mô hình giọng đã tải.
-Cuối cùng bấm **Xóa** trên thẻ tiện ích ở `chrome://extensions`.
+Lệnh gỡ tắt VieNeu và tự cập nhật, xóa thư mục `DichPhuDe`, `VieNeu-TTS` và mô hình giọng đã tải.
+Cuối cùng bấm **Xóa** trên thẻ "Vietnamese Subtitle Translator" ở `chrome://extensions`.
 
 ## Ghi chú
 
-- Thư mục `vieneu/` chứa một tệp của VieNeu-TTS (giấy phép Apache 2.0) đã được vá: máy chủ giọng giải
-  phóng chỗ khi người xem tua video, nếu không mọi yêu cầu sau đó đều bị từ chối cho tới khi khởi động
-  lại. `openai_speech.patch` là phần thay đổi so với bản gốc.
-- Giọng VieNeu chỉ mở ở `127.0.0.1:8000`, máy khác trong mạng không gọi được.
-- Trên Windows, VieNeu chạy ẩn bằng `pythonw.exe` (không có cửa sổ) và khởi động cùng Windows; muốn
-  tạm tắt thì vào Task Manager, mục Startup apps, mục "DichPhuDe VieNeu".
+- Trong Chrome, tiện ích mang tên **Vietnamese Subtitle Translator (Coursera + YouTube)**.
+- Thư mục `vieneu/` chứa một tệp của VieNeu-TTS (giấy phép Apache 2.0) đã được vá để máy chủ giọng
+  không bị kẹt sau khi người xem tua video. `openai_speech.patch` là phần thay đổi so với bản gốc.
+- Giọng VieNeu chỉ mở ở `127.0.0.1:8000`, máy khác trong mạng không gọi được. Trên Windows nó chạy ẩn
+  (không cửa sổ); muốn tạm tắt: Task Manager, mục Startup apps, "DichPhuDe VieNeu".
+- Tự cập nhật: mỗi 6 giờ hỏi GitHub; bản mới được tải sẵn và chỉ chép vào thư mục tiện ích khi Chrome
+  đang đóng, nên không bao giờ chen ngang lúc bạn đang xem. Nhật ký: `VieNeu-TTS/update.log`.
