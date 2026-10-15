@@ -35,6 +35,13 @@
     // Giọng Việt CHẠY TRÊN MÁY: VieNeu-TTS v3 Turbo (Apache 2.0, github.com/pnnbao97/VieNeu-TTS).
     // Máy chủ cục bộ tương thích OpenAI, chỉ mở trên 127.0.0.1; không tốn tiền API.
     // Đo trên MacBook Air M3 (CPU, ONNX fp32): tạo 5 giây lời nói mất khoảng 1,1 giây.
+    // The OS this browser runs on ("Windows", "Win32", "macOS", "MacIntel"...), "" when unknown
+    function currentPlatform() {
+        try {
+            const nav = root && root.navigator;
+            return String((nav && ((nav.userAgentData && nav.userAgentData.platform) || nav.platform)) || "");
+        } catch (_) { return ""; }
+    }
     const LOCAL_TTS = {
         id: "vieneu",
         label: "Giọng Việt trên máy (VieNeu)",
@@ -46,8 +53,11 @@
         // 0.700 -> 0.613 at 1.4x from a 24 kHz copy, but only 0.669 -> 0.649 from the 48 kHz
         // original. The time-stretch on the lower rate is what made fast passages sound rough.
         sampleRate: 48000,
-        // Nhiệt độ lấy mẫu: đo 4 lần/câu trên máy Đàm, độ dài dao động 8 đến 12% ở 0,8 (mặc định
-        // của VieNeu) còn 4 đến 6% ở 0,6 -> nhịp nói đều hơn giữa các câu, giọng vẫn tự nhiên
+        // Sampling temperature (VieNeu's own default is 0.8). A first test of 4 takes a sentence
+        // suggested 0.6 evens the pace out; the larger re-measurement of 2026-10-11 found no
+        // measurable difference anywhere in 0.5-0.8, nor from top_k 50 / repetition_penalty 1.1:
+        // duration variation across takes 1.6-4.9%, pitch range 11-12 st, 0 runaways in 90 takes.
+        // Kept at 0.6: nothing measured beats it.
         temperature: 0.6,
         // Rumble cut before the hiss removal (1.7.2, AUDIO.highPass): female voices have nothing
         // under ~130 Hz, male ones reach ~85 Hz (Thái Sơn)
@@ -66,8 +76,26 @@
         minSps: 4.0,
         maxFloor: 1.15,
         startScript: "~/VieNeu-TTS/cst-start.command",
+        // What to tell the user to do when the server is down, as a lowercase clause ("mở ...").
+        // cst-start.command exists on a Mac only: a Windows install starts the server through the
+        // autostart it installs once from the extension folder. platform defaults to this
+        // browser's (navigator.userAgentData.platform, else navigator.platform; both also exist
+        // in the service worker); with neither, the Mac hint.
+        startHint(platform) {
+            const p = platform === undefined ? currentPlatform() : String(platform || "");
+            return /^win/i.test(p)
+                ? "chạy tools\\vieneu-autostart.cmd trong thư mục tiện ích (cài một lần)"
+                : `mở ${LOCAL_TTS.startScript}`;
+        },
         defaultVoice: "Mỹ Duyên",
         defaultVoice2: "Thái Sơn",
+        // Voices for the third to fifth speaker of a conversation (2.5.2, dub-engine castVoices):
+        // the first free one of the speaker's gender, the main voice's region first. "Adam bựa" is
+        // a comic voice: last.
+        cast: {
+            "Nữ": ["Thục Đoan", "Thùy Dung", "Ngọc Trân", "Đoan Trang", "Ngọc Huyền", "Mai Anh", "Kim Thanh", "Mỹ Duyên", "Trúc Ly", "Ngọc Linh", "Quỳnh Anh"],
+            "Nam": ["Thái Sơn", "Adam", "Minh Triết", "Đức Trí", "Quang Sơn", "Minh Quân Pro", "Anh Khôi", "Phạm Tuyên", "Mạnh Dũng", "Minh Đức", "Xuân Vĩnh", "Thanh Bình", "Thiền Tâm Đức", "Adam bựa"]
+        },
         // sps: tốc độ nói đo trên máy Đàm (âm tiết/giây, không tính khoảng lặng).
         // 2026-09-23: all 25 measured on the local server (3 lecture sentences each, voiced frames
         // only, scaled by 0.984 to match the 4 voices measured earlier, which the method reproduced

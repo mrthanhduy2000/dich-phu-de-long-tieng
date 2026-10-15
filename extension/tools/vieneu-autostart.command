@@ -7,6 +7,13 @@ LABEL="com.damduy.vieneu"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 APP="${VIENEU_DIR:-$HOME/VieNeu-TTS}"  # the share installer may point elsewhere
 
+# --write-only: rewrite the plist and stop there; the running server keeps going and launchd reads
+# the new file at the next login (tools/dichphude-update.py uses it to move an older install to the
+# start command below without cutting a voice mid-sentence). VIENEU_DIR and HOME are honoured, so
+# tests write the plist into a throwaway home.
+WRITE_ONLY=0
+[[ "$1" == "--write-only" ]] && WRITE_ONLY=1
+
 if [[ "$1" == "--go" || "$1" == "--uninstall" ]]; then
     launchctl bootout "gui/$UID/$LABEL" 2>/dev/null || true
     rm -f "$PLIST"
@@ -26,11 +33,19 @@ cat > "$PLIST" <<PLISTEOF
 <plist version="1.0">
 <dict>
     <key>Label</key><string>$LABEL</string>
+    <!-- The pinned model (tools/vieneu-pin.py) is used only while its marker exists AND every
+         file the marker lists is there at its size, with each refs/main on its revision, decided at
+         every start (pinned_ok, about 20 stat and cat calls): HF_HOME + HF_HUB_OFFLINE, nothing
+         fetched. A file deleted or cut short sends the server online instead of into a crash
+         loop; without the marker VieNeu fetches the model itself, as before. \$0 is the Python
+         path (the 4th string), kept whole in the plist so the installer recognises its own
+         service. No ampersand or less-than sign in the line (XML), no double hyphen here. -->
     <key>ProgramArguments</key>
     <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>pinned_ok() { [ -f models/hf/.pinned-ok ] || return 1; cat models/hf/.pinned-ok | ( n=0; while read -r k a b; do case "\$k" in ref) [ "\$(cat "models/hf/\$b" 2>/dev/null)" = "\$a" ] || exit 1;; size) [ "\$(stat -f%z "models/hf/\$b" 2>/dev/null)" = "\$a" ] || exit 1; n=\$((n+1));; esac; done; [ "\$n" -gt 0 ] ); }; if pinned_ok; then export HF_HOME="\$PWD/models/hf" HF_HUB_OFFLINE=1; echo "VieNeu model: pinned copy in models/hf, offline"; elif [ -f models/hf/.pinned-ok ]; then echo "VieNeu model: pinned copy incomplete, fetched from Hugging Face"; else echo "VieNeu model: no pinned copy, fetched from Hugging Face"; fi; exec "\$0" -m apps.openai_speech</string>
         <string>$APP/.venv/bin/python</string>
-        <string>-m</string>
-        <string>apps.openai_speech</string>
     </array>
     <key>WorkingDirectory</key><string>$APP</string>
     <key>EnvironmentVariables</key>
@@ -55,6 +70,10 @@ cat > "$PLIST" <<PLISTEOF
 </dict>
 </plist>
 PLISTEOF
+if [[ $WRITE_ONLY == 1 ]]; then
+    echo "Đã ghi $PLIST (dùng từ lần đăng nhập sau)."
+    exit 0
+fi
 
 # Gỡ bản đang nạp (nếu có) rồi CHỜ launchd gỡ xong hẳn. Chạy bootout và bootstrap liền nhau làm
 # launchd trả "Bootstrap failed: 5: Input/output error" và bỏ dịch vụ ở trạng thái đã tắt (đo thật

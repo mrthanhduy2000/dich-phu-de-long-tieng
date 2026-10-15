@@ -1,0 +1,21 @@
+Dich Phu De & Long Tieng AI: third-party notices
+
+This repository and its model release redistribute parts of two works licensed under the
+Apache License, Version 2.0 (full text: LICENSE-Apache-2.0.txt, or https://www.apache.org/licenses/LICENSE-2.0).
+Copyright in each work stays with its authors.
+
+1. VieNeu-TTS, by pnnbao97: https://github.com/pnnbao97/VieNeu-TTS
+   - vieneu/openai_speech.py is apps/openai_speech.py of VieNeu-TTS at commit d350c63fceb0792d7b2db9a51d61cc040b1f8efa,
+     MODIFIED by this project (it frees a stream slot when the caller hangs up, and listens
+     on 127.0.0.1 unless HOST says otherwise);
+     vieneu/openai_speech.patch shows every change.
+   - The installers download the VieNeu-TTS code itself, unchanged, from GitHub at that commit.
+   - The model files of https://huggingface.co/pnnbao-ump/VieNeu-TTS-v3-Turbo at revision
+     61b85e3d937fbbacb387714180e8182823512523, unchanged, are assets of the GitHub release vieneu-model-61b85e3-ceff0d0.
+
+2. MOSS-Audio-Tokenizer-Nano-ONNX, by the OpenMOSS team:
+   https://huggingface.co/OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano-ONNX
+   - The model files at revision ceff0d0749bfb3fa2d61149794ec6feef0d1e1ae, unchanged, are assets of the same release.
+
+Every redistributed model file is listed with its size and sha256 in
+extension/tools/vieneu-model.json, and the installer checks each one before use.

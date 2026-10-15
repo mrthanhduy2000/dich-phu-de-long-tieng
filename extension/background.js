@@ -1297,13 +1297,20 @@ function localTimeoutMs(text) {
     return Math.round(Math.min(45, Math.max(8, 4 + audioSec * 0.9)) * 1000);
 }
 
+// The server is down: name this OS's way to start it. cst-start.command, which the attempt's own
+// message names, exists on a Mac only; a Windows user is sent to the autostart installer instead
+function withStartHint(r) {
+    if (r && r.errorType === "local_unavailable") r.error = `Máy chủ VieNeu chưa chạy (${LOCAL.startHint()})`;
+    return r;
+}
+
 async function synthesizeLocal(req, text, parts, signal) {
     let last = null;
     // Kẹt / audio bất thường: thử lại một lần (lấy mẫu ngẫu nhiên nên lần sau thường bình thường)
     for (let attempt = 0; attempt < 2; attempt++) {
         last = await localSerial(() => synthesizeLocalOnce(req, text, parts, signal), signal);
         // a dropped connection mid-body is as passing as a stuck take: free, so tried once more
-        if (last.ok || !(last.errorType === "timeout" || last.errorType === "runaway" || last.errorType === "dropped")) return last;
+        if (last.ok || !(last.errorType === "timeout" || last.errorType === "runaway" || last.errorType === "dropped")) return withStartHint(last);
         if (signal && signal.aborted) break;
         console.warn(`[VieNeu] ${last.error}; tạo lại lần ${attempt + 2}`);
     }
@@ -1579,6 +1586,144 @@ async function handleTestKey(req) {
     return { ok: false, errorType: "unavailable_for_key", error: "Không model nào trong danh sách gọi được với API key này", skipped: tried };
 }
 
+// ============================================================
+// WHO SPEAKS (2.5.2): one Gemini reading of a video's caption lines
+//
+// For the voices of a dubbed conversation. ">>" and "NAME:" marks (dub-planner speakerTurns) say
+// who speaks only when the captions carry them; most of the user's videos have none (manual
+// captions of a money show, an unpunctuated podcast). The page asks once per video (in parts of
+// SPEAKER_MAX_LINES for a long one) and dub-planner decides what to take: a speaker heard once is
+// folded away, a "low" answer is ignored. Cheapest model of the chain, temperature 0, kept in the
+// translation store, so a second viewing costs nothing. Charged and budgeted as text.
+// ============================================================
+const SPEAKER_PROMPT_VERSION = 1;
+const SPEAKER_MAX_LINES = 900;
+const SPEAKER_SYSTEM_PROMPT = [
+    "You mark who is speaking in a video transcript. Each numbered line is one caption, in time order. A turn is where a DIFFERENT PERSON starts talking.",
+    "Rules:",
+    "- One person talking (a vlog, a lecture, a monologue, a narrator), however lively: one speaker and one turn at the first line.",
+    "- Quoted or reported speech (\"and she said, no way\"), rhetorical questions, reading a comment or a message aloud, imitating someone, singing: NOT a turn.",
+    "- \">>\" in a line usually marks a new speaker from the speech recognizer, but it also stands around music and noises inside one person's talk: a hint, not a rule. \"NAME:\" at a line start names who speaks.",
+    "- A turn may start inside a line: then \"at\" holds the new speaker's first words exactly as written in that line.",
+    "- Number speakers 1, 2, 3 in order of first appearance and reuse the number every time the same person talks again. Label each with a name when the transcript says it, else a role (host, guest, interviewer, caller, customer). Gender only when the transcript makes it clear (a name, he/she, sir/ma'am), else \"unknown\".",
+    "- The first turn is at the first line. Not sure a line is someone else: it is not a turn.",
+    "- confidence: \"high\" when the transcript is clearly a dialogue or clearly one person, \"medium\" when mostly clear, \"low\" when guessing."
+].join("\n");
+const SPEAKER_SCHEMA = {
+    type: "OBJECT",
+    properties: {
+        speakers: { type: "ARRAY", items: { type: "OBJECT", properties: { id: { type: "INTEGER" }, label: { type: "STRING" }, gender: { type: "STRING", enum: ["male", "female", "unknown"] } }, required: ["id", "label", "gender"] } },
+        turns: { type: "ARRAY", items: { type: "OBJECT", properties: { line: { type: "INTEGER" }, speaker: { type: "INTEGER" }, at: { type: "STRING" } }, required: ["line", "speaker"] } },
+        confidence: { type: "STRING", enum: ["high", "medium", "low"] }
+    },
+    required: ["speakers", "turns", "confidence"]
+};
+let speakerSchemaUnsupported = false;
+const speakerInFlight = new Map();
+
+// The checked answer: speakers 1-9 with a label and a gender, turns on real lines by known
+// speakers in line order (one per change of speaker), a confidence. Throws when unusable.
+function readSpeakerAnswer(data, n) {
+    let raw = responseText(data).trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
+    let a;
+    try { a = JSON.parse(raw); } catch (e) { throw new GeminiError("bad_output", "Gemini không trả JSON hợp lệ"); }
+    const speakers = [];
+    for (const s of Array.isArray(a && a.speakers) ? a.speakers : []) {
+        const id = Number(s && s.id);
+        if (!Number.isInteger(id) || id < 1 || id > 9 || speakers.some(x => x.id === id)) continue;
+        speakers.push({ id, label: String(s.label || "").slice(0, 40), gender: /^(male|female)$/.test(s.gender) ? s.gender : "unknown" });
+    }
+    const known = new Set(speakers.map(s => s.id));
+    const turns = [];
+    const list = (Array.isArray(a && a.turns) ? a.turns : [])
+        .filter(x => x && Number.isInteger(x.line) && x.line >= 0 && x.line < n && Number.isInteger(x.speaker) && x.speaker >= 1 && x.speaker <= 9)
+        .sort((x, y) => x.line - y.line);
+    for (const x of list) {
+        if (!known.has(x.speaker)) { known.add(x.speaker); speakers.push({ id: x.speaker, label: "", gender: "unknown" }); }
+        if (turns.length && turns[turns.length - 1].speaker === x.speaker) continue;
+        const t = { line: x.line, speaker: x.speaker };
+        const at = String(x.at || "").trim().slice(0, 80);
+        if (at) t.at = at;
+        turns.push(t);
+    }
+    const confidence = /^(high|medium|low)$/.test(a && a.confidence) ? a.confidence : "low";
+    return { speakers, turns, confidence };
+}
+
+async function handleAnalyzeSpeakers(req) {
+    const lines = (Array.isArray(req.lines) ? req.lines : []).slice(0, SPEAKER_MAX_LINES).map(l => String(l || "").replace(/\s+/g, " ").trim().slice(0, 300));
+    if (lines.length < 4) return { ok: false, reason: "short" };
+    const cfg = await modelsFromCfg();
+    if (!cfg.useAi || !cfg.geminiApiKey) return { ok: false, reason: "no_key" };
+    const roster = (Array.isArray(req.roster) ? req.roster : []).slice(0, 9)
+        .map(s => `${Number(s.id) || 0} = ${String(s.label || "speaker").slice(0, 40)}${/^(male|female)$/.test(s.gender) ? ` (${s.gender})` : ""}`);
+    const user = [
+        req.videoTitle ? `Video title: ${String(req.videoTitle).slice(0, 120)}` : "",
+        roster.length ? `Speakers found in the part before this one (reuse their numbers): ${roster.join("; ")}` : "",
+        `Lines (${lines.length}):`,
+        ...lines.map((l, i) => `${i}| ${l}`)
+    ].filter(Boolean).join("\n");
+    const meta = metaOf(req);
+    const promptChars = SPEAKER_SYSTEM_PROMPT.length + user.length;
+    const flight = lines.join("\n") + "|" + roster.join("|");
+    if (speakerInFlight.has(flight)) return speakerInFlight.get(flight);
+    const p = (async () => {
+        // The cheapest model the key can call, as translation does: 404 for this key (a new key and
+        // 2.5) moves on to the next one at once
+        const tried = new Set();
+        let last = { ok: false, reason: "no_model" };
+        for (let guard = 0; guard < 4; guard++) {
+            const unavailable = await isUnavailableFn(cfg.geminiApiKey);
+            const model = COST.modelChain("cheap", cfg, cfg.costMode, unavailable).find(m => !tried.has(m));
+            if (!model) break;
+            tried.add(model);
+            let key = null;
+            if (caches) {
+                try { key = await CST_CACHE.hashKey(["spk", SPEAKER_PROMPT_VERSION, model, roster.join("|"), lines.map(CST_CACHE.normalizeText)]); } catch (e) { key = null; }
+                const hit = key ? await caches.tr.get(key) : null;
+                if (hit && Array.isArray(hit.turns)) { track(meta, { hitsTr: 1, avoided: 1 }); return { ok: true, ...hit, fromCache: true }; }
+            }
+            const budget = await budgetState(meta, COST.estimateTextCost(model, Math.ceil(promptChars / 3.5), 400 + lines.length * 3));
+            if (!budget.allowed || budget.runaway) return { ok: false, reason: "budget" };
+            last = await askSpeakers(model, cfg.geminiApiKey, user, lines.length, meta, promptChars);
+            if (last.ok) {
+                const entry = { speakers: last.speakers, turns: last.turns, confidence: last.confidence, model, v: SPEAKER_PROMPT_VERSION };
+                if (key && caches) caches.tr.set(key, entry);
+                return { ok: true, ...entry };
+            }
+            if (last.reason !== "not_found" && last.reason !== "unavailable_for_key") break;
+        }
+        return last;
+    })().finally(() => speakerInFlight.delete(flight));
+    speakerInFlight.set(flight, p);
+    return p;
+}
+
+async function askSpeakers(model, apiKey, user, n, meta, promptChars) {
+    const maxOutputTokens = Math.min(8192, 400 + n * 8);
+    const timeoutMs = Math.min(60000, 12000 + Math.round(user.length * 0.4));
+    for (let pass = 0; pass < 2; pass++) {
+        const generationConfig = { temperature: 0, maxOutputTokens };
+        if (!speakerSchemaUnsupported) { generationConfig.responseMimeType = "application/json"; generationConfig.responseSchema = SPEAKER_SCHEMA; }
+        const thinking = thinkingConfigFor(model);
+        if (thinking) generationConfig.thinkingConfig = thinking;
+        const sys = SPEAKER_SYSTEM_PROMPT + (speakerSchemaUnsupported ? "\nAnswer with JSON only: {\"speakers\": [{\"id\", \"label\", \"gender\"}], \"turns\": [{\"line\", \"speaker\", \"at\"}], \"confidence\"}." : "");
+        const body = { system_instruction: { parts: [{ text: sys }] }, contents: [{ parts: [{ text: user }] }], generationConfig };
+        let data;
+        try {
+            // srcChars 0: this answer is no translation, it must not move the output estimate
+            data = await geminiCall(model, apiKey, body, { timeoutMs, retries: 1, onBilled: d => trackText(meta, model, usageOf(d, promptChars, 0)) });
+        } catch (e) {
+            if (e.type === "invalid" && /thinking/i.test(e.message) && thinking) { noThinkingCfg.add(model); continue; }
+            if (e.type === "invalid" && /schema|mime/i.test(e.message) && !speakerSchemaUnsupported) { speakerSchemaUnsupported = true; continue; }
+            return { ok: false, reason: e.type || "error", error: e.message };
+        }
+        try { return { ok: true, ...readSpeakerAnswer(data, n) }; }
+        catch (e) { return { ok: false, reason: "bad_output", error: e.message }; }
+    }
+    return { ok: false, reason: "bad_output" };
+}
+
 // ---- Mở trang Cài đặt từ content script (trang YouTube/Coursera không được tự mở
 // chrome-extension://.../options.html: Chrome chặn với ERR_BLOCKED_BY_CLIENT) ----
 async function handleOpenOptions() {
@@ -1706,6 +1851,11 @@ async function reinjectOpenTabs() {
 try {
     chrome.runtime.onInstalled.addListener(details => {
         if (details && (details.reason === "update" || details.reason === "install")) reinjectOpenTabs().catch(() => {});
+        // A first install (Load unpacked, in any Chromium browser) opens the settings on a welcome
+        // card, as a store extension would: the Gemini key, the voice server, the first video
+        if (details && details.reason === "install" && chrome.tabs && chrome.tabs.create) {
+            Promise.resolve(chrome.tabs.create({ url: chrome.runtime.getURL("options.html#welcome") })).catch(() => {});
+        }
     });
 } catch (e) { /* chạy ngoài extension */ }
 
@@ -1782,6 +1932,7 @@ const ROUTES = {
     cacheClear: handleCacheClear,
     modelStatus: handleModelStatus,
     testKey: handleTestKey,
+    analyzeSpeakers: handleAnalyzeSpeakers,
     openOptions: handleOpenOptions,
     costStats: handleCostStats,
     localTtsStatus: handleLocalTtsStatus,

@@ -43,7 +43,9 @@ Environment:
     VIENEU_PRECISION=fp32|int8 (CPU)   VIENEU_ONNX_DIR=... (local ONNX export)
     VIENEU_MAX_STREAMS=16 (GPU)        VIENEU_QUEUE=16   VIENEU_QUEUE_TIMEOUT=10
     VIENEU_API_KEY=...  (Bearer auth; unset = open)
-    VIENEU_WATERMARK=1                 HOST=0.0.0.0  PORT=8000
+    VIENEU_WATERMARK=1                 HOST=127.0.0.1  PORT=8000
+    HOST defaults to 127.0.0.1 [CST patch]: only this machine can reach the server. Set
+    HOST=0.0.0.0 (with VIENEU_API_KEY) to serve other machines on purpose.
 """
 from __future__ import annotations
 
@@ -440,7 +442,9 @@ def health():
 
 
 def main() -> None:
-    host = os.environ.get("HOST", "0.0.0.0")
+    # [CST patch] Loopback by default: upstream listened on every interface, so anyone on the
+    # same Wi-Fi could use the voice (no key unless VIENEU_API_KEY is set).
+    host = os.environ.get("HOST", "127.0.0.1")
     port = _env_int("PORT", 8000)
     # One worker: the model (and on GPU the scheduler) is process-local.
     uvicorn.run(app, host=host, port=port, workers=1, log_level="info")

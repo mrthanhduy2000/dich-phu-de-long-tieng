@@ -279,8 +279,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 dubEnabled: dubbingBox.checked
             };
 
+            let reply;
             try {
-                await chrome.tabs.sendMessage(tab.id, payload);
+                reply = await chrome.tabs.sendMessage(tab.id, payload);
             } catch (err) {
                 // Script injection fallback
                 if (tab.url.includes("youtube.com")) {
@@ -292,14 +293,25 @@ document.addEventListener("DOMContentLoaded", async () => {
                         });
                     } catch (be) {}
                 }
-                // Nạp ĐỦ các tệp theo đúng thứ tự trong manifest (trước đây chỉ 4 tệp -> thiếu
-                // kiểu phụ đề, bộ lập lịch, ... : lỗi CST_STYLE / ytSettings, mất phụ đề và giọng)
-                const iso = (chrome.runtime.getManifest().content_scripts || []).find(g => g.world !== "MAIN" && (g.js || []).includes("content.js"));
-                await chrome.scripting.executeScript({
-                    target: { tabId: tab.id },
-                    files: iso ? iso.js : ["glossary.js", "dubbing.js", "content.js", "youtube.js"]
-                });
-                await chrome.tabs.sendMessage(tab.id, payload);
+                // Every file of the manifest's isolated-world group, in its order (a short hand-kept
+                // list once left out the subtitle style and the scheduler: CST_STYLE / ytSettings
+                // errors, no subtitles and no voice). The manifest always has that group.
+                const iso = chrome.runtime.getManifest().content_scripts.find(g => g.world !== "MAIN" && (g.js || []).includes("content.js"));
+                await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: iso.js });
+                reply = await chrome.tabs.sendMessage(tab.id, payload);
+            }
+
+            // The page answered that it did not start: say so instead of "Đã kích hoạt phụ đề!".
+            // "failed": the reason is already on the video (no captions, a Vietnamese video, ...);
+            // "busy": this video is being translated right now (a second click while it loads)
+            const status = reply && reply.status;
+            if (status === "failed" || status === "busy" || status === "error") {
+                translateBtn.classList.remove("is-translating");
+                btnLabel.textContent = idleLabel;
+                if (status === "busy") showStatus("Video này đang được dịch.", "info");
+                else if (status === "error") showStatus(activationError({ message: reply.message }), "error");
+                else showStatus("Chưa bắt đầu dịch được: xem thông báo trên video.", "error");
+                return;
             }
 
             // Success Transition

@@ -120,13 +120,19 @@ const YT_CACHE_PREFIX = "ytcache4_";   // v4: kem nhom cau + ban dich co ngu can
 const YT_CACHE_CU = "ytcache";
 // 100 videos (2.4.0; 50 in 2.3.9, 15 before): the user watches a batch, then has the whole batch
 // reviewed from this cache (background.js REVIEW_MARK counts the ones saved since the last review).
-// Measured on the 15 saved on 2026-09-30: 1.32 MB, 90 KB a video, 6.8 KB a minute, so 100 such
-// videos are ~9 MB and 100 of 35 minutes ~24 MB. storage.local alone holds 10 MB: the manifest asks
-// for "unlimitedStorage". The byte cap is only a guard against a runaway store.
+// Measured 2026-10-11 on the user's store: 152 KB a video (it was 90 KB on the 15 saved by
+// 2026-09-30), so 100 videos are ~15 MB. storage.local alone holds 10 MB: the manifest asks for
+// "unlimitedStorage". The byte cap is only a guard against a runaway store.
 const YT_CACHE_TOI_DA = 100;
 const YT_CACHE_MAX_BYTES = 64 * 1048576;
 // UTF-8 bytes of a stored value, near enough: Vietnamese text is 1.15 bytes a character (measured)
 const ytCacheBytes = v => Math.round(JSON.stringify(v).length * 1.15);
+// Videos this page knows are in the per-video cache (read from it, or saved once already). Saving
+// one again (a refine re-save, the same video translated again) replaces its entry and adds none,
+// so it cannot push the store past a cap and skips the sweep: ytDonCache reads ALL of
+// storage.local (6.1 MB on 2026-10-11, ~15 MB at the 100-video cap). The daily sweep
+// (ytSweepCacheDaily) catches the rest.
+const ytStoredVideos = new Set();
 
 async function ytDocCache(videoId) {
     if (!videoId) return null;
@@ -135,6 +141,7 @@ async function ytDocCache(videoId) {
         const kq = await chrome.storage.local.get(key);
         const data = kq[key];
         if (!data || !Array.isArray(data.vi) || !Array.isArray(data.cues)) return null;
+        ytStoredVideos.add(videoId);
         return data;
     } catch (e) {
         return null;
@@ -166,7 +173,11 @@ async function ytGhiCache(videoId) {
                 ])
             }
         });
-        await ytDonCache();
+        // only a save that adds a video sweeps (see ytStoredVideos)
+        if (!ytStoredVideos.has(videoId)) {
+            ytStoredVideos.add(videoId);
+            await ytDonCache();
+        }
     } catch (e) {
         console.warn("Khong ghi duoc bo nho dem:", e.message);
     }
@@ -200,7 +211,7 @@ async function ytDonCache() {
 
 // Every YouTube tab ran ytDonCache on load, and it reads ALL of storage.local (up to 100 saved videos,
 // the viewer's edits, the cost ledger: megabytes) only to find stale keys. Once a day is enough; a
-// save (ytGhiCache) still sweeps after itself.
+// save that adds a video (ytGhiCache) still sweeps after itself.
 async function ytSweepCacheDaily() {
     try {
         const { ytSweptAt = 0 } = await chrome.storage.local.get({ ytSweptAt: 0 });

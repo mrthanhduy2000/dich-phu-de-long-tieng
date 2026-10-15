@@ -24,7 +24,8 @@
         dubVoiceName: "",
         dubDuck: 0.2,                 // mức tiếng gốc khi có lời Việt (giữ nhạc nền nghe được)
         dubVolume: 1,
-        dubSecondVoice: false,        // a second voice for a second speaker: off unless the viewer asks
+        dubSpeakers: "auto",          // voices follow the speakers (2.5.2): "auto" | "one" (everyone in the main voice)
+        dubSpeakerAi: true,           // with a Gemini key, one AI reading of who speaks per YouTube video
         dubMaxRate: 0,                // fastest the voice may read (1.1 to 1.6); 0 = automatic
         dubPrepareWait: true,         // mở video mới / tua tới đoạn mới: tạm dừng tối đa 5 giây chờ phụ đề + giọng
         useAi: true,
@@ -201,6 +202,12 @@
         }
     }
 
+    // How to start the local voice server on this OS (cost-policy LOCAL_TTS.startHint)
+    function localStartHint() {
+        const L = window.CST_COST && window.CST_COST.LOCAL_TTS;
+        return L && L.startHint ? L.startHint() : "mở ~/VieNeu-TTS/cst-start.command";
+    }
+
     async function startEngine(opts, seq) {
         const outdated = () => seq !== startSeq;
         // Tự bật (opts.quiet): không bật hộp thoại chặn trang, chỉ ghi ra console
@@ -223,7 +230,8 @@
         if (!primary && localMissing && !(window.CST_COST && window.CST_COST.PAID_TTS)) {
             console.warn("[Lồng tiếng] Máy chủ VieNeu chưa chạy; chờ máy chủ, không dùng giọng khác");
             if (window.CST_UI && window.CST_UI.toast) {
-                window.CST_UI.toast("Giọng VieNeu chưa chạy. Mở ~/VieNeu-TTS/cst-start.command; lồng tiếng sẽ tự bật khi máy chủ sẵn sàng.", { warn: true });
+                window.CST_UI.toast(`Giọng VieNeu chưa chạy: ${localStartHint()}; lồng tiếng sẽ tự bật khi máy chủ sẵn sàng.`,
+                    { warn: true, actionLabel: "Mở Cài đặt", onAction: () => sendMessage({ action: "openOptions" }) });
             }
             dub.enabled = true;
             doiVieNeuSanSang(opts);
@@ -244,7 +252,7 @@
         if (!primary) {
             alert(
                 "Chưa có giọng đọc tiếng Việt.\n" +
-                "Cách nhanh nhất (miễn phí): mở ~/VieNeu-TTS/cst-start.command để bật giọng VieNeu trên máy, rồi bật lại lồng tiếng." +
+                `Cách nhanh nhất (miễn phí): ${localStartHint()} để bật giọng VieNeu trên máy, rồi bật lại lồng tiếng.` +
                 (canGemini ? "" : "\nHoặc nhập Gemini API Key trong Cài đặt.") +
                 (hasSystem ? "" : "\nHoặc tải giọng tiếng Việt của hệ điều hành (macOS: Spoken Content; Windows: Speech)."),
                 { actionLabel: "Thử lại", onAction: () => start(opts) }
@@ -281,7 +289,7 @@
                 }, 0);
             },
             log: (...a) => console.warn("[Lồng tiếng]", ...a)
-        }, { duck: level(s.dubDuck, 0.2), volume: level(s.dubVolume, 1), playerOwnsVolume: /(^|\.)youtube\.com$/.test(location.hostname), secondVoice: s.dubSecondVoice === true, maxRate: Number(s.dubMaxRate) || null, prefetchMax: smartPrefetch(mode, opts.video) });
+        }, { duck: level(s.dubDuck, 0.2), volume: level(s.dubVolume, 1), playerOwnsVolume: /(^|\.)youtube\.com$/.test(location.hostname), secondVoice: s.dubSpeakers !== "one", maxRate: Number(s.dubMaxRate) || null, prefetchMax: smartPrefetch(mode, opts.video) });
         dub.engine = engine;
         dub.enabled = true;
         dub.starting = false;
@@ -292,9 +300,50 @@
         startDebug(engine);
         dub.container = opts.container || null;
         engine.start();
+        readSpeakers(engine, s, opts);
         showDubBadge(dub.container);
         console.log(`[Lồng tiếng] Bắt đầu: ${primary.label} (${primary.voiceLabel || ""})${fallback ? ", dự phòng: giọng hệ thống" : ""}`);
         return true;
+    }
+
+    // ---------- Who speaks: one AI reading per video (2.5.2) ----------
+    // ">>" and "NAME:" marks say who speaks only when the captions carry them, and most videos'
+    // captions carry none. With a Gemini key the caption lines are read once (background.js
+    // analyzeSpeakers; a long video in parts, each told the speakers found before it) and the engine
+    // takes the reading through PLAN.speakerTurns, which keeps only a real conversation. YouTube
+    // only: there the whole caption track is known before the first line is read (Coursera's groups
+    // come as they are translated, and a lecture is one person). Each part goes to the engine as it
+    // arrives; a restart (a setting changed) reuses the reading.
+    const speakerReadings = new Map();      // video + caption track -> { hints, done }
+    const SPEAKER_PART = 900;                // lines per request (background.js SPEAKER_MAX_LINES)
+    function readSpeakers(engine, s, opts) {
+        const PLAN = window.CST_DUB_PLAN;
+        if (!PLAN || !PLAN.speakerLines || s.dubSpeakers === "one" || s.dubSpeakerAi === false || !(s.useAi && s.geminiApiKey)) return;
+        if (!/(^|\.)youtube\.com$/.test(location.hostname)) return;
+        const lines = PLAN.speakerLines((opts.getGroups && opts.getGroups()) || []);
+        if (lines.length < 8) return;
+        const meta = videoMeta(opts.video);
+        const key = `${meta.videoKey}|${lines.length}|${lines[0].text}|${lines[lines.length - 1].text}`;
+        const give = hints => { if (hints && dub.engine === engine) engine.setSpeakerHints(hints); };
+        let entry = speakerReadings.get(key);
+        if (entry) { give(entry.hints); entry.done.then(() => give(entry.hints)); return; }
+        entry = { hints: null, done: null };
+        speakerReadings.set(key, entry);
+        entry.done = (async () => {
+            for (let from = 0; from < lines.length; from += SPEAKER_PART) {
+                const part = lines.slice(from, from + SPEAKER_PART);
+                const roster = entry.hints ? entry.hints.speakers.map(x => ({ id: x.id, label: x.label, gender: x.gender })) : [];
+                const r = await sendMessage({ action: "analyzeSpeakers", lines: part.map(l => l.text), roster, ...meta });
+                if (!r || !r.ok) {
+                    // no reading this time (budget, network): the next start may ask again
+                    if (!entry.hints) speakerReadings.delete(key);
+                    break;
+                }
+                entry.hints = PLAN.mergeSpeakerHints(entry.hints, PLAN.speakerHints(lines, r, from, part.length));
+                const e = dub.engine;
+                if (e && e.setSpeakerHints && e.d && e.d.video === opts.video) e.setSpeakerHints(entry.hints);
+            }
+        })().catch(() => { speakerReadings.delete(key); });
     }
 
     // Video dài (> 30 phút): tạo trước dè dặt hơn (người xem hay tua, audio xa dễ bị bỏ phí)
@@ -338,7 +387,7 @@
             if (changes.dubVolume) e.settings.volume = level(changes.dubVolume.newValue, 1);
             if (changes.dubMaxRate) e.settings.maxRate = Number(changes.dubMaxRate.newValue) || null;   // next sentence on
             // Đổi giọng / nhà cung cấp: khởi động lại engine với cùng nguồn
-            if (changes.dubSecondVoice || changes.dubProvider || changes.dubGeminiVoice || changes.dubGeminiVoice2 || changes.dubVoiceName || changes.dubTtsModel || changes.costMode || changes.dubLocalVoice || changes.dubLocalVoice2) {
+            if (changes.dubSpeakers || changes.dubSpeakerAi || changes.dubProvider || changes.dubGeminiVoice || changes.dubGeminiVoice2 || changes.dubVoiceName || changes.dubTtsModel || changes.costMode || changes.dubLocalVoice || changes.dubLocalVoice2) {
                 const src = { video: e.d.video, getGroups: e.d.getGroups, container: dub.container };
                 start(src);
             }
@@ -447,6 +496,7 @@
             version, at: new Date().toISOString(), host: location.hostname, video,
             status: dub.lastStatus || null, health,
             settings: e ? { maxRate: e.settings.maxRate || null, secondVoice: !!e.settings.secondVoice, prefetchMax: e.settings.prefetchMax, duck: e.settings.duck, volume: e.settings.volume } : null,
+            speakers: e && e.turns ? { voices: e.turns.voices, source: e.turns.source, cast: e.provider && e.provider.voices } : null,
             player: v ? { t: Math.round((v.currentTime || 0) * 100) / 100, rate: v.playbackRate, paused: !!v.paused, readyState: v.readyState, hidden: !!document.hidden } : null,
             engine: snap
         });
@@ -481,8 +531,9 @@
         let text, warn = false;
         if (!st) text = "Lồng tiếng Việt";
         else if (st.budgetBlocked) { text = "Lồng tiếng: đã chạm ngân sách chi phí, ngừng tạo giọng AI"; warn = true; }
-        else if (st.playBlocked) { text = "Lồng tiếng: Chrome đang chặn phát âm thanh, bấm vào trang video một lần để nghe"; warn = true; }
+        else if (st.playBlocked) { text = "Lồng tiếng: trình duyệt đang chặn phát âm thanh, bấm vào trang video một lần để nghe"; warn = true; }
         else if (st.fallback) { text = `Lồng tiếng: đã chuyển sang giọng hệ thống (${st.reason === "budget" ? "chạm ngân sách giọng AI" : "giọng AI tạm không dùng được"})`; warn = true; }
+        else if (st.speakers > 1) text = `Lồng tiếng: ${st.speakers} giọng theo người nói`;
         else text = `Lồng tiếng: ${st.voice || st.label}`;
         if (badge.textContent === text && badge.dataset.warn === String(warn)) return;
         badge.textContent = text;

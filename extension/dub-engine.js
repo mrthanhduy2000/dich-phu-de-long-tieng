@@ -50,6 +50,15 @@
         startMoved: 0.015,        // moved this far past where it was set: the element is playing
         startWaitMax: 2.5,        // wall s a line waits for its element to start before it may end unheard
         reseekSpacing: 2.0,       // wall s between two drift seeks of one playing voice
+        // Warm elements (2.5.1). An element made while the line before it plays starts warm; one made
+        // at its own line's start, or one Chrome idled (kSuspended after ~15 s), starts cold. After a
+        // take shorter than prepTwoUnder s the line after next gets its element too, and between
+        // lines the next take's element is made prewarmAhead media s before its line (at least
+        // prewarmMin s ahead), or made again when it sat unplayed longer than prewarmIdle wall s.
+        prepTwoUnder: 1.2,
+        prewarmAhead: 3,
+        prewarmMin: 0.3,
+        prewarmIdle: 12,
         // Edges without a click (2.4.6): Chrome cuts a media element's wave wherever a pause, a seek
         // or a start lands, and applies its volume once per audio buffer (~10 ms) without a ramp. A
         // voice resumed inside its take stays silent until it moves, then fades in; a sounding voice
@@ -68,9 +77,25 @@
         fitSlack: 0.25,           // được nói quá mốc cuối phụ đề của câu tối đa bấy nhiêu giây
         catchUpMax: 0.08,         // đang trễ so với phụ đề: nhanh thêm tối đa 8% để bắt kịp dần
         rateStepUp: 0.1,          // câu sau được nhanh hơn câu trước tối đa 0,1 (câu tràn khung: đuổi kịp, không dồn trễ)
-        rateStepDown: 0.06,       // ... và chậm lại từ từ, tối đa 0,06 mỗi câu
+        // ... and slows down gently, at most this much per line. 0.06 until 2.5.1: a fast talk climbed
+        // 0.1, fell 0.06 and climbed again. With lookAhead 5 on the user's 45 saved videos (simulator):
+        // late starts 1802 -> 1658, heard-pace jumps over 15% 585 -> 486 (DUBBING.md "Smoother pace")
+        rateStepDown: 0.04,
+        // ... except a part that runs on into the next part of its sentence: if the gentle step would
+        // end it more than midSilenceMax s before that part may chain on (a silence mid-sentence), it
+        // may slow down by this much instead
+        rateStepDownJoined: 0.08,
+        midSilenceMax: 0.4,
         rateStepInSentence: 0.03, // the next part of a sentence being read: at most this change
+        // Heard pace (2.5.1): the steps above are taken from the last line's heard pace over this
+        // take's own pace, kept within paceComp of the last rate, when both takes have at least
+        // paceCompMinSyl syllables (a short take's own pace is too noisy to compare). 0 turns it off.
+        paceComp: 0.05,
+        paceCompMinSyl: 8,
         sentenceGap: 0.18,        // câu trước kết thúc bằng dấu chấm: nghỉ tối thiểu trước câu sau (như người thật)
+        // ... but when the next line was already more than lagBoostAt late as the last one ended, the
+        // rest is at most this: a breath, not a full stop's pause on top of a voice that is behind
+        lagRest: 0.12,
         joinGap: 0,               // câu trước còn nối tiếp (chưa hết ý): nói liền, không nghỉ
         // ... unless that part ended on a comma, semicolon or colon (1.7.2): a long sentence is cut
         // into two requests at a comma (segSoft), each take is trimmed to 25 ms of silence, and the
@@ -152,8 +177,8 @@
         paceCeilingMax: 1.55,     // ceiling may rise to this (lag boost adds 0.1 on top)
         paceCeilingPad: 1.08,     // ceiling = the upper-quartile need, plus this margin
         maxSpokenSps: 5.8,        // no rate makes the voice say more than this many syllables/s
-        lookAhead: 3,             // sentences ahead that may pull the rate up early (see chooseRate)
-        lookAheadEarly: 0.5,      // ... and how much sooner than its subtitle a sentence may end for it
+        lookAhead: 5,             // sentences ahead that may pull the rate up early (see chooseRate; 3 until 2.5.1)
+        lookAheadEarly: 1.0,      // ... and how much sooner than its subtitle a sentence may end for it (0.5 until 2.5.1)
         // Delivery scorecard (debugSnapshot only, 1.8.6): a line starting this late counts as a late
         // start; a silence this long beyond the rest the engine means to keep counts as a delivery gap
         lateStart: 0.5,
@@ -202,8 +227,9 @@
         duckHold: 0.35,           // the original stays down this long (media s) after a line ends
         // (2.0.8) Before a line whose start is known (its take is in the page, or a system-voice
         // phrase), a gap shorter than this (wall seconds) keeps the original down, and after a longer
-        // one it comes down before the line starts (lineComing)
-        duckBridge: 2.0
+        // one it comes down before the line starts (lineComing). 2.0 until 2.5.1: gaps of 2 to 2.5 s
+        // let the original up and down again, 421 times on the 45 saved videos (simulator), 72 at 2.5
+        duckBridge: 2.5
     };
 
     // ============================================================
@@ -214,6 +240,8 @@
     // ============================================================
 
     // ---- Web Speech (giọng hệ thống, miễn phí, chạy offline) ----
+    // Pitch of a speaker read in the first speaker's system voice (S2 was 0.88 before 2.5.2)
+    const SPEAKER_PITCH = { S2: 0.88, S3: 1.12, S4: 0.8, S5: 1.2 };
     function createWebSpeechProvider(env) {
         const synth = env.speechSynthesis;
         const Utter = env.SpeechSynthesisUtterance;
@@ -242,8 +270,10 @@
                 if (voice) u.voice = voice;
                 u.lang = "vi-VN";
                 u.rate = Math.max(0.5, Math.min(2.6, opts.rate));
-                // Người nói thứ hai dùng cùng giọng thì hạ cao độ để phân biệt
-                const speakerPitch = opts.speaker === "S2" && provider.voices && provider.voices.S2 === provider.voices.S1 ? 0.88 : 1;
+                // A speaker after the first read in the first one's voice (one Vietnamese system voice
+                // for everyone) is told apart by pitch
+                const shared = opts.speaker !== "S1" && provider.voices && (provider.voices[opts.speaker] || provider.voices.S1) === provider.voices.S1;
+                const speakerPitch = shared ? (SPEAKER_PITCH[opts.speaker] || 1) : 1;
                 u.pitch = Math.max(0.5, Math.min(1.6, opts.pitch * speakerPitch));
                 u.volume = Math.max(0, Math.min(1, opts.volume == null ? 1 : opts.volume));
                 let done = false;
@@ -346,8 +376,38 @@
     // 11 s (paid: 8) before it is cut at a subtitle line. Every cut restarts the voice's intonation;
     // the free server renders ~4x faster than real time, so a longer segment costs ~3 s ahead.
     const FREE_SEGMENTS = { joinGroups: true, segSoft: 8, segHard: 11 };
+    // Who reads whom (2.5.2): S1 the viewer's voice; S2 the viewer's second voice, unless the AI
+    // reading says that speaker is of the other gender; S3 to S5 the first free catalogue voice of
+    // the speaker's gender (LOCAL_TTS.cast, the main voice's region first), genders alternating
+    // when unknown so that neighbours sound apart. genders: "female" | "male" | "unknown" per voice.
+    function castVoices(L, main, second, genders) {
+        const all = L.voices || [];
+        const byId = id => all.find(v => v.id === id) || null;
+        const m = byId(main) || byId(L.defaultVoice) || all[0] || null;
+        const s2 = byId(second) || byId(L.defaultVoice2);
+        const want = k => { const g = genders && genders[k]; return g === "female" ? "Nữ" : g === "male" ? "Nam" : null; };
+        const other = g => (g === "Nữ" ? "Nam" : "Nữ");
+        const pool = gender => {
+            const list = ((L.cast && L.cast[gender]) || []).map(byId).filter(Boolean);
+            return [...list.filter(v => m && v.region === m.region), ...list.filter(v => !m || v.region !== m.region)];
+        };
+        const out = { S1: m ? m.id : main };
+        const used = new Set([out.S1]);
+        for (let k = 1; k < 5; k++) {
+            const g = want(k);
+            let pick = k === 1 && s2 && !used.has(s2.id) && (!g || s2.gender === g) ? s2 : null;
+            if (!pick) {
+                const gender = g || (k % 2 === 1 ? (s2 ? s2.gender : other(m && m.gender)) : (m ? m.gender : "Nữ"));
+                pick = pool(gender).find(v => !used.has(v.id)) || all.find(v => !used.has(v.id)) || m;
+            }
+            out["S" + (k + 1)] = pick ? pick.id : out.S1;
+            used.add(out["S" + (k + 1)]);
+        }
+        return out;
+    }
     function createVieneuProvider(env, settings) {
         const L = COST.LOCAL_TTS;
+        const cast = genders => castVoices(L, settings.localVoice || L.defaultVoice, settings.localVoice2 || L.defaultVoice2, genders);
         const provider = {
             id: L.id,
             label: L.label,
@@ -356,7 +416,16 @@
             tempo: { targetSps: L.targetSps, maxTempo: L.maxTempo, minSps: L.minSps, maxFloor: L.maxFloor },
             // Mô hình thời lượng cho bộ lập kế hoạch = thời lượng PHÁT (đã tính nhịp nền)
             voiceModel: { ...PLAN.DEFAULT_VOICE_MODEL, sylPerSec: L.targetSps * 0.97, rateExp: 1, pauseFactor: 1.0 },
-            voices: { S1: settings.localVoice || L.defaultVoice, S2: settings.localVoice2 || L.defaultVoice2 },
+            voices: cast([]),
+            castSig: "",
+            // the AI reading's genders for S1..S5 (DubEngine.refresh): a new cast only when they change
+            setCast(genders) {
+                const sig = (genders || []).join(",");
+                if (sig === provider.castSig) return false;
+                provider.castSig = sig;
+                provider.voices = cast(genders || []);
+                return true;
+            },
             // Tốc độ tự nhiên của giọng (đo trước trên máy; sau đó engine tự đo từ audio thật)
             naturalSps(speaker) {
                 const v = L.voices.find(x => x.id === (provider.voices[speaker] || provider.voices.S1));
@@ -463,8 +532,22 @@
             return t;
         }).filter(Boolean);
         let s = parts.join(" ").replace(/\s+([,.;:!?…])/g, "$1").replace(/\s+/g, " ").trim();
+        const cut = s.indexOf("--") >= 0;
+        if (cut) s = interruptionCommas(s);
         if (s && !plan.continuesNext && !/[.!?…]$/.test(s)) s += ".";
+        // ... and a comma left just before that closing full stop ("vì-- Vâng," -> "vì, Vâng.")
+        if (cut) s = s.replace(/,+\.$/, ".");
         return s;
+    }
+
+    // (2.5.1) A speaker cut off mid-thought is written "vì-- Vâng" (53 of 7,795 lines on the user's 45
+    // saved videos); VieNeu has no reading for the dashes. The speech text turns such a "--" into the
+    // comma it is ("vì, Vâng"); a range between two digits (5--10) stays. Then ",,", a comma before
+    // other punctuation and a leading comma are tidied. Speech text only: subtitles keep the dashes.
+    function interruptionCommas(s) {
+        return s.replace(/\s*-{2,}\s*/g, (m, at, all) => (/\d/.test(all[at - 1] || "") && /\d/.test(all[at + m.length] || "") ? m : ", "))
+            .replace(/\s+,/g, ",").replace(/,(\s*,)+/g, ",").replace(/,\s*([.;:!?…])/g, "$1")
+            .replace(/^[\s,]+/, "").replace(/\s+/g, " ").trim();
     }
 
     // What VieNeu is asked to say: plainScript with its English spans written the way its front end
@@ -534,6 +617,8 @@
             this.speech = null;             // lời đang phát (audio có sẵn): { id, mediaStart, offset, rate, end }
             this.voiceSps = new Map();      // tốc độ nói thật của từng người nói (âm tiết/giây, đo từ audio)
             this.lastRate = null;
+            this.lastHeard = null;          // heard pace of the last line (syllables/s) and its syllables (chooseRate)
+            this.lastHeardSyl = 0;
             this.warmup = true;             // lượt TTS đầu tiên nhỏ (có tiếng sớm nhất)
             this.lastSpokenStart = null;    // mốc bắt đầu của câu vừa nói (hàng đợi lời nói)
             this.entryWait = null;          // the line waited on for audio at a start or a seek
@@ -657,7 +742,7 @@
             for (const g of groups) {
                 if (seen.get(g) !== g.viText) { seen.set(g, g.viText); this.textRev = (this.textRev || 0) + 1; }
             }
-            const sig = step + "|" + groups.length + "|" + this.textRev + "|" + (this.provider && this.provider.id) + "|" + (this.provider && this.provider.caps && this.provider.caps.free ? this.headAt : "");
+            const sig = step + "|" + groups.length + "|" + this.textRev + "|" + (this.provider && this.provider.id) + "|" + (this.provider && this.provider.caps && this.provider.caps.free ? this.headAt : "") + "|" + (this.hintsRev || 0);
             if (!force && sig === this.sourceSig) return false;
             this.sourceSig = sig;
             // Chỉ giọng MIỄN PHÍ (VieNeu) mới cắt đoạn đầu ngắn: đổi điểm cắt sau khi tua có thể phải
@@ -666,7 +751,10 @@
             // who speaks when, from the source of every group, translated or not (2.4.8). With one
             // voice no turn at all: a reply inside a group is read on in the same breath, as before
             // (cut there, 45 saved videos: 53 more late starts, 2 s more silence, nothing gained)
-            const speakerTurns = this.settings.secondVoice ? PLAN.speakerTurns(given) : PLAN.NO_TURNS;
+            // 2.5.2: up to five voices, and the AI reading of who speaks when there is one (setSpeakerHints)
+            const speakerTurns = this.settings.secondVoice ? PLAN.speakerTurns(given, { ai: this.speakerHints || null }) : PLAN.NO_TURNS;
+            this.turns = speakerTurns;
+            if (this.provider && this.provider.setCast) this.provider.setCast(speakerTurns.genders);
             // what the queue has spoken or passed never changes (buildDubScript opts.spoken)
             const s0 = this.lastSpokenStart;
             const passed = s0 == null ? null : (this.plans || []).find(p => Math.abs(p.start - s0) < 1e-6);
@@ -675,11 +763,16 @@
             const opts = { voiceModel: this.provider.voiceModel };
             this.plans = PLAN.planAll(script, opts);
             this.planById = new Map(this.plans.map(p => [p.id, p]));
+            // who reads each line: a take made in another voice (a speaker found later, a new cast)
+            // is made again, as one made for other words is. By the voice, not the speaker: two
+            // speakers sharing a voice (Gemini TTS past S2) make the same audio
+            for (const p of this.plans) p.voiceTag = this.voiceName(p.speaker);
             // Audio đã tạo cho lời thoại KHÁC (đoạn được cắt lại sau khi tua, bản dịch được sửa):
             // bỏ để tạo lại cho đúng lời, trừ đoạn đang nói
             for (const [id, r] of this.rendered) {
                 const p = this.planById.get(id);
-                if (p && r.text != null && r.text !== p.text && !(this.speech && this.speech.id === id)) {
+                const changed = p && ((r.text != null && r.text !== p.text) || (r.voiceTag != null && r.voiceTag !== p.voiceTag));
+                if (changed && !(this.speech && this.speech.id === id)) {
                     if (r.el) this.releaseAudio(r);   // as in stop() and releaseOld(): not only its URL
                     if (r.url && this.d.revokeObjectURL) this.d.revokeObjectURL(r.url);
                     this.rendered.delete(id);
@@ -689,9 +782,24 @@
             return true;
         }
 
-        // The second voice (a different voice when the subtitles mark another speaker with ">>",
-        // "- " or "NAME:") is optional and off by default: a voice switching mid-video surprises
-        // more than it helps when the marks are unreliable. Off = everyone is S1.
+        // The voice a speaker is read in, by name (a system voice is an object)
+        voiceName(speaker) {
+            const vs = this.provider && this.provider.voices;
+            const v = vs && (vs[speaker] || vs.S1);
+            return v && typeof v === "object" ? String(v.name || "") : String(v || "");
+        }
+
+        // An AI reading of who speaks (dubbing.js, from background.js analyzeSpeakers, as times by
+        // PLAN.speakerHints): taken into the next plan at once; the lines it gives another voice are
+        // made again
+        setSpeakerHints(hints) {
+            this.speakerHints = hints || null;
+            this.hintsRev = (this.hintsRev || 0) + 1;
+            if (this.running) { this.refresh(true); this.status(); }
+        }
+
+        // Voices follow the speakers (dubbing.js: the viewer's "Giọng theo người nói" is not "one
+        // voice"): ">>", "- ", "NAME:" marks and the AI reading decide. Off = everyone is S1.
         oneVoice(script) {
             if (this.settings.secondVoice) return script;
             for (const sg of script) sg.speaker = "S1";
@@ -975,7 +1083,10 @@
                 this.speech = S = null;
             }
             const next = (this.adResume && this.takeAdResume(t)) || this.nextSpeech(t);
-            if (!next) return;
+            if (!next) {
+                this.prewarm(t);
+                return;
+            }
             const { p, r, offset, lag } = next;
             this.meterStart(p, t, lag);
             const rate = this.chooseRate(p, r, t, offset, lag);
@@ -986,7 +1097,7 @@
             this.stats.started.push({ id: p.id, t, due: p.start, lag, rate, speechEnd: S.end, cueEnd: p.end });
             if (lag > SYNC.lateStart) this.note("late", { id: p.id, lag: Math.round(lag * 100) / 100, rate: Math.round(rate * 100) / 100 });
             for (const [id, x] of this.rendered) if (x.el && id !== p.id && !x.el.paused) this.quietPause(x.el);
-            if (!r.el) r.el = this.makeAudio(r.url);
+            if (!r.el) this.makeEl(r);
             this.driveSpeech(S, r, t, videoRate, true);
             this.speakingUntilMedia = S.end + SYNC.duckHold;
         }
@@ -1069,6 +1180,13 @@
             const el = this.d.createAudio(url);
             try { if (el && el.addEventListener) el.addEventListener("ended", () => { if (this.running) this.tick(); }); } catch (e) { /* bỏ qua */ }
             return el;
+        }
+
+        // A take's element, made now; madeAt (wall ms) tells prewarm how long it has sat unplayed
+        makeEl(r) {
+            r.el = this.makeAudio(r.url);
+            r.madeAt = this.d.now();
+            return r.el;
         }
 
         // Nhịp nền của giọng: giọng nói chậm hơn nhịp mục tiêu được tăng tốc ĐỀU cho cả video
@@ -1195,8 +1313,27 @@
             let want = (r.duration - offset) / win;
             if (lag > 0.25) want *= 1 + Math.min(SYNC.catchUpMax, lag * 0.05);
             want = Math.max(floor, want);
+            // (2.5.1) The pace the smoothing steps from. Each take has its own pace (VieNeu reads one
+            // line slower than the next), so the same rate on two takes is not the same pace to the ear:
+            // the last line's heard pace (its rate x its take's syllables per second) over this take's
+            // own pace, kept within paceComp of the last rate. Short takes keep the plain last rate.
+            const recent = !!(this.lastRate && t - this.lastRateEnd < SYNC.rateMemory);
+            const syl = p.phrases.reduce((a, ph) => a + ph.syl, 0);
+            const native = syl / Math.max(0.3, r.duration);
+            let last = this.lastRate;
+            if (recent && SYNC.paceComp > 0 && this.lastHeard && syl >= SYNC.paceCompMinSyl && this.lastHeardSyl >= SYNC.paceCompMinSyl) {
+                last = Math.max(this.lastRate * (1 - SYNC.paceComp), Math.min(this.lastRate * (1 + SYNC.paceComp), this.lastHeard / native));
+            }
             // Đang sớm giữa câu: được chậm lại nhanh hơn (0,1 mỗi đoạn, như lúc tăng tốc) để kịp lấp khung
-            const stepDown = joined && early > 0.3 ? SYNC.rateStepUp : SYNC.rateStepDown;
+            let stepDown = joined && early > 0.3 ? SYNC.rateStepUp : SYNC.rateStepDown;
+            // (2.5.1) A part that runs on, read at the gentle step down, would end more than
+            // midSilenceMax before the next part may chain on (a silence mid-sentence): it may slow
+            // down by rateStepDownJoined instead
+            if (joined && recent) {
+                const gentle = Math.max(floor, last - stepDown);
+                const silence = (next.start - SYNC.chainLead) - (t + (r.duration - offset) / gentle);
+                if (silence > SYNC.midSilenceMax) stepDown = Math.max(stepDown, SYNC.rateStepDownJoined);
+            }
             // Look ahead: a dense sentence coming up (in the same stretch of speech) is reached by
             // speeding up gradually from here, since the rate may only climb rateStepUp per sentence.
             // Measured on a real timeline: without it a 35-syllable sentence in a 6.5 s slot (needs
@@ -1216,22 +1353,20 @@
                 const earliest = (r.duration - offset) / Math.max(0.5, win - SYNC.lookAheadEarly);
                 want = Math.max(want, Math.min(ahead, earliest));
             }
-            if (this.lastRate && t - this.lastRateEnd < SYNC.rateMemory) {
-                want = Math.max(this.lastRate - stepDown, Math.min(this.lastRate + SYNC.rateStepUp, want));
-            }
+            if (recent) want = Math.max(last - stepDown, Math.min(last + SYNC.rateStepUp, want));
             let ceiling = lag > SYNC.lagBoostAt ? lim.lagCeiling : lim.ceiling;
             // Vừa bắt kịp (trần trở về 1,3x): hạ tốc độ từ từ, không tụt 0,1 trong một câu
-            if (this.lastRate && t - this.lastRateEnd < SYNC.rateMemory) ceiling = Math.max(ceiling, Math.min(lim.lagCeiling, this.lastRate - SYNC.rateStepDown));
+            // (from the rate really played, not the heard-pace reference)
+            if (recent) ceiling = Math.max(ceiling, Math.min(lim.lagCeiling, this.lastRate - SYNC.rateStepDown));
             if (lag > SYNC.lagBoostAt) want = Math.max(want, (r.duration - offset) / win * (1 + Math.min(0.12, lag * 0.06)));
             let rate = Math.max(floor, Math.min(ceiling, want));
             // Tốc độ sàn vừa được hiệu chỉnh lại (đo giọng thật) không được làm nhịp nhảy quá bước cho phép
-            if (this.lastRate && t - this.lastRateEnd < SYNC.rateMemory) rate = Math.min(rate, this.lastRate + SYNC.rateStepUp);
+            if (recent) rate = Math.min(rate, last + SYNC.rateStepUp);
             // Close to natural speed and not behind: play at exactly 1.0. Any other rate goes through
             // Chrome's time-stretch, which roughens the voice (1.6.7 measurements); finishing up to 5%
             // early leaves a natural gap, and 5% late stays inside fitSlack.
             // (not for a slow voice whose floor rate is above 1: it is sped up on purpose)
             const natural = this.floorRate(p) <= 1 ? 1 : 0;
-            const recent = this.lastRate && t - this.lastRateEnd < SYNC.rateMemory;
             // The rest of a sentence the voice is still reading keeps its pace (a tempo change inside a
             // sentence is heard), unless the voice has fallen behind. Slowing down stays free while the
             // sentence goes on after this part: finishing early there means a silence mid-sentence
@@ -1240,10 +1375,12 @@
             const inSentence = !!(recent && prevPlan && prevPlan.continuesNext && this.lastSpokenId === prevPlan.id && lag <= SYNC.lagBoostAt);
             const up = inSentence ? SYNC.rateStepInSentence : null;
             const down = inSentence && !joined ? SYNC.rateStepInSentence : null;
-            if (up != null) rate = Math.min(this.lastRate + up, rate);
-            if (down != null) rate = Math.max(this.lastRate - down, rate);
-            const smoothOk = !recent || ((1 >= this.lastRate - (down != null ? down : SYNC.rateStepDown) - 1e-9) &&
-                (1 <= this.lastRate + (up != null ? up : SYNC.rateStepUp) + 1e-9));
+            if (up != null) rate = Math.min(last + up, rate);
+            if (down != null) rate = Math.max(last - down, rate);
+            // a reference above the last rate must not lift this line past the ceiling
+            rate = Math.min(rate, lim.lagCeiling);
+            const smoothOk = !recent || ((1 >= last - (down != null ? down : SYNC.rateStepDown) - 1e-9) &&
+                (1 <= last + (up != null ? up : SYNC.rateStepUp) + 1e-9));
             if (natural === 1 && lag < 0.3 && smoothOk && Math.abs(rate - 1) <= SYNC.snapToNatural + 1e-6) {
                 const over = rate > 1 ? (r.duration - offset) * (1 - 1 / rate) : 0;
                 if (over <= SYNC.fitSlack) rate = 1;
@@ -1252,6 +1389,8 @@
             if (cap) rate = Math.min(rate, cap);          // above even a slow voice's floor rate
             this.lastRate = rate;
             this.lastRateEnd = t + (r.duration - offset) / rate;
+            this.lastHeard = rate * native;
+            this.lastHeardSyl = syl;
             return rate;
         }
 
@@ -1261,7 +1400,30 @@
             const i = this.plans.findIndex(p => p.id === currentId);
             const next = i >= 0 ? this.plans[i + 1] : null;
             const r = next && this.rendered.get(next.id);
-            if (r && !r.el) r.el = this.makeAudio(r.url);
+            if (r && !r.el) this.makeEl(r);
+            // (2.5.1) A short next take would leave the line after it an element made just before
+            // its own start, which Chrome starts cold: make that one now too
+            if (r && r.duration < SYNC.prepTwoUnder) {
+                const n2 = this.plans[i + 2], r2 = n2 && this.rendered.get(n2.id);
+                if (r2 && !r2.el) this.makeEl(r2);
+            }
+        }
+
+        // (2.5.1) Between lines (nothing speaking, the next line not due yet): the next take's element
+        // is made shortly before its line, so Chrome starts it warm. An element made at its line's
+        // start, or one Chrome suspended after ~15 s idle, took 0.25 to 0.75 s to start in the user's
+        // Chrome while the server worked (the simulator's LATENCY=busy). One that is playing or fading
+        // is never touched; one never played that sat longer than prewarmIdle is made again.
+        prewarm(t) {
+            if (this.lastSpokenStart == null) return;
+            const q = this.plans[this.planAt(this.lastSpokenStart + 1e-6) + 1];
+            const r = q && this.rendered.get(q.id);
+            if (!r || !r.url) return;
+            const ahead = q.start - t;
+            if (ahead >= SYNC.prewarmAhead || ahead <= SYNC.prewarmMin) return;
+            const el = r.el;
+            if (el && el.paused && !el.cstFade && !el.currentTime && r.madeAt != null && this.d.now() - r.madeAt > SYNC.prewarmIdle * 1000) this.releaseAudio(r);
+            if (!r.el) this.makeEl(r);
         }
 
         // Giải phóng audio của các câu đã qua xa (video dài không giữ hàng trăm MB trong trang).
@@ -1333,7 +1495,12 @@
                 return { p, r, offset, lag: 0 };
             }
             // Câu trước vừa nói xong (đang trễ, câu sau đã tới giờ): nghỉ một nhịp như người thật
-            const restAfter = this.lastSpeechGap != null ? this.lastSpeechGap : (this.lastSpeechJoined ? SYNC.joinGap : SYNC.sentenceGap);
+            let restAfter = this.lastSpeechGap != null ? this.lastSpeechGap : (this.lastSpeechJoined ? SYNC.joinGap : SYNC.sentenceGap);
+            // (2.5.1) The next line was already lagBoostAt late when the last one ended: a short breath
+            if (this.lastSpeechEnd != null && restAfter > SYNC.lagRest) {
+                const q = this.plans[this.planAt(this.lastSpokenStart + 1e-6) + 1];
+                if (q && this.lastSpeechEnd - q.start > SYNC.lagBoostAt) restAfter = SYNC.lagRest;
+            }
             if (this.lastSpeechEnd != null && t < this.lastSpeechEnd + restAfter) {
                 // Hẹn đúng lúc hết nhịp nghỉ (không chờ vòng đếm giờ kế, có thể tới 1 giây khi cửa sổ bị che)
                 const wait = this.lastSpeechEnd + restAfter - t;
@@ -1476,7 +1643,7 @@
             const r = this.rendered.get(p.id);
             if (!r) return false;
             // Cho trình duyệt nạp sẵn audio đoạn đầu ngay khi còn tạm dừng: video chạy là có tiếng liền
-            if (!r.el && r.url) r.el = this.makeAudio(r.url);
+            if (!r.el && r.url) this.makeEl(r);
             return true;
         }
 
@@ -1511,7 +1678,7 @@
         // (2.4.6) A play() or a seek is complete only once the element is seen moving (settleSpeech):
         // until then its standing still is Chrome starting it, never drift to chase (SYNC startMoved)
         driveSpeech(S, r, t, videoRate, starting) {
-            const el = r.el || (r.el = this.makeAudio(r.url));
+            const el = r.el || this.makeEl(r);
             const baseRate = S.rate * videoRate;
             try { el.preservesPitch = true; } catch (e) { /* bỏ qua */ }
             el.cstFade = null;                                        // a stop on its way down is called off: the voice goes on
@@ -1857,7 +2024,7 @@
                     const h = hits && hits[keys[i]];
                     if (!h) return;
                     const cur = this.planById.get(p.id);
-                    if (!cur || cur.text !== p.text || this.rendered.has(p.id)) return;
+                    if (!cur || cur.text !== p.text || cur.voiceTag !== p.voiceTag || this.rendered.has(p.id)) return;
                     const duration = this.audioLength(h.wav, h.duration);
                     if (duration == null) { this.countError("bad_audio"); return; }
                     cur.audioKey = keys[i];
@@ -1919,7 +2086,7 @@
             // được chọn lúc bắt đầu nói (chooseRate) để nhịp đều giữa các câu
             const stretch = this.baseTempo(p);
             const url = this.d.createObjectURL(wav);
-            this.rendered.set(p.id, { url, duration, stretch, fit: duration / slot, overflow: duration / stretch - slot, text: p.text, stops: this.findStops(wav, duration) });
+            this.rendered.set(p.id, { url, duration, stretch, fit: duration / slot, overflow: duration / stretch - slot, text: p.text, voiceTag: p.voiceTag, stops: this.findStops(wav, duration) });
         }
 
         // Where the voice resumes after each stop inside the take (seconds), for entryPoint. ~0.5 ms
@@ -2015,7 +2182,7 @@
                     const cur = this.planById.get(o.planId);
                     const duration = this.audioLength(o.wav, o.duration);
                     if (duration == null) { this.countError("bad_audio"); this.failed.set(p.id, (this.failed.get(p.id) || 0) + 1); continue; }
-                    if (cur && cur.text === p.text && !this.rendered.has(cur.id)) this.addRendered(cur, o.wav, duration);
+                    if (cur && cur.text === p.text && cur.voiceTag === p.voiceTag && !this.rendered.has(cur.id)) this.addRendered(cur, o.wav, duration);
                 }
                 this.consecutiveErrors = 0;
             } catch (e) {
@@ -2186,9 +2353,15 @@
                 }
             }
             const keys = new Set();
+            // every voice the video is read in, not only each line's own (2.5.2: up to five, and an AI
+            // reading that came later may have moved a line to another one)
+            const n = this.settings.secondVoice && this.turns ? this.turns.voices : 1;
+            const speakers = Array.from({ length: n }, (_, k) => "S" + (k + 1));
             for (const p of plans) {
                 if (p.audioKey) keys.add(p.audioKey);
-                for (const tight of [false, true]) keys.add(await this.provider.audioKey({ ...p, tightPauses: tight }));
+                for (const speaker of new Set([p.speaker || "S1", ...speakers])) {
+                    for (const tight of [false, true]) keys.add(await this.provider.audioKey({ ...p, speaker, tightPauses: tight }));
+                }
             }
             return [...keys];
         }
@@ -2413,12 +2586,15 @@
                 fallback: kind === "fallback" || (this.fallback && this.provider === this.fallback && this.d.providers.primary !== this.fallback),
                 reason: this.fallbackReason || "",
                 budgetBlocked: !!this.budgetBlocked,
-                playBlocked: !!this.playBlocked
+                playBlocked: !!this.playBlocked,
+                // how many voices follow the speakers, and what decided it (names, marks, ai, none)
+                speakers: this.turns ? this.turns.voices : 1,
+                speakerSource: this.turns ? this.turns.source : "none"
             });
         }
     }
 
-    const api = { DubEngine, createWebSpeechProvider, createGeminiProvider, createVieneuProvider, geminiScript, plainScript, speakScript, gapAfter, SYNC, TTS_STYLE_VERSION, DEFAULT_TTS_MODEL };
+    const api = { DubEngine, createWebSpeechProvider, createGeminiProvider, createVieneuProvider, castVoices, geminiScript, plainScript, speakScript, gapAfter, SYNC, TTS_STYLE_VERSION, DEFAULT_TTS_MODEL };
     if (typeof module === "object" && module.exports) module.exports = api;
     if (root) root.CST_DUB_ENGINE = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

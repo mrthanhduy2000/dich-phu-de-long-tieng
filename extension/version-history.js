@@ -4,6 +4,44 @@
 (function (root) {
     const HISTORY = [
         {
+            v: "2.5.2", luc: "16/10/2026", ten: "Mỗi người nói một giọng, cài được trên mọi trình duyệt nhân Chromium",
+            y: [
+                "Lồng tiếng tự nhận ra người nói và cho mỗi người một giọng riêng, tối đa 5 giọng, bật sẵn. Người nói nhiều nhất dùng giọng chính; từ người thứ ba trở đi tiện ích tự chọn giọng khác hẳn. Video chỉ có một người nói vẫn giữ một giọng, kể cả khi phụ đề tự động đánh dấu nhầm quanh đoạn nhạc hay câu trích lời. Muốn cả video một giọng: Cài đặt > Lồng tiếng > Giọng theo người nói.",
+                "Phụ đề YouTube phần lớn không đánh dấu đổi người nói. Có khóa Gemini, tiện ích đọc lời gốc một lần cho mỗi video để biết ai nói câu nào, nam hay nữ, rồi chọn giọng hợp giới tính (ước tính vài chục đồng cho video 10 phút, lưu lại cho lần xem sau). Kết quả không chắc chắn, hay một người chỉ chen một câu trích dẫn, thì bỏ qua, không thêm giọng. Tắt bằng ô \"Dùng Gemini nhận ra ai đang nói\".",
+                "Phụ đề ghi tên người nói kiểu \"Yeah. ANDREW HUBERMAN:\" không còn bị hiểu thành một người thứ ba.",
+                "Trong hội thoại nói qua lại rất nhanh, mỗi lượt là một câu đọc riêng nên giọng bắt đầu trễ hơn một chút so với đọc một giọng. Không câu nào bị bỏ, không chữ nào bị lược.",
+                "Cài cho bạn bè: bộ cài một lệnh nay mở trang hướng dẫn trong trình duyệt nhân Chromium có trên máy (Chrome, Cốc Cốc, Edge, Brave, Opera, Vivaldi, Arc), và trang tự chỉ đúng địa chỉ, đúng tên nút của trình đó. Bộ tự cập nhật chờ đúng trình duyệt đang dùng tiện ích đóng lại rồi mới chép bản mới.",
+                "Lần cài đầu, trang Cài đặt tự mở với phần chào mừng: chỗ dán khóa Gemini, trạng thái giọng VieNeu, cách ghim tiện ích và phím tắt.",
+                "Máy chủ giọng VieNeu của bộ cài chỉ nghe trên chính máy này (127.0.0.1), máy khác trong mạng không gọi được.",
+                "Xóa âm thanh đã lưu của một video nay xóa cả các giọng phụ."
+            ],
+            bang: { cot: ["50 video đã lưu (mô phỏng)", "2.5.1", "Nay"], hang: [
+                ["Video hội thoại có dấu >> đọc mỗi người một giọng khi để mặc định", "0 / 5", "5 / 5"],
+                ["Video bị chen nhầm giọng thứ hai", "0", "0"],
+                ["Câu bị bỏ / chữ bị lược", "0 / 0", "0 / 0"],
+                ["Trễ trung vị ở video nói qua lại nhanh nhất", "0,85 giây (một giọng)", "1,18 giây"]
+            ] }
+        },
+        {
+            v: "2.5.1", luc: "11/10/2026", ten: "Giọng Mỹ Duyên đều nhịp hơn, mô hình giọng nằm trong máy",
+            y: [
+                "Nhịp đọc giữa hai câu liền nhau đều hơn: tốc độ giảm từ từ thay vì lên xuống liên tục, và tiện ích tính cả nhịp riêng của từng câu VieNeu đọc ra, không chỉ tốc độ phát. Đo trên 45 video đã lưu, số cặp câu nghe chênh nhịp quá 15% giảm gần một nửa; ngay trong cùng một câu gần như không còn.",
+                "Khi giọng đang chậm hơn phụ đề, khoảng nghỉ giữa hai câu rút còn 0,12 giây để bắt kịp, nên số câu trễ quá 4,5 giây giảm một nửa. Không câu nào bị bỏ, không chữ nào bị lược.",
+                "Âm thanh gốc của video không còn bật lên rồi tụt xuống trong những quãng lặng ngắn 2 đến 2,5 giây giữa hai câu.",
+                "Câu bị ngắt bằng \"--\" (người nói bị cắt lời) nay có khoảng ngừng, không còn đọc dính hai chữ vào nhau.",
+                "Mô hình giọng 580 MB nay nằm cố định trong thư mục VieNeu và được kiểm từng tệp, không còn nằm trong thư mục đệm mà công cụ dọn đĩa hay xóa. Máy chủ giọng chạy không cần mạng, khởi động khoảng 2 giây.",
+                "Báo lỗi khi giọng VieNeu chưa chạy nay chỉ đúng tệp cho máy Windows. Bảng điều khiển không còn báo \"Đã kích hoạt phụ đề\" khi video thật ra chưa bắt đầu dịch được.",
+                "Tiện ích bỏ hai quyền truy cập phông chữ không dùng tới, và bớt một lần đọc toàn bộ bộ nhớ đệm mỗi khi lưu bản dịch đã tinh chỉnh."
+            ],
+            bang: { cot: ["45 video đã lưu (mô phỏng)", "2.5.0", "Nay"], hang: [
+                ["Cặp câu liền nhau nghe chênh nhịp quá 15%", "585", "284"],
+                ["Chênh nhịp quá 15% trong cùng một câu", "102", "15"],
+                ["Câu bắt đầu trễ quá 4,5 giây", "67", "30"],
+                ["Lần âm gốc bật lên rồi tụt xuống giữa hai câu", "408", "68"],
+                ["Câu bị bỏ / chữ bị lược", "0 / 0", "0 / 0"]
+            ] }
+        },
+        {
             v: "2.5.0", luc: "", ten: "Coursera có giọng Việt ngay từ câu đầu",
             y: [
                 "Coursera tự phát bài giảng chỉ 2 đến 3 giây sau khi mở, lúc phụ đề còn đang dịch và giọng chưa kịp tạo. Đo thật trên một bài đã dịch sẵn: câu chào đầu bài không được đọc, giọng chỉ vào từ câu thứ hai; bài chưa dịch thì phải tới khoảng giây thứ 7 mới có giọng.",

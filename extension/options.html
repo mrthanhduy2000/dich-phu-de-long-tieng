@@ -765,6 +765,11 @@
         .cst-note-body { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
         .cst-stale-warning { border-color: var(--primary) !important; background: var(--primary-light) !important; }
         .cst-stale-warning button { background: var(--primary) !important; }
+        .welcome-card { border-color: var(--primary-border); background: var(--primary-light); }
+        .welcome-steps { margin: 0 0 16px; padding-left: 20px; color: var(--text-main); font-size: 14px; line-height: 1.6; }
+        .welcome-steps li { margin-bottom: 8px; }
+        .welcome-steps a { color: var(--primary); }
+        .welcome-actions { display: flex; justify-content: flex-end; }
     </style>
     <script src="chrome-shim.js"></script>
     <script src="theme.js"></script>
@@ -795,7 +800,7 @@
                 <button type="button" class="theme-btn" data-theme-set="dark" title="Luôn dùng giao diện tối">Tối</button>
                 <button type="button" class="theme-btn" data-theme-set="auto" title="Theo cài đặt sáng/tối của máy">Theo máy</button>
             </div>
-            <span class="header-badge" title="Cập nhật lúc 21:04 06/10/2026">Phiên bản v2.5.0 · cập nhật 21:04 06/10/2026</span>
+            <span class="header-badge" title="Cập nhật lúc 03:42 16/10/2026">Phiên bản v2.5.2 · cập nhật 03:42 16/10/2026</span>
         </div>
     </header>
 
@@ -848,6 +853,22 @@
 
         <!-- Content Area -->
         <section class="content-area">
+
+            <!-- Shown once, right after a first install (background.js opens options.html#welcome) -->
+            <div class="card welcome-card" id="welcomeCard" hidden>
+                <div class="card-header">
+                    <h2 class="card-title">Cài xong rồi! Ba việc nhỏ để bắt đầu</h2>
+                    <p class="card-desc">Làm một lần là xong; về sau tiện ích tự chạy.</p>
+                </div>
+                <ol class="welcome-steps">
+                    <li><b>Dán khóa Gemini</b> vào ô "Gemini API Key" ngay bên dưới để dịch theo ngữ cảnh, tự nhiên hơn. Khóa miễn phí, lấy tại <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>. Chưa có khóa vẫn dịch được bằng Google Dịch.</li>
+                    <li><b>Giọng đọc VieNeu:</b> <span id="welcomeVoice">đang kiểm tra…</span></li>
+                    <li><b>Ghim tiện ích</b> lên thanh công cụ (biểu tượng mảnh ghép, chọn ghim), rồi mở một video YouTube và bấm nút phụ đề Việt trên thanh điều khiển của trình phát. Phím tắt: <b>Alt+S</b> bật phụ đề, <b>Alt+D</b> bật lồng tiếng.</li>
+                </ol>
+                <div class="welcome-actions">
+                    <button type="button" class="btn btn-primary" id="welcomeDone">Đã hiểu</button>
+                </div>
+            </div>
 
             <!-- TAB 1: KIỂU PHỤ ĐỀ (The main focus requested!) -->
             <div id="tab-subtitle" class="tab-panel active">
@@ -1122,7 +1143,7 @@
                         <input type="checkbox" id="autoDub" checked>
                         <span>Tự động lồng tiếng Việt khi mở video</span>
                     </label>
-                    <div class="field-hint">Phím tắt: <b>Alt+S</b> bật/tắt phụ đề, <b>Alt+D</b> bật/tắt lồng tiếng, <b>Alt+Shift+V</b> mở bảng điều khiển. Đổi phím tại trang chrome://extensions/shortcuts.</div>
+                    <div class="field-hint">Phím tắt: <b>Alt+S</b> bật/tắt phụ đề, <b>Alt+D</b> bật/tắt lồng tiếng, <b>Alt+Shift+V</b> mở bảng điều khiển. Đổi phím tại trang phím tắt tiện ích của trình duyệt: chrome://extensions/shortcuts (Edge: edge://extensions/shortcuts).</div>
 
                     <label class="group-row">
                         <input type="checkbox" id="perCueMode">
@@ -1379,16 +1400,23 @@ Claude's code => Claude Code</div>
                         </div>
 
                         <div class="form-group" style="grid-column: 1 / -1;">
-                            <label class="group-row" style="font-weight: 600;">
-                                <input type="checkbox" id="dubSecondVoice">
-                                <span>Dùng giọng thứ hai cho người nói khác</span>
+                            <label class="form-label" for="dubSpeakers">Giọng theo người nói</label>
+                            <select id="dubSpeakers" class="form-select">
+                                <option value="auto" selected>Tự động: mỗi người nói một giọng (tối đa 5)</option>
+                                <option value="one">Một giọng cho cả video</option>
+                            </select>
+                            <div class="field-hint">Tự động: video có nhiều người nói (phỏng vấn, podcast, trò chuyện) thì mỗi người một giọng riêng, người nói nhiều nhất luôn dùng giọng chính, từ người thứ ba trở đi tiện ích tự chọn giọng khác hẳn. Video chỉ có một người nói thì giữ một giọng, kể cả khi phụ đề tự động đánh dấu nhầm quanh đoạn nhạc hay câu trích lời người khác.</div>
+                            <label class="group-row" style="font-weight: 600; margin-top: 10px;">
+                                <input type="checkbox" id="dubSpeakerAi" checked>
+                                <span>Dùng Gemini nhận ra ai đang nói (YouTube)</span>
                             </label>
-                            <div class="field-hint">Khi phụ đề đánh dấu đổi người nói (&gt;&gt;, gạch đầu dòng, TÊN:), câu của người khác được đọc bằng giọng thứ hai. Video chỉ có một người nói thì luôn giữ một giọng, kể cả khi phụ đề tự động đánh dấu nhầm quanh đoạn nhạc. Người nói nhiều nhất luôn dùng giọng chính. Tắt: cả video chỉ một giọng.</div>
+                            <div class="field-hint">Phụ đề phần lớn video không đánh dấu đổi người nói. Có khóa Gemini thì tiện ích đọc lời gốc một lần cho mỗi video để biết ai nói câu nào, nam hay nữ (ước tính vài chục đồng cho video 10 phút, cộng vào chi phí hôm nay; xem lại không tốn thêm). Tắt: chỉ dựa vào dấu &gt;&gt; và TÊN: trong phụ đề.</div>
                         </div>
 
                         <div class="form-group">
                             <label class="form-label" for="dubLocalVoice2">Giọng VieNeu (người nói thứ hai)</label>
                             <select id="dubLocalVoice2" class="form-select"></select>
+                            <div class="field-hint">Khi Gemini nhận ra người nói thứ hai khác giới với giọng này, tiện ích chọn một giọng đúng giới.</div>
                         </div>
 
                         <div class="form-group">

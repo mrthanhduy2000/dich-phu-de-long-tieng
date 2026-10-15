@@ -2451,6 +2451,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (site === "youtube") {
             if (typeof ytNapCaiDatKieu === "function") ytNapCaiDatKieu();
             if (typeof ytBatDauDich === "function") {
+                // Already translating (a second click while it loads): ytBatDauDich would refuse
+                // at once, and the popup would read that as a failure
+                if (typeof yt !== "undefined" && yt.busy) {
+                    sendResponse({ method: "translate", status: "busy" });
+                    return true;
+                }
                 ytBatDauDich().then(ok => {
                     if (ok && typeof ytTuBatLongTieng === "function") ytTuBatLongTieng();
                     sendResponse({ method: "translate", status: ok ? "success" : "failed" });

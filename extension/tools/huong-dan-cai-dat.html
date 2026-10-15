@@ -4,12 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bật tiện ích Dịch Phụ Đề</title>
-<!-- Opened by the installers right after a first install (file://, from extension/tools/). The
-     folder path is worked out from this page's own location, so nothing is generated per machine. -->
+<!-- Opened by the installers right after a first install (file://, from extension/tools/), in the
+     default browser when it is Chromium-based, else the first one installed. The folder path is
+     worked out from this page's own location, and the steps from the browser it is open in
+     (Chrome, Coc Coc, Edge, Brave, Opera, Vivaldi, Arc), so nothing is generated per machine. -->
 <style>
-  :root { --bg: #f6f4f0; --card: #fff; --ink: #24211d; --muted: #6b655c; --line: #e4dfd6; --accent: #1a73e8; --ok: #1e8e3e; }
+  :root { --bg: #f6f4f0; --card: #fff; --ink: #24211d; --muted: #6b655c; --line: #e4dfd6; --accent: #1a73e8; --ok: #1e8e3e; --warn-bg: #fdf1e7; --warn-line: #e8b48a; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #1d1b18; --card: #282521; --ink: #ece8e1; --muted: #a59e93; --line: #3a3732; --accent: #8ab4f8; --ok: #81c995; }
+    :root { --bg: #1d1b18; --card: #282521; --ink: #ece8e1; --muted: #a59e93; --line: #3a3732; --accent: #8ab4f8; --ok: #81c995; --warn-bg: #3a2c22; --warn-line: #8a5a3a; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
@@ -25,30 +27,75 @@
   button { font: inherit; font-weight: 600; border: 0; border-radius: 8px; padding: 8px 14px; background: var(--accent); color: var(--card); cursor: pointer; }
   button.done { background: var(--ok); }
   .note { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .warn { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 14px; padding: 16px 18px; margin: 0 0 18px; }
+  .warn[hidden] { display: none; }
   .foot { color: var(--muted); font-size: 14px; margin-top: 22px; }
   a { color: var(--accent); }
 </style>
 </head>
 <body>
 <main>
-  <h1>Còn một bước: bật tiện ích trong Chrome</h1>
-  <p class="lead">Bộ cài đã xong. Chrome không cho chương trình nào tự bật tiện ích, nên bạn làm 4 bước dưới đây một lần duy nhất.</p>
+  <h1>Còn một bước: bật tiện ích trong <span id="bname">trình duyệt</span></h1>
+  <p class="lead">Bộ cài đã xong. Trình duyệt không cho chương trình nào tự bật một tiện ích ngoài cửa hàng (để chặn phần mềm độc hại), nên bạn làm 4 bước dưới đây một lần duy nhất, mất khoảng một phút.</p>
+
+  <div class="warn" id="not-chromium" hidden>
+    <b>Trang này đang mở trong <span id="this-browser">trình duyệt này</span>, nơi tiện ích không chạy được.</b>
+    Tiện ích chạy trên các trình duyệt nhân Chromium: Chrome, Cốc Cốc, Edge, Brave, Opera, Vivaldi, Arc.
+    Mở trình duyệt bạn hay dùng trong số đó, dán địa chỉ dưới đây vào thanh địa chỉ rồi làm tiếp các bước.
+    Chưa có trình duyệt nào như vậy thì tải <a href="https://www.google.com/chrome/">Chrome</a> hoặc <a href="https://coccoc.com/">Cốc Cốc</a>.
+    <div class="row"><code id="page-url"></code><button data-copy="page-url">Chép</button></div>
+  </div>
+
   <ol>
-    <li>Chép địa chỉ này, dán vào thanh địa chỉ của Chrome rồi nhấn Enter.
+    <li>Chép địa chỉ này, dán vào thanh địa chỉ của <span class="bname">trình duyệt</span> rồi nhấn Enter.
       <div class="row"><code id="ext-url">chrome://extensions</code><button data-copy="ext-url">Chép</button></div>
+      <p class="note" id="url-alt"></p>
     </li>
-    <li>Ở góc trên bên phải trang vừa mở, bật <b>Chế độ dành cho nhà phát triển</b> (Developer mode).</li>
+    <li id="dev-step">Ở góc trên bên phải trang vừa mở, bật <b>Chế độ dành cho nhà phát triển</b> (Developer mode).</li>
     <li>Bấm nút <b>Tải tiện ích đã giải nén</b> (Load unpacked), rồi chọn thư mục này:
       <div class="row"><code id="folder"></code><button data-copy="folder">Chép</button></div>
       <p class="note" id="pick-hint"></p>
     </li>
-    <li>Bấm biểu tượng mảnh ghép trên thanh công cụ, ghim <b>Vietnamese Subtitle Translator</b> (tên tiện ích trong Chrome), mở Cài đặt của tiện ích và dán khóa Gemini API. Chưa có khóa thì lấy miễn phí tại <a href="https://aistudio.google.com/apikey">Google AI Studio</a>.</li>
+    <li>Trang <b>Cài đặt</b> của tiện ích tự mở ra: dán khóa Gemini vào ô "Gemini API Key" (lấy miễn phí tại <a href="https://aistudio.google.com/apikey">Google AI Studio</a>; chưa có khóa vẫn dịch được bằng Google Dịch). Rồi ghim tiện ích lên thanh công cụ: <span id="pin-hint">bấm biểu tượng mảnh ghép, chọn ghim cạnh <b>Vietnamese Subtitle Translator</b></span>.</li>
   </ol>
-  <p class="foot">Từ giờ không cần làm gì thêm: giọng đọc tự chạy mỗi khi bật máy, và bản mới tự được cài vào lần mở Chrome kế tiếp.</p>
+  <p class="foot">Từ giờ không cần làm gì thêm: giọng đọc tự chạy mỗi khi bật máy, và bản mới tự được cài vào lần mở trình duyệt kế tiếp. Dùng nhiều trình duyệt thì làm lại 4 bước này trong từng trình duyệt, cùng một thư mục.</p>
 </main>
 <script>
+  // Which Chromium browser this is: the extensions page, where its developer-mode switch sits and
+  // how its toolbar pins an extension. Vivaldi and Arc say they are Chrome; their pages match it.
+  const ua = navigator.userAgent;
+  const brands = ((navigator.userAgentData && navigator.userAgentData.brands) || []).map(b => b.brand).join(" ");
+  const B = (() => {
+    if (/Edg\//.test(ua)) return { name: "Edge", url: "edge://extensions",
+      dev: "Ở cột bên trái trang vừa mở, bật <b>Chế độ nhà phát triển</b> (Developer mode). Cửa sổ hẹp thì bấm biểu tượng ☰ ở góc trên bên trái để hiện cột đó.",
+      pin: "bấm biểu tượng mảnh ghép trên thanh công cụ, rồi bấm hình con mắt cạnh <b>Vietnamese Subtitle Translator</b>" };
+    if (/OPR\//.test(ua)) return { name: "Opera", url: "opera://extensions",
+      dev: "Ở góc trên bên phải trang vừa mở, bật <b>Chế độ nhà phát triển</b> (Developer mode).",
+      pin: "bấm biểu tượng khối lập phương trên thanh công cụ, rồi bấm ghim cạnh <b>Vietnamese Subtitle Translator</b>" };
+    if (/coc_coc_browser/i.test(ua)) return { name: "Cốc Cốc", url: "chrome://extensions" };
+    if (navigator.brave && typeof navigator.brave.isBrave === "function") return { name: "Brave", url: "brave://extensions" };
+    if (/Vivaldi/.test(ua + brands)) return { name: "Vivaldi", url: "vivaldi://extensions" };
+    if (/Firefox\//.test(ua)) return { name: "Firefox", other: true };
+    if (/Safari\//.test(ua) && !/Chrome|Chromium|CriOS/.test(ua)) return { name: "Safari", other: true };
+    // Vivaldi, Arc, Chromium: a Chrome user agent, but no "Google Chrome" brand
+    if (navigator.userAgentData ? /Google Chrome/.test(brands) : /Chrome\//.test(ua)) return { name: "Chrome", url: "chrome://extensions" };
+    return { name: "trình duyệt", url: "chrome://extensions" };
+  })();
+  for (const el of document.querySelectorAll("#bname, .bname")) el.textContent = B.other ? "trình duyệt" : B.name;
+  if (B.other) {
+    document.getElementById("not-chromium").hidden = false;
+    document.getElementById("this-browser").textContent = B.name;
+    document.getElementById("page-url").textContent = decodeURIComponent(location.href);
+  }
+  document.getElementById("ext-url").textContent = B.url || "chrome://extensions";
+  if (B.url && B.url !== "chrome://extensions") {
+    document.getElementById("url-alt").textContent = "Nếu không mở được, thử địa chỉ chrome://extensions.";
+  }
+  if (B.dev) document.getElementById("dev-step").innerHTML = B.dev;
+  if (B.pin) document.getElementById("pin-hint").innerHTML = B.pin;
+
   // This page sits in <extension folder>/tools/
-  const isWin = /Windows/i.test(navigator.userAgent);
+  const isWin = /Windows/i.test(ua);
   let p = decodeURIComponent(location.pathname).replace(/\/tools\/[^/]*$/, "");
   if (isWin) p = p.replace(/^\/([A-Za-z]:)/, "$1").replace(/\//g, "\\");
   document.getElementById("folder").textContent = p;
@@ -59,7 +106,7 @@
     b.addEventListener("click", async () => {
       const text = document.getElementById(b.dataset.copy).textContent;
       try { await navigator.clipboard.writeText(text); }
-      catch (e) {                                   // older Chrome on file://: the selection route
+      catch (e) {                                   // older browsers on file://: the selection route
         const r = document.createRange(); r.selectNodeContents(document.getElementById(b.dataset.copy));
         const s = getSelection(); s.removeAllRanges(); s.addRange(r); document.execCommand("copy");
       }

@@ -1,11 +1,18 @@
 # Runs the exact one-line install a friend runs, on clean GitHub machines, after every update:
-# install, a spoken line, the server coming back after it is killed, an update, an uninstall.
+# install, the pinned voice model (every byte checked, the server offline), a spoken line, the
+# server coming back after it is killed, an update, an uninstall. DPD_REF makes the installer and the
+# updater download this very commit, not main. Every voice machine must get all the model files from
+# the GitHub release (no Hugging Face fallback), and a last job downloads each release asset: the
+# release is published FIRST (node tools/publish-share.js --release-model), then the share repo is
+# pushed, so a missing release fails this test instead of quietly sending friends to Hugging Face.
 # Built from tools/share/ in the private repo by tools/publish-share.js; edit it there.
 name: Install test
 
 on:
+  # staging: a release is pushed there first and reaches main (and friends' updaters, which read
+  # main only) once this test is green on it (tools/publish-share.js --stage, then --promote)
   push:
-    branches: [main]
+    branches: [main, staging]
   workflow_dispatch:
 
 concurrency:
@@ -27,6 +34,7 @@ jobs:
           - { name: ARM, os: windows-11-arm, voice: "0" }
     env:
       DPD_NO_OPEN: "1"
+      DPD_REF: ${{ github.sha }}
       DPD_EXT_DIR: ${{ matrix.ext }}
       DPD_VIENEU_DIR: ${{ matrix.vn }}
       URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/install-windows.ps1
@@ -37,7 +45,10 @@ jobs:
       - name: Install with the one-line command (Windows PowerShell 5.1)
         run: |
           $PSVersionTable.PSVersion.ToString()
-          irm $env:URL | iex
+          # Kept for the next step: the model summary says where every file came from
+          $o = & { irm $env:URL | iex } 6>&1 | Out-String
+          $o
+          [IO.File]::WriteAllText("$env:RUNNER_TEMP\install1.log", $o)
           if ($global:DPD_RESULT -ne 'ok') { throw "installer: $global:DPD_RESULT" }
 
       - name: Check the install
@@ -66,6 +77,22 @@ jobs:
           "speech: $n bytes in $([math]::Round($t.TotalSeconds, 2)) s"
           if ($n -lt 50000) { throw 'speech too short' }
           Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'run-vieneu|openai_speech' } | ForEach-Object { "$($_.Name)  $($_.CommandLine)" }
+          # The pinned model: marker, every byte against the pin, the server started offline on it,
+          # and nothing fetched into the Hugging Face cache
+          if (-not (Test-Path "$vn\models\hf\.pinned-ok")) { throw 'pinned model marker missing' }
+          # Every pinned file from the GitHub release, none from Hugging Face
+          $n = ((Get-Content "$ext\tools\vieneu-model.json" -Raw -Encoding UTF8 | ConvertFrom-Json).repos | ForEach-Object { $_.files.Count } | Measure-Object -Sum).Sum
+          $log = [IO.File]::ReadAllText("$env:RUNNER_TEMP\install1.log")
+          $sum = ($log -split "`n" | Where-Object { $_ -match 'Mo hinh giong da khoa:' }) -join ' '
+          "model summary: $sum"
+          if ($sum -notmatch "tai moi [0-9.]+ MB \(GitHub $n tep\), ") { throw "not all $n model files came from the GitHub release: $sum" }
+          if ($log -match '\) tu Hugging Face') { throw 'a model file was fetched from Hugging Face' }
+          & "$vn\.venv\Scripts\python.exe" "$ext\tools\vieneu-pin.py" --vieneu $vn | Select-Object -Last 2
+          if ($LASTEXITCODE -ne 0) { throw 'the model copy does not match the pin' }
+          $first = Get-Content "$vn\server.log" -TotalCount 1
+          "server.log: $first"
+          if ($first -notmatch 'pinned copy in models/hf, offline') { throw 'the server did not start on the pinned model' }
+          if (Test-Path "$env:USERPROFILE\.cache\huggingface\hub\models--pnnbao-ump--VieNeu-TTS-v3-Turbo") { throw 'model fetched into the Hugging Face cache' }
         env:
           VOICE: ${{ matrix.voice }}
 
@@ -78,6 +105,8 @@ jobs:
           for ($i = 0; $i -lt 180; $i++) { try { Invoke-RestMethod http://127.0.0.1:8000/health -TimeoutSec 2 | Out-Null; $ok = $true; break } catch {}; Start-Sleep -Seconds 1 }
           if (-not $ok) { throw 'server did not come back' }
           "back after about $($i + 3) s"
+          $vn = if ($env:DPD_VIENEU_DIR) { $env:DPD_VIENEU_DIR } else { "$env:USERPROFILE\VieNeu-TTS" }
+          if ((Get-Content "$vn\server.log" -TotalCount 1) -notmatch 'offline') { throw 'the restarted server is not on the pinned model' }
 
       - name: The background updater brings an old install up to date
         if: matrix.voice == '1'
@@ -94,13 +123,28 @@ jobs:
           if ($got -ne $want) { throw "updater left $got, expected $want" }
           if (Test-Path "$ext\stale-file.js") { throw 'a file gone from the release stayed' }
 
+      - name: The guide page has a Chromium browser to open in
+        run: |
+          # The installer's own function (the install itself runs with DPD_NO_OPEN): the default
+          # browser when it is Chromium-based, else Chrome, Coc Coc, Brave, Edge
+          $src = (Invoke-WebRequest -UseBasicParsing $env:URL).Content
+          $m = [regex]::Match($src, '(?ms)^function Get-ChromiumBrowser \{.*?^\}')
+          if (-not $m.Success) { throw 'Get-ChromiumBrowser not found in the installer' }
+          Invoke-Expression $m.Value
+          $b = Get-ChromiumBrowser
+          "browser: $b"
+          if (-not $b -or -not (Test-Path $b)) { throw 'no Chromium browser found (Edge is on every Windows 10/11)' }
+
       - name: Update (run the same command again)
         run: |
           $o = & { irm $env:URL | iex } 6>&1 | Out-String
           $o
           if ($global:DPD_RESULT -ne 'ok') { throw "installer: $global:DPD_RESULT" }
           if ($o -notmatch 'DA CAP NHAT') { throw 'not seen as an update' }
-          if ($env:VOICE -eq '1') { Invoke-RestMethod http://127.0.0.1:8000/health | Out-Null }
+          if ($env:VOICE -eq '1') {
+            Invoke-RestMethod http://127.0.0.1:8000/health | Out-Null
+            if ($o -notmatch 'tai moi 0\.0 MB, ') { throw 'the update downloaded the model again' }
+          }
         env:
           VOICE: ${{ matrix.voice }}
 
@@ -135,6 +179,7 @@ jobs:
           - { name: Intel, os: macos-15-intel, voice: "0" }
     env:
       DPD_NO_OPEN: "1"
+      DPD_REF: ${{ github.sha }}
       VOICE: ${{ matrix.voice }}
       URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/install-mac.sh
     defaults:
@@ -142,7 +187,8 @@ jobs:
         shell: bash
     steps:
       - name: Install with the one-line command (macOS /bin/bash)
-        run: curl -fsSL "$URL" | /bin/bash
+        # Kept for the next step: the model summary says where every file came from
+        run: curl -fsSL "$URL" | /bin/bash 2>&1 | tee "$RUNNER_TEMP/install1.log"
 
       - name: Check the install
         run: |
@@ -160,14 +206,29 @@ jobs:
           curl -fsS -o "$RUNNER_TEMP/t.wav" -w 'speech: %{size_download} bytes in %{time_total} s\n' 127.0.0.1:8000/v1/audio/speech \
             -H 'content-type: application/json' -d '{"model":"x","input":"Xin chào, đây là thử nghiệm giọng đọc.","response_format":"wav"}'
           test "$(stat -f%z "$RUNNER_TEMP/t.wav")" -gt 50000
+          # The pinned model: marker, every byte against the pin, the server running with
+          # HF_HUB_OFFLINE=1 (read from its environment), nothing in the Hugging Face cache
+          test -f ~/VieNeu-TTS/models/hf/.pinned-ok
+          # Every pinned file from the GitHub release, none from Hugging Face
+          n="$(python3 -c 'import json,os; print(sum(len(r["files"]) for r in json.load(open(os.path.expanduser("~/DichPhuDe/tools/vieneu-model.json")))["repos"]))')"
+          grep "Mo hinh giong da khoa:" "$RUNNER_TEMP/install1.log"
+          grep -qE "tai moi [0-9.]+ MB \(GitHub $n tep\), " "$RUNNER_TEMP/install1.log"
+          if grep -q ') tu Hugging Face' "$RUNNER_TEMP/install1.log"; then echo "a model file was fetched from Hugging Face"; exit 1; fi
+          ~/VieNeu-TTS/.venv/bin/python ~/DichPhuDe/tools/vieneu-pin.py --vieneu ~/VieNeu-TTS | tail -2
+          grep -q pinned-ok ~/Library/LaunchAgents/com.damduy.vieneu.plist
+          grep "VieNeu model:" ~/VieNeu-TTS/server.log | tail -1 | grep -q offline
+          pid="$(pgrep -f apps.openai_speech | head -1)"
+          ps eww -o command= -p "$pid" | tr ' ' '\n' | grep -x HF_HUB_OFFLINE=1
+          test ! -e ~/.cache/huggingface/hub/models--pnnbao-ump--VieNeu-TTS-v3-Turbo
 
       - name: The server comes back after it is killed
         if: matrix.voice == '1'
         run: |
           pkill -f apps.openai_speech
           sleep 3
-          for i in $(seq 1 180); do curl -fs -m 2 127.0.0.1:8000/health >/dev/null && { echo "back after about $((i + 3)) s"; exit 0; }; sleep 1; done
-          echo "server did not come back"; exit 1
+          for i in $(seq 1 180); do curl -fs -m 2 127.0.0.1:8000/health >/dev/null && { echo "back after about $((i + 3)) s"; break; }; sleep 1; done
+          curl -fs -m 2 127.0.0.1:8000/health >/dev/null || { echo "server did not come back"; exit 1; }
+          grep "VieNeu model:" ~/VieNeu-TTS/server.log | tail -1 | grep -q offline
 
       - name: The background updater brings an old install up to date
         if: matrix.voice == '1'
@@ -187,7 +248,7 @@ jobs:
           out="$(curl -fsSL "$URL" | /bin/bash)"
           echo "$out"
           echo "$out" | grep -q "ĐÃ CẬP NHẬT"
-          if [ "$VOICE" = 1 ]; then curl -fsS 127.0.0.1:8000/health; fi
+          if [ "$VOICE" = 1 ]; then curl -fsS 127.0.0.1:8000/health; echo "$out" | grep -q "tai moi 0.0 MB, "; fi
 
       - name: Uninstall
         run: |
@@ -205,3 +266,21 @@ jobs:
       - name: Server log on failure
         if: failure()
         run: tail -60 ~/VieNeu-TTS/server.log || true
+
+  model-release:
+    name: Model release assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      # The release comes first (node tools/publish-share.js --release-model), the push second: a
+      # missing release fails here. Every asset must download and match the pin byte for byte, with
+      # no fallback.
+      - name: Every pinned file downloads from the release and matches
+        shell: bash
+        run: |
+          read -r repo tag < <(python3 -c 'import json; r = json.load(open("extension/tools/vieneu-model.json"))["release"]; print(r["repo"], r["tag"])')
+          code="$(curl -s -o /dev/null -w '%{http_code}' "https://github.com/$repo/releases/tag/$tag")"
+          if [ "$code" = 404 ]; then echo "::error::release $tag is not published: publish it first (node tools/publish-share.js --release-model), then push"; exit 1; fi
+          python3 extension/tools/vieneu-pin.py --install --no-hf --hf-home "$RUNNER_TEMP/hf" --vieneu "$RUNNER_TEMP/none" | grep -v '\.\.\. '
+          test -f "$RUNNER_TEMP/hf/.pinned-ok"

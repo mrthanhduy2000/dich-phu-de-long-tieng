@@ -45,7 +45,7 @@
         userNormalize: "",
         enabledGroups: ["tech", "academic", "cybersecurity", "sustainability", "realestate", "legal"],
         dubVoiceName: "",
-        dubDuck: 0.12
+        dubDuck: 0.2
     };
 
     // Ensure storage has defaults

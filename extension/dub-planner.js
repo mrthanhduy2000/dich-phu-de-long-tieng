@@ -421,7 +421,7 @@
         return String(text || "").replace(LABEL_RE, (m, lead, name) => (labels.has(name) ? lead : m));
     }
 
-    // ---------------- Who speaks (2.4.8) ----------------
+    // ---------------- Who speaks (2.4.8; 2.5.2: up to five voices, an AI reading) ----------------
     // The second voice used to switch at every ">>", "- " or "NAME:" that opened a group's first
     // caption line, and nowhere else. Over the user's 46 saved videos that was wrong both ways:
     // - YouTube's recognizer writes ">>" around music and sighs inside one person's talk ("Last-minute
@@ -448,16 +448,39 @@
     const NOT_A_NAME = /^(?:Note|Step|Example|Tip|Warning|Q|A|Translator|Reviewer|Transcriber|Transcript|Subtitles?|Captions?|Source|Credits?|Update|Edit|Disclaimer)$/i;
     const NAME_PARTICLE = /^(?:de|da|del|der|di|du|la|le|van|von|bin|al|y)$/;
     const TURN_MIN_NAMED = 3;
+    // 2.5.2: as many voices as speakers, up to five (S1..S5); a sixth named speaker and on share the
+    // voices after the main one
+    const MAX_VOICES = 5;
+    const voiceIdx = rank => (rank < MAX_VOICES ? rank : 1 + ((rank - 1) % (MAX_VOICES - 1)));
+    // An AI reading of who speaks (background.js analyzeSpeakers, turned into times by speakerHints)
+    // is taken only for a real conversation. A speaker heard once and briefly (a quote read as a
+    // turn, a passer-by) is folded into whoever spoke before: a voice of its own needs
+    // AI_MIN_TURNS turns or AI_MIN_TALK_S seconds of talk. A turn within AI_SNAP_S of a ">>" the
+    // recognizer wrote moves onto it (the AI knows who, the recognizer heard when).
+    const AI_MIN_TURNS = 2;
+    const AI_MIN_TALK_S = 15;
+    const AI_SNAP_S = 2;
+    // "Yeah. ANDREW HUBERMAN: ..." (UIy-WQCZd4M): the last word of the one before, then the label. The
+    // name is what follows the last sentence end, unless that end is a title's ("Dr. Galpin:")
+    const TITLE_ABBR = /^(?:Dr|Mr|Mrs|Ms|Mx|Prof|St|Jr|Sr|Rev|Gen|Col|Capt|Sgt|Lt)$/;
     const nameOf = text => {
         const m = String(text || "").match(NAMED_RE);
-        if (!m || NOT_A_NAME.test(m[1].trim())) return null;
-        const words = m[1].trim().split(/\s+/);
-        return words.length <= 4 && words.every(w => /^[A-Z]/.test(w) || NAME_PARTICLE.test(w)) ? m[1].trim() : null;
+        if (!m) return null;
+        let name = m[1].trim();
+        let cut = -1;
+        for (const e of name.matchAll(/([A-Za-z]+)[.!?…]\s+/g)) if (!TITLE_ABBR.test(e[1])) cut = e.index + e[0].length;
+        if (cut > 0) name = name.slice(cut);
+        if (!name || NOT_A_NAME.test(name)) return null;
+        const words = name.split(/\s+/);
+        return words.length <= 4 && words.every(w => /^[A-Z]/.test(w) || NAME_PARTICLE.test(w)) ? name : null;
     };
     const turnsMemo = typeof WeakMap === "function" ? new WeakMap() : null;
-    function speakerTurns(groups) {
+    // opts.ai: the AI reading for this video ({ turns: [{ t, speaker }], speakers, confidence,
+    // until }, speakerHints below), or null
+    function speakerTurns(groups, opts = {}) {
+        const ai = opts.ai || null;
         const memo = turnsMemo && Array.isArray(groups) ? turnsMemo.get(groups) : null;
-        if (memo && memo.n === groups.length) return memo.turns;
+        if (memo && memo.n === groups.length && memo.ai === ai) return memo.turns;
         const list = (groups || []).filter(g => g && g.srcCues && g.srcCues.length).sort((a, b) => a.start - b.start);
         const pieces = [];                       // { t, text, kind: null | "anon" | "named", name }
         let endT = 0;
@@ -521,28 +544,135 @@
         // the main voice; the alternation goes on from there. A swap now lasts until the next long
         // stretch, not to the end.
         // Named speakers: the one who talks longest gets the main voice (UIy-WQCZd4M: the guest, 69%
-        // of the talk, was the second voice because the host spoke first)
+        // of the talk, was the second voice because the host spoke first), the next ones a voice each
+        // in order of talk (2.5.2; before, everyone else shared the second voice)
+        let source = "none", genders = [], out = marks;
         if (labelled && marks.length > 1) {
-            const talk = new Map();
-            marks.forEach((m, k) => talk.set(m.idx, (talk.get(m.idx) || 0) + (k + 1 < marks.length ? marks[k + 1].t : endT) - m.t));
-            const main = [...talk].sort((a, b) => b[1] - a[1])[0][0];
-            // two voices: everyone but the main speaker shares the second
-            for (const m of marks) m.idx = m.idx === main ? 0 : 1;
+            const rank = rankByTalk(marks.map(m => ({ t: m.t, sp: m.idx })), endT);
+            for (const m of marks) m.idx = voiceIdx(rank.get(m.idx));
+            source = "names";
+        } else {
+            const viaAi = !labelled && ai ? acceptAiTurns(ai, endT, anon.map(p => p.t)) : null;
+            if (viaAi) {
+                out = viaAi.marks;
+                genders = viaAi.genders;
+                source = "ai";
+            } else if (!labelled && marks.length) {
+                let flip = false;
+                marks.forEach((m, k) => {
+                    let i = m.idx ^ (flip ? 1 : 0);
+                    if ((k + 1 < marks.length ? marks[k + 1].t : endT) - m.t >= TURN_MAIN_S && i !== 0) { flip = !flip; i = 0; }
+                    m.idx = i;
+                });
+                source = "marks";
+            } else if (labelled) source = "names";
         }
-        if (!labelled && marks.length) {
-            let flip = false;
-            marks.forEach((m, k) => {
-                let i = m.idx ^ (flip ? 1 : 0);
-                if ((k + 1 < marks.length ? marks[k + 1].t : endT) - m.t >= TURN_MAIN_S && i !== 0) { flip = !flip; i = 0; }
-                m.idx = i;
-            });
-        }
-        const turns = { marks, conversation, labelled, anon: anon.length, paired };
-        if (turnsMemo && Array.isArray(groups)) turnsMemo.set(groups, { n: groups.length, turns });
+        const voices = out.reduce((n, m) => Math.max(n, m.idx + 1), 1);
+        const turns = { marks: out, conversation, labelled, anon: anon.length, paired, source, voices, genders };
+        if (turnsMemo && Array.isArray(groups)) turnsMemo.set(groups, { n: groups.length, ai, turns });
         return turns;
     }
+    // Talk per speaker over time-ordered turns ({ t, sp }), each turn running to the next one (the
+    // last to endT): the rank of each speaker, the one who talks longest first
+    function talkBySpeaker(turns, endT) {
+        const talk = new Map();
+        turns.forEach((x, k) => {
+            const s = talk.get(x.sp) || { talk: 0, turns: 0, first: x.t };
+            s.talk += Math.max(0, (k + 1 < turns.length ? turns[k + 1].t : endT) - x.t);
+            s.turns++;
+            talk.set(x.sp, s);
+        });
+        return talk;
+    }
+    function rankByTalk(turns, endT) {
+        const order = [...talkBySpeaker(turns, endT)].sort((a, b) => b[1].talk - a[1].talk || a[1].first - b[1].first);
+        return new Map(order.map(([sp], r) => [sp, r]));
+    }
+    function acceptAiTurns(ai, endT, markTimes) {
+        if (!ai || ai.confidence === "low" || !Array.isArray(ai.turns)) return null;
+        const until = Math.min(endT, Number.isFinite(ai.until) ? ai.until : endT);
+        let turns = ai.turns.filter(x => x && Number.isFinite(x.t) && x.speaker != null && x.t <= until)
+            .map(x => ({ t: x.t, sp: String(x.speaker) })).sort((a, b) => a.t - b.t);
+        const near = (markTimes || []).slice().sort((a, b) => a - b);
+        if (near.length) {
+            turns = turns.map(x => {
+                let best = null;
+                for (const m of near) if (Math.abs(m - x.t) <= AI_SNAP_S && (best == null || Math.abs(m - x.t) < Math.abs(best - x.t))) best = m;
+                return best == null ? x : { ...x, t: best };
+            });
+        }
+        const squash = list => list.filter((x, k) => k === 0 || x.sp !== list[k - 1].sp);
+        turns = squash(turns);
+        // fold the minor speakers until none is left (folding one can merge two turns of another)
+        for (let pass = 0; pass < 4; pass++) {
+            const talk = talkBySpeaker(turns, until);
+            const minor = new Set([...talk].filter(([, s]) => s.turns < AI_MIN_TURNS && s.talk < AI_MIN_TALK_S).map(([sp]) => sp));
+            if (!minor.size) break;
+            turns = squash(turns.filter(x => !minor.has(x.sp)));
+        }
+        const rank = rankByTalk(turns, until);
+        if (rank.size < 2) return null;
+        const marks = turns.map(x => ({ t: x.t, idx: voiceIdx(rank.get(x.sp)) }));
+        // Past the part read (a long video still being read in parts): the main voice
+        if (until < endT - 1 && marks.length && marks[marks.length - 1].idx !== 0) marks.push({ t: until, idx: 0 });
+        const genders = [];
+        for (const [sp, r] of rank) {
+            const s = (ai.speakers || []).find(x => String(x.id) === sp);
+            if (r < MAX_VOICES) genders[r] = s && /^(male|female)$/.test(s.gender) ? s.gender : "unknown";
+        }
+        return { marks, genders };
+    }
     // One voice: nobody's turn ends a segment
-    const NO_TURNS = Object.freeze({ marks: Object.freeze([]), conversation: false, labelled: false, anon: 0, paired: 0 });
+    const NO_TURNS = Object.freeze({ marks: Object.freeze([]), conversation: false, labelled: false, anon: 0, paired: 0, source: "none", voices: 1, genders: Object.freeze([]) });
+
+    // ---- The lines an AI reading is asked about, and its answer as times (2.5.2) ----
+    // Every caption line of the video in time order (each group's source; a line shared by two
+    // groups once), sound-only lines left out. The answer names lines by their index in this list.
+    function speakerLines(groups) {
+        const seen = new Set();
+        const out = [];
+        for (const g of (groups || []).filter(x => x && x.srcCues).sort((a, b) => a.start - b.start)) {
+            for (const c of g.srcCues) {
+                const text = String(c.text || "").replace(/\s+/g, " ").trim();
+                const key = c.start + "|" + text;
+                if (!text || seen.has(key) || TURN_NOTE.test(text)) continue;
+                seen.add(key);
+                out.push({ start: c.start, end: c.end, text });
+            }
+        }
+        return out;
+    }
+    // answer: { speakers: [{ id, label, gender }], turns: [{ line, speaker, at }], confidence } for
+    // lines[from .. from + count - 1]. A turn starting inside a line ("at": its first words) takes
+    // its time from where those words stand in the line, as a ">>" does.
+    function speakerHints(lines, answer, from = 0, count = lines.length - from) {
+        const turns = [];
+        for (const x of (answer && answer.turns) || []) {
+            const i = from + (x && Number.isInteger(x.line) ? x.line : -1);
+            if (i < from || i >= from + count || i >= lines.length) continue;
+            const c = lines[i];
+            let t = c.start;
+            const at = String((x && x.at) || "").trim();
+            const pos = at ? c.text.indexOf(at) : -1;
+            if (pos > 0) t = c.start + (c.end - c.start) * pos / c.text.length;
+            turns.push({ t, speaker: x.speaker });
+        }
+        const last = lines[Math.min(lines.length, from + count) - 1];
+        return { turns, speakers: (answer && answer.speakers) || [], confidence: (answer && answer.confidence) || "low", until: last ? last.end : 0 };
+    }
+    // Parts of a long video read one after another: one reading, the later part's turns after the
+    // earlier one's, its "until"
+    function mergeSpeakerHints(a, b) {
+        if (!a) return b;
+        if (!b) return a;
+        const rank = { low: 0, medium: 1, high: 2 };
+        return {
+            turns: [...a.turns.filter(x => x.t < (b.turns[0] ? b.turns[0].t : Infinity)), ...b.turns],
+            speakers: [...a.speakers, ...b.speakers.filter(s => !a.speakers.some(o => String(o.id) === String(s.id)))],
+            confidence: rank[b.confidence] < rank[a.confidence] ? b.confidence : a.confidence,
+            until: Math.max(a.until || 0, b.until || 0)
+        };
+    }
     // The speaker at time t: the last mark at or before it
     function speakerAt(turns, t) {
         const m = turns.marks;
@@ -1077,7 +1207,7 @@
     }
 
     const api = {
-        numberToVietnamese, countSyllables, adaptForSpeech, numberRole, classifyIntent, buildPhrases, speakerTurns, speakerAt, NO_TURNS,
+        numberToVietnamese, countSyllables, adaptForSpeech, numberRole, classifyIntent, buildPhrases, speakerTurns, speakerAt, NO_TURNS, MAX_VOICES, speakerLines, speakerHints, mergeSpeakerHints,
         buildDubScript, stripSoundNotes, speakerLabels, stripSpeakerLabels, planSegment, planAll, smoothRates, speechSeconds, pauseSeconds, rateForSps, rateForSpeedup, speedMultiplier,
         DEFAULT_VOICE_MODEL, LIMITS, INTENT_PROSODY, PAUSE
     };

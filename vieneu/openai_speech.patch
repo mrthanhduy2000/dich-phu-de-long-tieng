@@ -1,8 +1,19 @@
 diff --git a/apps/openai_speech.py b/apps/openai_speech.py
-index 530b829..d698911 100644
+index 530b829..c27774d 100644
 --- a/apps/openai_speech.py
 +++ b/apps/openai_speech.py
-@@ -242,7 +242,53 @@ class SpeechRequest(BaseModel):
+@@ -43,7 +43,9 @@ Environment:
+     VIENEU_PRECISION=fp32|int8 (CPU)   VIENEU_ONNX_DIR=... (local ONNX export)
+     VIENEU_MAX_STREAMS=16 (GPU)        VIENEU_QUEUE=16   VIENEU_QUEUE_TIMEOUT=10
+     VIENEU_API_KEY=...  (Bearer auth; unset = open)
+-    VIENEU_WATERMARK=1                 HOST=0.0.0.0  PORT=8000
++    VIENEU_WATERMARK=1                 HOST=127.0.0.1  PORT=8000
++    HOST defaults to 127.0.0.1 [CST patch]: only this machine can reach the server. Set
++    HOST=0.0.0.0 (with VIENEU_API_KEY) to serve other machines on purpose.
+ """
+ from __future__ import annotations
+ 
+@@ -242,7 +244,53 @@ class SpeechRequest(BaseModel):
      max_chars: int = 256
  
  
@@ -57,7 +68,7 @@ index 530b829..d698911 100644
      """float32 chunks at ``req.sample_rate``; logs TTFA / RTF; holds one stream slot."""
      t0 = time.perf_counter()
      first = None
-@@ -260,13 +306,20 @@ def _speech_chunks(eng: Engine, req: SpeechRequest, rid: str) -> Iterator[np.nda
+@@ -260,13 +308,20 @@ def _speech_chunks(eng: Engine, req: SpeechRequest, rid: str) -> Iterator[np.nda
                  first = time.perf_counter() - t0
              emitted += len(chunk)
              out = rs(chunk)
@@ -79,7 +90,7 @@ index 530b829..d698911 100644
          total = time.perf_counter() - t0
          audio_s = emitted / SAMPLE_RATE
          log.info("%s done: ttfa=%s total=%.2fs audio=%.2fs rtf=%s active=%d", rid,
-@@ -308,7 +361,7 @@ def speech(req: SpeechRequest):
+@@ -308,7 +363,7 @@ def speech(req: SpeechRequest):
          raise HTTPException(400, f"unknown voice '{req.voice}'; see GET /v1/voices")
      rid = f"spk-{uuid.uuid4().hex[:8]}"
      eng.acquire()   # 429 if the server is full; released when the stream ends
@@ -88,3 +99,14 @@ index 530b829..d698911 100644
      headers = {"X-Request-Id": rid, "X-Sample-Rate": str(req.sample_rate), "Cache-Control": "no-store"}
      ignored = [k for k in ("speed", "instructions") if getattr(req, k) is not None]
      if ignored:
+@@ -387,7 +442,9 @@ def health():
+ 
+ 
+ def main() -> None:
+-    host = os.environ.get("HOST", "0.0.0.0")
++    # [CST patch] Loopback by default: upstream listened on every interface, so anyone on the
++    # same Wi-Fi could use the voice (no key unless VIENEU_API_KEY is set).
++    host = os.environ.get("HOST", "127.0.0.1")
+     port = _env_int("PORT", 8000)
+     # One worker: the model (and on GPU the scheduler) is process-local.
+     uvicorn.run(app, host=host, port=port, workers=1, log_level="info")

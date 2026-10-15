@@ -20,6 +20,29 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     });
 
+    // A first install opens options.html#welcome (background.js onInstalled): the card says what is
+    // left to do, on the Gemini tab, where the key goes
+    const welcome = document.getElementById("welcomeCard");
+    if (welcome && location.hash === "#welcome") {
+        welcome.hidden = false;
+        const geminiTab = document.querySelector('.nav-tab[data-tab="tab-gemini"]');
+        if (geminiTab) geminiTab.click();
+        const voiceLine = document.getElementById("welcomeVoice");
+        const L = window.CST_COST && window.CST_COST.LOCAL_TTS;
+        try {
+            chrome.runtime.sendMessage({ action: "localTtsStatus" }, r => {
+                if (chrome.runtime.lastError || !voiceLine) return;
+                voiceLine.textContent = r && r.running
+                    ? "đang chạy trên máy này, sẵn sàng lồng tiếng."
+                    : `chưa chạy. Bộ cài một lệnh tự bật nó mỗi khi mở máy; chạy tay: ${L && L.startHint ? L.startHint() : "mở ~/VieNeu-TTS/cst-start.command"}.`;
+            });
+        } catch (e) { if (voiceLine) voiceLine.textContent = "chưa kiểm tra được."; }
+        document.getElementById("welcomeDone").addEventListener("click", () => {
+            welcome.hidden = true;
+            try { history.replaceState(null, "", location.pathname); } catch (e) { /* bỏ qua */ }
+        });
+    }
+
     // ========================================================
     // 2. KIỂU PHỤ ĐỀ (dùng chung subtitle-style.js với trang video)
     // ========================================================
@@ -779,7 +802,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const testStatus = document.getElementById("testVoiceStatus");
 
     const dubSaved = await chrome.storage.sync.get({
-        dubVoiceName: "", dubDuck: 0.2, dubVolume: 1, dubProvider: "vieneu", dubPrepareWait: true, dubSecondVoice: false,
+        dubVoiceName: "", dubDuck: 0.2, dubVolume: 1, dubProvider: "vieneu", dubPrepareWait: true, dubSpeakers: "auto", dubSpeakerAi: true,
         dubGeminiVoice: "Kore", dubGeminiVoice2: "Charon", dubTtsModel: "", dubMaxRate: 0,
         dubLocalVoice: "", dubLocalVoice2: ""
     });
@@ -854,8 +877,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (providerSel) providerSel.value = dubSaved.dubProvider;
     // 1.8.1: only VieNeu is offered while the paid voice is off; an old "gemini" / "auto" shows VieNeu
     if (providerSel && !providerSel.value) providerSel.value = "vieneu";
-    const secondVoiceBox = document.getElementById("dubSecondVoice");
-    if (secondVoiceBox) secondVoiceBox.checked = dubSaved.dubSecondVoice === true;
+    const speakersSel = document.getElementById("dubSpeakers");
+    if (speakersSel) speakersSel.value = dubSaved.dubSpeakers === "one" ? "one" : "auto";
+    const speakerAiBox = document.getElementById("dubSpeakerAi");
+    if (speakerAiBox) speakerAiBox.checked = dubSaved.dubSpeakerAi !== false;
     const prepareWaitBox = document.getElementById("dubPrepareWait");
     if (prepareWaitBox) prepareWaitBox.checked = dubSaved.dubPrepareWait !== false;
     if (gVoiceSel) gVoiceSel.value = dubSaved.dubGeminiVoice;
@@ -993,7 +1018,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             dubVolume: volSlider ? Number(volSlider.value) / 100 : 1,
             dubProvider: providerSel ? providerSel.value : "vieneu",
             dubPrepareWait: document.getElementById("dubPrepareWait") ? document.getElementById("dubPrepareWait").checked : true,
-            dubSecondVoice: document.getElementById("dubSecondVoice") ? document.getElementById("dubSecondVoice").checked : false,
+            dubSpeakers: speakersSel ? speakersSel.value : "auto",
+            dubSpeakerAi: speakerAiBox ? speakerAiBox.checked : true,
             dubGeminiVoice: gVoiceSel ? gVoiceSel.value : "Kore",
             dubGeminiVoice2: gVoice2Sel ? gVoice2Sel.value : "Charon",
             dubTtsModel: ttsModelInput ? ttsModelInput.value.trim() : "",
@@ -1270,7 +1296,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const local = prov === "vieneu" || prov === "auto";
         const gem = prov === "gemini" || prov === "auto";
         const sys = prov === "system" || prov === "auto";
-        const two = !!(document.getElementById("dubSecondVoice") || {}).checked;
+        const two = !speakersSel || speakersSel.value !== "one";
         ["localTtsStatus", "dubLocalVoice"].forEach(id => showIf(groupOf(id), local));
         showIf(groupOf("dubLocalVoice2"), local && two);
         ["dubGeminiVoice", "dubTtsModel"].forEach(id => showIf(groupOf(id), gem));
@@ -1281,7 +1307,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const budgetCard = document.getElementById("budgetDailyUsd");
         showIf(budgetCard && budgetCard.closest(".card"), useAi || gem);
     }
-    [providerSel, optUseAiBox, costModeSel, secondVoiceBox].forEach(el => el && el.addEventListener("change", capNhatHienThi));
+    [providerSel, optUseAiBox, costModeSel, speakersSel].forEach(el => el && el.addEventListener("change", capNhatHienThi));
     capNhatHienThi();
 
     // Giá trị ban đầu coi như đã lưu (tránh ghi thừa khi vừa mở trang)
