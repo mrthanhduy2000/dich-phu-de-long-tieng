@@ -4,6 +4,14 @@
 (function (root) {
     const HISTORY = [
         {
+            v: "2.5.4", luc: "16/10/2026", ten: "Không đọc chú thích âm thanh",
+            y: [
+                "Lồng tiếng không còn đọc các chú thích âm thanh của phụ đề như \"(Nhạc nền sôi động)\", \"(tiếng gõ cửa)\", \"(Vỗ tay nhiệt liệt)\", \"[Âm nhạc]\", dù được dịch theo cách nào. Trước đây chỉ bỏ được dạng ngắn như \"(Âm nhạc)\", \"(Vỗ tay)\"; dạng có thêm chữ mô tả vẫn bị đọc thành lời. Chú thích vẫn hiện trên phụ đề, chỉ không đọc.",
+                "Dòng mà lời gốc chỉ có chú thích (ví dụ \"[upbeat music]\") thì phần trong ngoặc của bản dịch luôn được bỏ qua khi đọc.",
+                "Phần giải thích trong ngoặc vẫn được đọc như cũ: \"AI (trí tuệ nhân tạo)\", \"(tiếng Anh)\", \"(nhạc sĩ ...)\". Kiểm tra trên 44 video đã lưu: 34 chú thích âm thanh không đọc, không giải thích nào bị bỏ nhầm."
+            ]
+        },
+        {
             v: "2.5.3", luc: "16/10/2026", ten: "Nhận ra người nói chính xác hơn, mỗi người giữ đúng một giọng",
             y: [
                 "Sửa lỗi video dài nhiều người nói vẫn chỉ có một giọng: phần AI đọc \"ai đang nói\" bị bỏ dở vì chờ quá ngắn (22,5 giây) dù Google vẫn tính tiền lượt đó. Nay thời gian chờ đủ cho câu trả lời dài nhất, và nếu câu trả lời đến muộn thì vẫn được giữ lại cho lần sau, không phải trả tiền lần hai. Đo thật trên một video 30 phút có 3 người nói: trước chỉ một giọng, nay 3 giọng khác nhau, không câu nào bị bỏ.",

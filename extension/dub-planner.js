@@ -396,12 +396,27 @@
     // đơn chỉ bỏ khi nội dung là tiếng động / phản ứng khán giả (giữ ngoặc giải thích như "AI (trí tuệ
     // nhân tạo)").
     const SOUND_RE = /^(?:(?:tiếng|có tiếng|khán giả)\s+)*(?:cười(?:\s+lớn|\s+ồ)?|vỗ tay(?:\s+và\s+(?:cười|hò reo|reo hò))?|nhạc(?:\s+nền)?|âm nhạc|hò reo|reo hò|ồ lên|xì xào|ồn ào|im lặng|thở dài|huýt sáo|hát|hoan hô|laughter|laughs|laughing|applause|music|cheers|cheering|audience\b.*|silence|sighs?|whistl\w*|inaudible|khán giả)(?:\s*(?:\)|\])?)$/i;
-    function stripSoundNotes(text) {
+    // 2.5.4: a note with words after the sound ("(Nhạc nền sôi động)", "(tiếng gõ cửa)", "(upbeat
+    // music)") was read aloud: the user is not hard of hearing and does not want the captions'
+    // descriptions read. A parenthesis that opens on a sound (not "nhạc sĩ", not a language
+    // "tiếng Anh") and stays short is a note, whatever follows.
+    const SOUND_HEAD_RE = /^(?:(?:có|những|các)\s+)?(?:(?:tiếng|âm thanh)(?!\s+(?:anh|việt|pháp|nhật|hàn|trung|đức|nga|ý|tây|bồ|thái|lào|khmer|hoa|quan|quảng|lóng|địa|mẹ|nói|người)(?![\p{L}\p{N}]))|nhạc(?!\s+(?:sĩ|cụ|trưởng|viện|phẩm|lý|kịch|công|sư))|âm nhạc|giai điệu|cười|vỗ tay|hò reo|reo hò|khán giả|đám đông|im lặng|thở|huýt sáo|hát|hoan hô|hò hét|la hét|reo|khóc|nức nở|hắt hơi|chuông|còi|gõ cửa)(?![\p{L}\p{N}])/iu;
+    const SOUND_EN_RE = /\b(?:music|musical|applause|laughter|laughs?|laughing|cheers?|cheering|chuckl\w*|sighs?|gasps?|whoosh\w*|beep\w*|ringing|rings|playing|instrumental|sound|noise|silence|inaudible|indistinct|crowd)\b/i;
+    const isSoundNote = inner => {
+        const t = inner.replace(/¦/g, "").trim();
+        if (SOUND_RE.test(t)) return true;
+        if (t.split(/\s+/).length > 7) return false;
+        return SOUND_HEAD_RE.test(t) || (/^[a-z]/.test(t) && SOUND_EN_RE.test(t));
+    };
+    // srcNotesOnly: the line's source is only notes ("[upbeat music]", "(door closes)"): then every
+    // parenthesis of the translation is that note, however it was worded
+    function stripSoundNotes(text, srcNotesOnly = false) {
         return String(text || "")
             .replace(/\[[^\]]*\]|[♪♫]+/g, " ")
-            .replace(/\(([^()]{1,40})\)/g, (m, inner) => (SOUND_RE.test(inner.replace(/¦/g, "").trim()) ? " " : m))
+            .replace(/\(([^()]{1,60})\)/g, (m, inner) => (srcNotesOnly || isSoundNote(inner) ? " " : m))
             .replace(/\s{2,}/g, " ").trim();
     }
+    const notesOnly = text => /[\[(♪♫]/.test(text) && !hasWords(String(text || "").replace(/\[[^\]]*\]|\([^()]*\)|[♪♫]+/g, " "));
     const hasWords = t => /[\p{L}\p{N}]/u.test(String(t || "").replace(/¦/g, ""));
 
     // A speaker label of edited captions ("ANDREW HUBERMAN: Welcome to...") stays in the translation,
@@ -864,13 +879,14 @@
             const cueTok = g.viCues.map(c => (SEG ? SEG.tokenize(c.text).length : 0));
             let ti = 0;
             const labels = speakerLabels((g.srcCues || []).map(c => c.text).join("\n"));
+            const srcNotes = (g.srcCues || []).length > 0 && notesOnly((g.srcCues || []).map(c => c.text).join(" "));
             const cueLabels = [];
             const cueTexts = g.viCues.map((c, k) => {
                 if (!SEG) return c.text;
                 const part = tokens.slice(ti, ti + cueTok[k]);
                 ti += cueTok[k];
                 return part.map(t => (t.hint ? "¦ " : "") + t.raw).join(" ");
-            }).map((t, k) => { const r = stripLabelsAt(stripSoundNotes(t), labels); cueLabels[k] = r.at; return r.text; });
+            }).map((t, k) => { const r = stripLabelsAt(stripSoundNotes(t, srcNotes), labels); cueLabels[k] = r.at; return r.text; });
             // where in a piece of words from .. to of cue k a label stood (0: none inside it)
             const labelIn = (k, from, to) => { const x = (cueLabels[k] || []).find(i => i > from && i < to); return x == null ? 0 : x - from; };
 
