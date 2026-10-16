@@ -318,10 +318,16 @@
     const SPEAKER_PART = 900;                // lines per request (background.js SPEAKER_MAX_LINES)
     function readSpeakers(engine, s, opts) {
         const PLAN = window.CST_DUB_PLAN;
-        if (!PLAN || !PLAN.speakerLines || s.dubSpeakers === "one" || s.dubSpeakerAi === false || !(s.useAi && s.geminiApiKey)) return;
-        if (!/(^|\.)youtube\.com$/.test(location.hostname)) return;
-        const lines = PLAN.speakerLines((opts.getGroups && opts.getGroups()) || []);
-        if (lines.length < 8) return;
+        // what the reading did, for the debug snapshot (startDebug): skipped and why, asking, read
+        const note = x => { dub.speakerRead = { ...x, at: Date.now() }; };
+        if (!PLAN || !PLAN.speakerLines || s.dubSpeakers === "one" || s.dubSpeakerAi === false || !(s.useAi && s.geminiApiKey)) return note({ state: "skip", why: "off" });
+        if (!/(^|\.)youtube\.com$/.test(location.hostname)) return note({ state: "skip", why: "site" });
+        const groups = (opts.getGroups && opts.getGroups()) || [];
+        const lines = PLAN.speakerLines(groups);
+        if (lines.length < 8) return note({ state: "skip", why: "lines", lines: lines.length, groups: groups.length });
+        // captions that name the speaker of every turn ("NAME:", dub-planner labelsComplete) are read
+        // as they are: no reading paid for (2.5.3)
+        if (PLAN.speakerTurns(groups).complete) return note({ state: "skip", why: "labels" });
         const meta = videoMeta(opts.video);
         const key = `${meta.videoKey}|${lines.length}|${lines[0].text}|${lines[lines.length - 1].text}`;
         const give = hints => { if (hints && dub.engine === engine) engine.setSpeakerHints(hints); };
@@ -330,20 +336,34 @@
         entry = { hints: null, done: null };
         speakerReadings.set(key, entry);
         entry.done = (async () => {
-            for (let from = 0; from < lines.length; from += SPEAKER_PART) {
-                const part = lines.slice(from, from + SPEAKER_PART);
+            // parts of one size, SPEAKER_PART lines at most: 1289 lines are 645 + 644, not 900 + 389
+            // (a short last part reads with little to go on; the speaker lab measured parts of
+            // about 800 lines). A part whose answer was cut off (upTo, background.js
+            // readSpeakerAnswer) goes on from where its turns end; each later part is told who was
+            // talking there
+            const size = Math.ceil(lines.length / Math.ceil(lines.length / SPEAKER_PART));
+            let from = 0;
+            for (let ask = 0; from < lines.length && ask < 2 * Math.ceil(lines.length / SPEAKER_PART) + 2; ask++) {
+                const part = lines.slice(from, from + size);
                 const roster = entry.hints ? entry.hints.speakers.map(x => ({ id: x.id, label: x.label, gender: x.gender })) : [];
-                const r = await sendMessage({ action: "analyzeSpeakers", lines: part.map(l => l.text), roster, ...meta });
+                const said = entry.hints && entry.hints.turns.length ? entry.hints.turns[entry.hints.turns.length - 1] : null;
+                const t0 = Date.now();
+                note({ state: "asking", from, lines: lines.length, ask });
+                const r = await sendMessage({ action: "analyzeSpeakers", lines: part.map(l => l.text), roster, last: said ? { id: said.speaker } : null, ...meta });
                 if (!r || !r.ok) {
+                    note({ state: "failed", from, lines: lines.length, ask, ms: Date.now() - t0, why: (r && (r.reason || r.error)) || "no answer", error: String((r && r.error) || "").slice(0, 160) });
                     // no reading this time (budget, network): the next start may ask again
                     if (!entry.hints) speakerReadings.delete(key);
                     break;
                 }
-                entry.hints = PLAN.mergeSpeakerHints(entry.hints, PLAN.speakerHints(lines, r, from, part.length));
+                note({ state: "read", from, lines: lines.length, ask, ms: Date.now() - t0, cached: !!r.fromCache, upTo: r.upTo || 0, turns: (r.turns || []).length, speakers: (r.speakers || []).length });
+                const upTo = Number.isInteger(r.upTo) && r.upTo > 0 && r.upTo < part.length ? r.upTo : part.length;
+                entry.hints = PLAN.mergeSpeakerHints(entry.hints, PLAN.speakerHints(lines, r, from, upTo));
                 const e = dub.engine;
                 if (e && e.setSpeakerHints && e.d && e.d.video === opts.video) e.setSpeakerHints(entry.hints);
+                from += upTo;
             }
-        })().catch(() => { speakerReadings.delete(key); });
+        })().catch(e => { note({ state: "error", why: String((e && e.message) || e).slice(0, 200) }); speakerReadings.delete(key); });
     }
 
     // Video dài (> 30 phút): tạo trước dè dặt hơn (người xem hay tua, audio xa dễ bị bỏ phí)
@@ -364,7 +384,7 @@
         if (!on) return;
         debugTimer = setInterval(() => {
             if (dub.engine !== engine) { clearInterval(debugTimer); return; }
-            try { document.documentElement.setAttribute("data-cst-dub", JSON.stringify(engine.debugSnapshot())); } catch (e) { /* bỏ qua */ }
+            try { document.documentElement.setAttribute("data-cst-dub", JSON.stringify({ ...engine.debugSnapshot(), speakerRead: dub.speakerRead || null })); } catch (e) { /* bỏ qua */ }
         }, 500);
     }
 

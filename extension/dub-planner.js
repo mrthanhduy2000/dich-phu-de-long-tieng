@@ -410,18 +410,39 @@
     // as words of the sentence, on a fast talk that dropped lines for time. Only a label in capitals
     // that the group's own source carries is taken out, where a line or a sentence starts.
     // (a line may end on the label: "... vì-- ANDY GALPIN:"; a hint mark ¦ may stand before it)
-    const LABEL_RE = /(^[\s¦]*|[.!?…—–-]["”')\]]*[\s¦]+)(\p{Lu}[\p{Lu}\p{M}.'’-]*(?:\s+\p{Lu}[\p{Lu}\p{M}.'’-]*){0,3}):(?:\s+|$)/gmu;
+    // News transcripts write a guest's first turn with who they are ("TAMARA KEITH, National Public
+    // Radio:", "REP. MARIA ELVIRA SALAZAR (R-FL):"): that goes too, translated or not, for a name of
+    // two words or more that the source writes that way (2.5.3; "NASA, the agency, said:" is no label)
+    const LABEL_RE = /(^[\s¦]*|[.!?…—–-]["”')\]]*[\s¦]+)(\p{Lu}[\p{Lu}\p{M}.'’-]*(?:\s+\p{Lu}[\p{Lu}\p{M}.'’-]*){0,4}):(?:\s+|$)/gmu;
+    const LABEL_WHO_RE = /(^[\s¦]*|[.!?…—–-]["”')\]]*[\s¦]+)(\p{Lu}[\p{Lu}\p{M}.'’-]*(?:\s+\p{Lu}[\p{Lu}\p{M}.'’-]*){0,4})((?:\s*\([^()\n]{1,40}\))?(?:,\s+[^:\n]{1,120})?):(?:\s+|$)/gmu;
     function speakerLabels(src) {
         const out = new Set();
         for (const m of String(src || "").matchAll(LABEL_RE)) if (/\p{Lu}{2}/u.test(m[2])) out.add(m[2]);
+        for (const m of String(src || "").matchAll(LABEL_WHO_RE)) {
+            if (m[3] && /\p{Lu}{2}/u.test(m[2]) && /\s/.test(m[2]) && /^\s*\(|^,\s+[\p{Lu}\d]/u.test(m[3]) && m[3].length <= 92) out.add(m[2]);
+        }
         return out;
     }
     function stripSpeakerLabels(text, labels) {
         if (!labels || !labels.size) return text;
-        return String(text || "").replace(LABEL_RE, (m, lead, name) => (labels.has(name) ? lead : m));
+        return String(text || "").replace(LABEL_WHO_RE, (m, lead, name) => (labels.has(name) ? lead : m));
+    }
+    // The same, keeping where each label stood: the index of the word after it in the text left
+    // (buildDubScript cuts a turn the source names right there)
+    function stripLabelsAt(text, labels) {
+        const MARK = "\u2063";
+        const marked = labels && labels.size ? String(text || "").replace(LABEL_WHO_RE, (m, lead, name) => (labels.has(name) ? lead + MARK : m)) : String(text || "");
+        if (marked.indexOf(MARK) < 0) return { text: marked, at: [] };
+        const words = [], at = [];
+        for (const w of marked.split(/\s+/).filter(Boolean)) {
+            if (w.indexOf(MARK) >= 0) at.push(words.length);
+            const rest = w.split(MARK).join("");
+            if (rest) words.push(rest);
+        }
+        return { text: words.join(" "), at };
     }
 
-    // ---------------- Who speaks (2.4.8; 2.5.2: up to five voices, an AI reading) ----------------
+    // ---------------- Who speaks (2.4.8; 2.5.2: an AI reading; 2.5.3: up to eight voices) ----------------
     // The second voice used to switch at every ">>", "- " or "NAME:" that opened a group's first
     // caption line, and nowhere else. Over the user's 46 saved videos that was wrong both ways:
     // - YouTube's recognizer writes ">>" around music and sighs inside one person's talk ("Last-minute
@@ -445,26 +466,37 @@
     // Zurawell" opens every TED talk): in PsihkFWDt3Y those three put 83% of a one-person talk in the
     // other voice. And a label used fewer than TURN_MIN_NAMED times in the whole video is no system.
     const NAMED_RE = /^([A-Z][A-Za-z.'’ -]{0,28}[A-Za-z.]):\s/;
+    // A name in capitals may carry a party or a title after it, the way news transcripts write a
+    // speaker's first turn ("TAMARA KEITH, National Public Radio:", "COL. JOEL RAYBURN (RET.):",
+    // "REP. MARIA ELVIRA SALAZAR (R-FL):"). Missed, that whole first answer stayed in the host's
+    // voice: 4 of 19 news panels lost 15 to 30 points (2026-10-16 speaker lab)
+    const NAMED_CAPS_RE = /^([A-Z][A-Z.'’ -]{1,44}[A-Z.])(?:\s*\([^()]{1,30}\))?(?:,\s+[^:]{1,90})?:\s/;
     const NOT_A_NAME = /^(?:Note|Step|Example|Tip|Warning|Q|A|Translator|Reviewer|Transcriber|Transcript|Subtitles?|Captions?|Source|Credits?|Update|Edit|Disclaimer)$/i;
     const NAME_PARTICLE = /^(?:de|da|del|der|di|du|la|le|van|von|bin|al|y)$/;
     const TURN_MIN_NAMED = 3;
-    // 2.5.2: as many voices as speakers, up to five (S1..S5); a sixth named speaker and on share the
-    // voices after the main one
-    const MAX_VOICES = 5;
+    const LABEL_SAME_SHARE = 0.25;
+    const LABEL_GAP_SHARE = 0.5;
+    // As many voices as speakers, up to eight (S1..S8; five in 2.5.2): a ninth speaker and on share the
+    // voices after the main one. Over 30 news videos with named transcripts (2026-10-16), five
+    // voices left 7 people in another speaker's voice on panels and reports; the free voice has 25
+    const MAX_VOICES = 8;
     const voiceIdx = rank => (rank < MAX_VOICES ? rank : 1 + ((rank - 1) % (MAX_VOICES - 1)));
     // An AI reading of who speaks (background.js analyzeSpeakers, turned into times by speakerHints)
     // is taken only for a real conversation. A speaker heard once and briefly (a quote read as a
-    // turn, a passer-by) is folded into whoever spoke before: a voice of its own needs
-    // AI_MIN_TURNS turns or AI_MIN_TALK_S seconds of talk. A turn within AI_SNAP_S of a ">>" the
-    // recognizer wrote moves onto it (the AI knows who, the recognizer heard when).
+    // turn) is folded into whoever spoke before: a voice of its own needs AI_MIN_TURNS turns or
+    // AI_MIN_TALK_S seconds of talk (15 s in 2.5.2 folded real interviewees of news reports into the
+    // reporter's voice: 8 s, +0.7 points of words in the right voice over 30 videos, no monologue
+    // given a second voice). A turn within AI_SNAP_S of a ">>" the recognizer wrote moves onto it
+    // (the AI knows who, the recognizer heard when).
     const AI_MIN_TURNS = 2;
-    const AI_MIN_TALK_S = 15;
+    const AI_MIN_TALK_S = 8;
     const AI_SNAP_S = 2;
     // "Yeah. ANDREW HUBERMAN: ..." (UIy-WQCZd4M): the last word of the one before, then the label. The
     // name is what follows the last sentence end, unless that end is a title's ("Dr. Galpin:")
     const TITLE_ABBR = /^(?:Dr|Mr|Mrs|Ms|Mx|Prof|St|Jr|Sr|Rev|Gen|Col|Capt|Sgt|Lt)$/;
     const nameOf = text => {
-        const m = String(text || "").match(NAMED_RE);
+        const caps = String(text || "").match(NAMED_CAPS_RE);
+        const m = caps && /[A-Z]{2}/.test(caps[1]) ? caps : String(text || "").match(NAMED_RE);
         if (!m) return null;
         let name = m[1].trim();
         let cut = -1;
@@ -472,7 +504,7 @@
         if (cut > 0) name = name.slice(cut);
         if (!name || NOT_A_NAME.test(name)) return null;
         const words = name.split(/\s+/);
-        return words.length <= 4 && words.every(w => /^[A-Z]/.test(w) || NAME_PARTICLE.test(w)) ? name : null;
+        return words.length <= (m === caps ? 6 : 4) && words.every(w => /^[A-Z]/.test(w) || NAME_PARTICLE.test(w)) ? name : null;
     };
     const turnsMemo = typeof WeakMap === "function" ? new WeakMap() : null;
     // opts.ai: the AI reading for this video ({ turns: [{ t, speaker }], speakers, confidence,
@@ -523,7 +555,9 @@
         }
         const paired = anon.filter((p, k) => (k > 0 && p.t - anon[k - 1].t <= TURN_PAIR_S) || (k + 1 < anon.length && anon[k + 1].t - p.t <= TURN_PAIR_S)).length;
         const conversation = paired >= TURN_MIN_PAIRED;
-        const labelled = pieces.filter(p => p.kind === "named").length >= TURN_MIN_NAMED;
+        const labels = pieces.filter(p => p.kind === "named");
+        const labelled = labels.length >= TURN_MIN_NAMED;
+        const complete = labelled && labelsComplete(labels, endT);
         const marks = [];
         const named = new Map();
         let idx = 0, spoken = false;
@@ -546,18 +580,21 @@
         // Named speakers: the one who talks longest gets the main voice (UIy-WQCZd4M: the guest, 69%
         // of the talk, was the second voice because the host spoke first), the next ones a voice each
         // in order of talk (2.5.2; before, everyone else shared the second voice)
+        // Labels that name only some of the turns (a host's "Amna:" before each question, the guests'
+        // answers bare) give way to an AI reading: on 4 of 30 news videos they put the whole video
+        // in one or two voices (28 to 75% of the words right), the reading 77 to 99%
         let source = "none", genders = [], out = marks;
-        if (labelled && marks.length > 1) {
+        const viaAi = ai && !complete ? acceptAiTurns(ai, endT, anon.map(p => p.t)) : null;
+        if (viaAi) {
+            out = viaAi.marks;
+            genders = viaAi.genders;
+            source = "ai";
+        } else if (labelled && marks.length > 1) {
             const rank = rankByTalk(marks.map(m => ({ t: m.t, sp: m.idx })), endT);
             for (const m of marks) m.idx = voiceIdx(rank.get(m.idx));
             source = "names";
         } else {
-            const viaAi = !labelled && ai ? acceptAiTurns(ai, endT, anon.map(p => p.t)) : null;
-            if (viaAi) {
-                out = viaAi.marks;
-                genders = viaAi.genders;
-                source = "ai";
-            } else if (!labelled && marks.length) {
+            if (!labelled && marks.length) {
                 let flip = false;
                 marks.forEach((m, k) => {
                     let i = m.idx ^ (flip ? 1 : 0);
@@ -568,9 +605,21 @@
             } else if (labelled) source = "names";
         }
         const voices = out.reduce((n, m) => Math.max(n, m.idx + 1), 1);
-        const turns = { marks: out, conversation, labelled, anon: anon.length, paired, source, voices, genders };
+        const turns = { marks: out, conversation, labelled, complete, anon: anon.length, paired, source, voices, genders };
         if (turnsMemo && Array.isArray(groups)) turnsMemo.set(groups, { n: groups.length, ai, turns });
         return turns;
+    }
+    // "NAME:" labels that name every turn: two names or more, a name seldom right after itself (a
+    // host labelled before each question, the answers bare, repeats it) and no stretch without a
+    // label over half the labelled talk (the anchors labelled at the start and the end of a report)
+    function labelsComplete(named, endT) {
+        if (new Set(named.map(p => p.name)).size < 2) return false;
+        let same = 0, gap = endT - named[named.length - 1].t;
+        for (let k = 1; k < named.length; k++) {
+            if (named[k].name === named[k - 1].name) same++;
+            gap = Math.max(gap, named[k].t - named[k - 1].t);
+        }
+        return same <= LABEL_SAME_SHARE * (named.length - 1) && gap <= LABEL_GAP_SHARE * Math.max(1, endT - named[0].t);
     }
     // Talk per speaker over time-ordered turns ({ t, sp }), each turn running to the next one (the
     // last to endT): the rank of each speaker, the one who talks longest first
@@ -623,11 +672,13 @@
         return { marks, genders };
     }
     // One voice: nobody's turn ends a segment
-    const NO_TURNS = Object.freeze({ marks: Object.freeze([]), conversation: false, labelled: false, anon: 0, paired: 0, source: "none", voices: 1, genders: Object.freeze([]) });
+    const NO_TURNS = Object.freeze({ marks: Object.freeze([]), conversation: false, labelled: false, complete: false, anon: 0, paired: 0, source: "none", voices: 1, genders: Object.freeze([]) });
 
     // ---- The lines an AI reading is asked about, and its answer as times (2.5.2) ----
     // Every caption line of the video in time order (each group's source; a line shared by two
     // groups once), sound-only lines left out. The answer names lines by their index in this list.
+    // Captions cut into short pieces (half of them under JOIN_SHORT characters, as recognizer
+    // captions are) go joined into sentences (joinCaptionLines).
     function speakerLines(groups) {
         const seen = new Set();
         const out = [];
@@ -640,7 +691,42 @@
                 out.push({ start: c.start, end: c.end, text });
             }
         }
+        const sizes = out.map(l => l.text.length).sort((a, b) => a - b);
+        return sizes.length && sizes[sizes.length >> 1] < JOIN_SHORT ? joinCaptionLines(out) : out;
+    }
+    // Short caption pieces joined into sentences: a piece goes on the line before unless that line
+    // ends a sentence, would pass JOIN_MAX characters, or JOIN_GAP seconds of silence lie between;
+    // a ">>", "- " or "NAME:" piece always opens a line. Read piece by piece, a long talk made the
+    // model write a turn for nearly every line: 1289 pieces of a 30-minute show (JBvcMfa7K6E, half
+    // of them under 23 characters) ran its 900-line part into the 16,384-token cap at temperature
+    // 0 and 1 (55 to 58 turns kept; 10,799 tokens for 104 at 0.5); its 637 sentences read in one
+    // call, 5,227 tokens, 178 turns, 3 speakers. On 7 news videos captioned in pieces the words in
+    // the right voice moved 0.3 points (noise); on 22 captioned in whole lines joining cost 3.9, so
+    // those stay as they are
+    const JOIN_SHORT = 40, JOIN_MAX = 160, JOIN_GAP = 1.5;
+    const TURN_OPEN = /^(?:>>|-\s|\p{Lu}[\p{Lu}\p{M}.'’-]*(?:\s+\p{Lu}[\p{Lu}\p{M}.'’-]*){0,4}:\s)/u;
+    function joinCaptionLines(caps) {
+        const out = [];
+        let cur = null;
+        for (const c of caps) {
+            if (cur && !TURN_OPEN.test(c.text) && c.start - cur.end < JOIN_GAP && !/[.!?…]["”')\]]*$/.test(cur.text) &&
+                cur.text.length + 1 + c.text.length <= JOIN_MAX) {
+                cur.parts.push({ pos: cur.text.length + 1, start: c.start, end: c.end, len: c.text.length });
+                cur.text += " " + c.text;
+                cur.end = Math.max(cur.end, c.end);
+                continue;
+            }
+            cur = { start: c.start, end: c.end, text: c.text, parts: [{ pos: 0, start: c.start, end: c.end, len: c.text.length }] };
+            out.push(cur);
+        }
         return out;
+    }
+    // The time of a character of a line: within the caption piece it came from
+    function timeIn(l, pos) {
+        if (!l.parts) return l.start + (l.end - l.start) * pos / Math.max(1, l.text.length);
+        let p = l.parts[0];
+        for (const q of l.parts) if (q.pos <= pos) p = q;
+        return p.start + (p.end - p.start) * Math.min(1, Math.max(0, pos - p.pos) / Math.max(1, p.len));
     }
     // answer: { speakers: [{ id, label, gender }], turns: [{ line, speaker, at }], confidence } for
     // lines[from .. from + count - 1]. A turn starting inside a line ("at": its first words) takes
@@ -650,15 +736,51 @@
         for (const x of (answer && answer.turns) || []) {
             const i = from + (x && Number.isInteger(x.line) ? x.line : -1);
             if (i < from || i >= from + count || i >= lines.length) continue;
-            const c = lines[i];
+            const found = findAt(lines, i, String((x && x.at) || ""), from, Math.min(lines.length, from + count)) || afterSentenceTail(lines, i, from);
+            const c = lines[found ? found.line : i];
             let t = c.start;
-            const at = String((x && x.at) || "").trim();
-            const pos = at ? c.text.indexOf(at) : -1;
-            if (pos > 0) t = c.start + (c.end - c.start) * pos / c.text.length;
+            if (found && found.pos > 0) t = timeIn(c, found.pos);
             turns.push({ t, speaker: x.speaker });
         }
         const last = lines[Math.min(lines.length, from + count) - 1];
         return { turns, speakers: (answer && answer.speakers) || [], confidence: (answer && answer.confidence) || "low", until: last ? last.end : 0 };
+    }
+    // Where a turn's first words ("at") stand: the longest start of them (2 words or more) found in
+    // the line named, else in the one after or before it, case and punctuation aside; the words may
+    // run on into the next line ("... the CEO >> I" / "felt like the country"). The reading often
+    // gives a whole sentence running into the next line, or counts one line off: of 191 turns
+    // inside a line over 30 news videos, 42 were not found as written and went to the line start
+    function findAt(lines, i, at, lo, hi) {
+        const key = w => w.toLowerCase().replace(/[^\p{L}\p{N}']/gu, "");
+        const want = String(at).split(/\s+/).map(key).filter(Boolean);
+        if (!want.length) return null;
+        const toksOf = j => [...lines[j].text.matchAll(/\S+/g)].map(m => ({ k: key(m[0]), pos: m.index })).filter(x => x.k);
+        for (let k = Math.min(want.length, 6); k >= Math.min(2, want.length); k--) {
+            for (const j of [i, i + 1, i - 1]) {
+                if (j < lo || j >= hi) continue;
+                const own = toksOf(j);
+                const toks = j + 1 < hi ? [...own, ...toksOf(j + 1)] : own;
+                for (let s = 0; s < own.length && s + k <= toks.length; s++) {
+                    let same = true;
+                    for (let q = 0; q < k && same; q++) same = toks[s + q].k === want[q];
+                    if (same) return { line: j, pos: toks[s].pos };
+                }
+            }
+        }
+        return null;
+    }
+    // A turn named by its line alone (no first words, or none found: 236 of 411 turns): when the
+    // line opens on the tail of a sentence (the line before ends without . ! ?), the one talking
+    // finishes it and the turn comes after it ("pain. Over to you."). Over 29 news videos read from
+    // recognizer-like captions it moved 42 turns, 32 nearer the real one and 8 farther: words in the
+    // right voice 89.4 -> 90.2% (2.5.3). "Dr. Smith" and "U. S." are no sentence end
+    function afterSentenceTail(lines, i, lo) {
+        if (i <= lo || /[.!?…]["”')\]]*$/.test(lines[i - 1].text.trim())) return null;
+        for (const m of lines[i].text.matchAll(/([\p{L}\p{N}'’]+)[.!?…]+["”')\]]*\s+(?=\S)/gu)) {
+            if (TITLE_ABBR.test(m[1]) || /^\p{Lu}$/u.test(m[1])) continue;
+            return { line: i, pos: m.index + m[0].length };
+        }
+        return null;
     }
     // Parts of a long video read one after another: one reading, the later part's turns after the
     // earlier one's, its "until"
@@ -688,6 +810,9 @@
         return lo < m.length && m[lo].t <= b + 1e-6;
     }
 
+    // Where a piece may be cut at a turn inside it, in order of preference, and how far from the
+    // turn's share of the piece's time (buildDubScript)
+    const TURN_CUTS = [[/(?:[.!?…]|--|—)["”')\]]*$/, 0.3], [/[,;:]["”')\]]*$/, 0.2]];
     function buildDubScript(groups, opts = {}) {
         const segments = [];
         // who speaks when: from every group of the video (the engine passes it for a window)
@@ -713,6 +838,7 @@
         // A line boundary inside a phrase (the prosody model forbids a pause there) is bridged over a
         // silence up to this long; a longer one is a real break in the video and is followed
         const BRIDGE_MAX = 1.2;
+        const SEG_STRETCH = opts.segStretch != null ? opts.segStretch : 2;
         const insidePhrase = (seg, next) => {
             const P = prosody();
             return !!(P && SEG) && P.boundaryValue(SEG.cleanText(seg.texts[seg.texts.length - 1]), SEG.cleanText(next.text)) < P.K.minValue;
@@ -738,12 +864,15 @@
             const cueTok = g.viCues.map(c => (SEG ? SEG.tokenize(c.text).length : 0));
             let ti = 0;
             const labels = speakerLabels((g.srcCues || []).map(c => c.text).join("\n"));
+            const cueLabels = [];
             const cueTexts = g.viCues.map((c, k) => {
                 if (!SEG) return c.text;
                 const part = tokens.slice(ti, ti + cueTok[k]);
                 ti += cueTok[k];
                 return part.map(t => (t.hint ? "¦ " : "") + t.raw).join(" ");
-            }).map(t => stripSpeakerLabels(stripSoundNotes(t), labels));
+            }).map((t, k) => { const r = stripLabelsAt(stripSoundNotes(t), labels); cueLabels[k] = r.at; return r.text; });
+            // where in a piece of words from .. to of cue k a label stood (0: none inside it)
+            const labelIn = (k, from, to) => { const x = (cueLabels[k] || []).find(i => i > from && i < to); return x == null ? 0 : x - from; };
 
             // Lời gốc có khoảng lặng thật ngay sau thời điểm t hay không
             const src = g.srcCues || [];
@@ -777,12 +906,12 @@
                     for (let w = 0; w < words.length - 1; w++) {
                         if (/[,.;:!?…]["”')\]]*$/.test(words[w]) && w + 1 - lastCut >= 3 && words.length - (w + 1) >= 3) { cuts1.push(w + 1); lastCut = w + 1; }
                     }
-                    if (!cuts1.length) { pieces.push({ start: c.start, end: c.end, text: cueTexts[k] }); return; }
+                    if (!cuts1.length) { pieces.push({ start: c.start, end: c.end, text: cueTexts[k], labelAt: labelIn(k, 0, words.length) }); return; }
                     let f1 = 0, s1 = c.start;
                     [...cuts1, words.length].forEach(to => {
                         const ps = syl1.slice(f1, to).reduce((a, b) => a + b, 0);
                         const e1 = to === words.length ? c.end : s1 + dur * ps / total1;
-                        pieces.push({ start: s1, end: e1, text: words.slice(f1, to).join(" ") });
+                        pieces.push({ start: s1, end: e1, text: words.slice(f1, to).join(" "), labelAt: labelIn(k, f1, to) });
                         f1 = to; s1 = e1;
                     });
                     return;
@@ -816,7 +945,7 @@
                     const part = words.slice(from, to);
                     const ps = syl.slice(from, to).reduce((a, b) => a + b, 0);
                     const t1 = to === words.length ? c.end : t0 + dur * ps / total;
-                    pieces.push({ start: t0, end: t1, text: part.join(" ") });
+                    pieces.push({ start: t0, end: t1, text: part.join(" "), labelAt: labelIn(k, from, to) });
                     from = to; t0 = t1;
                 });
             });
@@ -829,21 +958,32 @@
             // Khung chỉ có chú thích âm thanh ("(Vỗ tay)"): không đọc, để thành khoảng lặng
             for (let k = pieces.length - 1; k >= 0; k--) if (!hasWords(pieces[k].text)) pieces.splice(k, 1);
             // A turn inside a piece ("Có ngay. Bạn muốn nóng hay đá? Nóng." over "...hot or ice? >> Uh,
-            // hot."): the piece is cut at the sentence end nearest the turn's share of its time
+            // hot."): the piece is cut at the sentence end nearest the turn's share of its time. 2.5.3:
+            // an interrupted one ("vì-- Vâng, chắc chắn rồi.") ends there too, and failing both, a
+            // comma close to the turn does: over the user's 5 saved conversations the voice changed
+            // mid-sentence 18 times in 652 ("vì-- Vâng," | "chắc chắn rồi.", the "yeah" in the wrong voice)
             for (let k = 0; k < pieces.length; k++) {
                 const c = pieces[k];
-                const inside = TURNS.marks.find(m => m.t > c.start + 0.15 && m.t < c.end - 0.15);
+                // (a label stands where the source line starts; the translation's line may give its
+                // words less time than they had, the turn then falls just after the piece)
+                const inside = TURNS.marks.find(m => m.t > c.start + 0.15 && m.t < c.end - 0.15) ||
+                    (c.labelAt > 0 ? TURNS.marks.find(m => m.t > c.start + 0.15 && m.t < c.end + 2) : null);
                 if (!inside) continue;
                 const words = String(c.text).split(/\s+/).filter(Boolean);
                 const syl = words.map(w => Math.max(1, tokenSyllables(w.replace(/¦/g, ""))));
                 const total = syl.reduce((a, b) => a + b, 0) || 1;
                 const share = (inside.t - c.start) / (c.end - c.start);
-                let best = -1, bestCost = Infinity, acc = 0;
-                for (let w = 0; w < words.length - 1; w++) {
-                    acc += syl[w];
-                    if (!/[.!?…]["”')\]]*$/.test(words[w])) continue;
-                    const cost = Math.abs(acc / total - share);
-                    if (cost < bestCost && cost < 0.3) { bestCost = cost; best = w + 1; }
+                // a label the source carries says where exactly (the translation keeps 262 of 339)
+                let best = c.labelAt > 0 && c.labelAt < words.length ? c.labelAt : -1;
+                for (const [mark, near] of best > 0 ? [] : TURN_CUTS) {
+                    let bestCost = Infinity, acc = 0;
+                    for (let w = 0; w < words.length - 1; w++) {
+                        acc += syl[w];
+                        if (!mark.test(words[w])) continue;
+                        const cost = Math.abs(acc / total - share);
+                        if (cost < bestCost && cost < near) { bestCost = cost; best = w + 1; }
+                    }
+                    if (best >= 0) break;
                 }
                 if (best < 0) continue;
                 const at = c.start + (c.end - c.start) * syl.slice(0, best).reduce((a, b) => a + b, 0) / total;
@@ -872,7 +1012,7 @@
                     ((gap < PAUSE_SPLIT && (running || g.midLine)) || (running && gap < BRIDGE_MAX && insidePhrase(cur, first)));
                 if (!carry) flush();
             }
-            pieces.forEach(c => {
+            pieces.forEach((c, pi) => {
                 if (cur && (pastSpoken(cur, c.end) || turnAfter(cur, c))) flush();
                 const gapBefore = cur ? c.start - cur.end : 0;
                 const len = cur ? c.end - cur.start : 0;
@@ -902,7 +1042,16 @@
                     }
                 }
                 const len2 = cur ? c.end - cur.start : 0;
-                const tooLong = cur && (len2 > hardFor(cur.start) || (cur.end - cur.start >= SEG_SOFT && endsWithPunct(cur.texts[cur.texts.length - 1])));
+                // 2.5.3, free voice: a cut the length forces where no line boundary is better and that
+                // falls inside a phrase ("cường độ cao với | những quãng nghỉ") waits for the end of
+                // this line, up to SEG_STRETCH s more, when speech may pause there. 39 of the 7794 cuts
+                // over the user's 44 saved videos fell inside a phrase, 38 of them forced by length.
+                // Not near where playback starts: the first request stays short (HEAD_HARD)
+                const next = pieces[pi + 1];
+                const stretch = JOIN && cur && hardFor(cur.start) === SEG_HARD && len2 > SEG_HARD && len2 <= SEG_HARD + SEG_STRETCH &&
+                    !endsWithPunct(cur.texts[cur.texts.length - 1]) && insidePhrase(cur, c) &&
+                    (endsWithPunct(c.text) || (!!next && !insidePhrase({ texts: [c.text] }, next)));
+                const tooLong = cur && (len2 > hardFor(cur.start) + (stretch ? SEG_STRETCH : 0) || (cur.end - cur.start >= SEG_SOFT && endsWithPunct(cur.texts[cur.texts.length - 1])));
                 // 1.8.0, free voice: a pause of the source speaker inside a phrase of the Vietnamese
                 // ("Christopher | Nolan", "3,5 | GHz", "ở California | trong quý") is not a speech
                 // boundary: the segment runs on (up to BRIDGE_MAX of silence), only length forces a cut
@@ -1208,7 +1357,7 @@
 
     const api = {
         numberToVietnamese, countSyllables, adaptForSpeech, numberRole, classifyIntent, buildPhrases, speakerTurns, speakerAt, NO_TURNS, MAX_VOICES, speakerLines, speakerHints, mergeSpeakerHints,
-        buildDubScript, stripSoundNotes, speakerLabels, stripSpeakerLabels, planSegment, planAll, smoothRates, speechSeconds, pauseSeconds, rateForSps, rateForSpeedup, speedMultiplier,
+        buildDubScript, stripSoundNotes, speakerLabels, stripSpeakerLabels, stripLabelsAt, planSegment, planAll, smoothRates, speechSeconds, pauseSeconds, rateForSps, rateForSpeedup, speedMultiplier,
         DEFAULT_VOICE_MODEL, LIMITS, INTENT_PROSODY, PAUSE
     };
     if (typeof module === "object" && module.exports) module.exports = api;

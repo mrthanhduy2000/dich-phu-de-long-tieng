@@ -1595,19 +1595,30 @@ async function handleTestKey(req) {
 // SPEAKER_MAX_LINES for a long one) and dub-planner decides what to take: a speaker heard once is
 // folded away, a "low" answer is ignored. Cheapest model of the chain, temperature 0, kept in the
 // translation store, so a second viewing costs nothing. Charged and budgeted as text.
+//
+// Prompt 2 (2.5.3), scored on 30 PBS NewsHour videos against their named transcripts (docs/TESTING.md
+// "Speaker lab"): words in the right voice 81.5 -> 89.3% on recognizer-like captions, 89.7 -> 93.5%
+// on clean ones, people sharing a voice 20 -> 7. Prompt 1 told the model to skip a turn it was not
+// sure of and never said what an interview looks like: it missed the host's questions. Measured and
+// not kept: pause marks in the lines, a stricter "at", 3.5 Flash-Lite, a long video in parts of 60
+// or 120 lines (worse: 86% vs 89%, each part loses who is who), temperature 0.5 or 1 (a 900-line
+// part of short caption pieces still wrote 10,799 and 16,368 tokens; dub-planner joins such pieces
+// into sentences), a rule against a turn back to the same speaker (367 alternating turns instead)
 // ============================================================
-const SPEAKER_PROMPT_VERSION = 1;
+const SPEAKER_PROMPT_VERSION = 2;
 const SPEAKER_MAX_LINES = 900;
+const SPEAKER_TEMPERATURE = 0;
 const SPEAKER_SYSTEM_PROMPT = [
-    "You mark who is speaking in a video transcript. Each numbered line is one caption, in time order. A turn is where a DIFFERENT PERSON starts talking.",
-    "Rules:",
-    "- One person talking (a vlog, a lecture, a monologue, a narrator), however lively: one speaker and one turn at the first line.",
-    "- Quoted or reported speech (\"and she said, no way\"), rhetorical questions, reading a comment or a message aloud, imitating someone, singing: NOT a turn.",
-    "- \">>\" in a line usually marks a new speaker from the speech recognizer, but it also stands around music and noises inside one person's talk: a hint, not a rule. \"NAME:\" at a line start names who speaks.",
-    "- A turn may start inside a line: then \"at\" holds the new speaker's first words exactly as written in that line.",
-    "- Number speakers 1, 2, 3 in order of first appearance and reuse the number every time the same person talks again. Label each with a name when the transcript says it, else a role (host, guest, interviewer, caller, customer). Gender only when the transcript makes it clear (a name, he/she, sir/ma'am), else \"unknown\".",
-    "- The first turn is at the first line. Not sure a line is someone else: it is not a turn.",
-    "- confidence: \"high\" when the transcript is clearly a dialogue or clearly one person, \"medium\" when mostly clear, \"low\" when guessing."
+    "You mark who speaks in a video transcript. Each numbered line is one caption, in time order. Captions often run two people's words together in one line, without any mark: read for meaning.",
+    "A turn is where a DIFFERENT PERSON starts talking. Give every turn, in order.",
+    "How turns look:",
+    "- Interview, panel, talk show, podcast: the host asks, the guests answer. A question or remark addressed to someone by name (\"So David, what does it signal...\", \"Kimberly, everything that...\", \"Thank you both.\") is said by someone else, usually the host, and the person addressed answers next. Short replies (\"Thank you.\", \"Good to be here.\", \"Right.\", \"Yes.\") are turns too.",
+    "- News report or documentary: the reporter narrates; interviewees speak in short clips, often introduced (\"says Jane Doe, a nurse\"); each clip is a turn of that person, then back to the reporter.",
+    "- One person talking (a vlog, a lecture, a monologue), however lively: one speaker, one turn at the first line. Quoted or reported speech (\"and she said, no way\"), rhetorical questions, reading a comment aloud, imitating someone, singing: NOT a turn.",
+    "- \">>\" usually marks a new speaker but also stands around music and noises: a hint. \"Name:\" labels may mark only some of the turns.",
+    "- A turn that starts inside a line: \"at\" holds the new speaker's first words exactly as written in that line.",
+    "Speakers: number them 1, 2, 3 in order of first appearance and reuse the number every time the same person talks again (a host comes back many times). Label each with the name the transcript gives (introductions, people addressed by name), else a role (host, guest, reporter, interviewee). Gender only when the transcript makes it clear (a name, he/she, sir/ma'am), else \"unknown\".",
+    "confidence: \"high\" when clearly a dialogue or clearly one person, \"medium\" when mostly clear, \"low\" when guessing."
 ].join("\n");
 const SPEAKER_SCHEMA = {
     type: "OBJECT",
@@ -1623,10 +1634,16 @@ const speakerInFlight = new Map();
 
 // The checked answer: speakers 1-9 with a label and a gender, turns on real lines by known
 // speakers in line order (one per change of speaker), a confidence. Throws when unusable.
+// An answer cut off by the token cap keeps its whole turns and says how far they reach (upTo:
+// lines 0 .. upTo - 1); the page reads the rest as a new part. The reading that ran into the cap
+// in the lab listed a turn on every line, its whole text as "at" (1 of 60 news videos)
 function readSpeakerAnswer(data, n) {
     let raw = responseText(data).trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
     let a;
-    try { a = JSON.parse(raw); } catch (e) { throw new GeminiError("bad_output", "Gemini không trả JSON hợp lệ"); }
+    try { a = JSON.parse(raw); } catch (e) {
+        a = (((data || {}).candidates || [])[0] || {}).finishReason === "MAX_TOKENS" ? salvageSpeakerAnswer(raw, n) : null;
+        if (!a) throw new GeminiError("bad_output", "Gemini không trả JSON hợp lệ");
+    }
     const speakers = [];
     for (const s of Array.isArray(a && a.speakers) ? a.speakers : []) {
         const id = Number(s && s.id);
@@ -1647,25 +1664,52 @@ function readSpeakerAnswer(data, n) {
         turns.push(t);
     }
     const confidence = /^(high|medium|low)$/.test(a && a.confidence) ? a.confidence : "low";
-    return { speakers, turns, confidence };
+    const out = { speakers, turns, confidence };
+    if (Number.isInteger(a.upTo) && a.upTo > 0 && a.upTo < n) out.upTo = a.upTo;
+    return out;
+}
+// The whole objects of a cut-off answer: the speakers (written first), every complete turn. The
+// last one may have had more on its line, so the part read ends with it. Too little: unusable
+function salvageSpeakerAnswer(raw, n) {
+    const at = raw.indexOf('"turns"');
+    if (at < 0) return null;
+    let speakers = [];
+    const head = raw.slice(0, at).match(/"speakers"\s*:\s*(\[[\s\S]*\])/);
+    if (head) { try { speakers = JSON.parse(head[1]); } catch (e) { speakers = []; } }
+    const turns = [];
+    for (const m of raw.slice(at).matchAll(/\{[^{}]*\}/g)) { try { turns.push(JSON.parse(m[0])); } catch (e) { /* the cut one */ } }
+    const lines = turns.map(x => Number(x && x.line)).filter(Number.isInteger);
+    const upTo = lines.length ? Math.max(...lines) + 1 : 0;
+    return upTo < 8 ? null : { speakers, turns, confidence: "medium", upTo };
 }
 
-async function handleAnalyzeSpeakers(req) {
-    const lines = (Array.isArray(req.lines) ? req.lines : []).slice(0, SPEAKER_MAX_LINES).map(l => String(l || "").replace(/\s+/g, " ").trim().slice(0, 300));
+async function handleAnalyzeSpeakers(req, sender) {
+    // Speaker lab (tests/harness/speaker-lab.html, docs/TESTING.md): another system prompt, model or
+    // part size for one reading, from the extension's own test pages only. Cached apart, charged as
+    // any reading
+    const lab = req.lab && sender && String(sender.url || "").startsWith(chrome.runtime.getURL("tests/")) ? req.lab : null;
+    const lines = (Array.isArray(req.lines) ? req.lines : []).slice(0, lab && lab.maxLines ? Math.min(8000, Number(lab.maxLines) || 0) : SPEAKER_MAX_LINES)
+        .map(l => String(l || "").replace(/\s+/g, " ").trim().slice(0, 300));
     if (lines.length < 4) return { ok: false, reason: "short" };
     const cfg = await modelsFromCfg();
     if (!cfg.useAi || !cfg.geminiApiKey) return { ok: false, reason: "no_key" };
+    const system = lab && lab.system ? String(lab.system) : SPEAKER_SYSTEM_PROMPT;
+    const temperature = lab && lab.temperature != null && lab.temperature !== "" && Number.isFinite(Number(lab.temperature)) ? Number(lab.temperature) : SPEAKER_TEMPERATURE;
+    const version = lab && (lab.system || temperature !== SPEAKER_TEMPERATURE) ? "lab:" + await CST_CACHE.hashKey([system, temperature]) : SPEAKER_PROMPT_VERSION;
     const roster = (Array.isArray(req.roster) ? req.roster : []).slice(0, 9)
         .map(s => `${Number(s.id) || 0} = ${String(s.label || "speaker").slice(0, 40)}${/^(male|female)$/.test(s.gender) ? ` (${s.gender})` : ""}`);
+    // who was talking where the part before ended: the first lines go on with their talk
+    const lastId = req.last && Number.isInteger(Number(req.last.id)) && Number(req.last.id) >= 1 ? Number(req.last.id) : 0;
     const user = [
         req.videoTitle ? `Video title: ${String(req.videoTitle).slice(0, 120)}` : "",
         roster.length ? `Speakers found in the part before this one (reuse their numbers): ${roster.join("; ")}` : "",
+        lastId ? `Speaker ${lastId} was talking when the part before ended: line 0 goes on with their talk unless someone else starts there.` : "",
         `Lines (${lines.length}):`,
         ...lines.map((l, i) => `${i}| ${l}`)
     ].filter(Boolean).join("\n");
     const meta = metaOf(req);
-    const promptChars = SPEAKER_SYSTEM_PROMPT.length + user.length;
-    const flight = lines.join("\n") + "|" + roster.join("|");
+    const promptChars = system.length + user.length;
+    const flight = lines.join("\n") + "|" + roster.join("|") + "|" + lastId + "|" + version + "|" + ((lab && lab.model) || "");
     if (speakerInFlight.has(flight)) return speakerInFlight.get(flight);
     const p = (async () => {
         // The cheapest model the key can call, as translation does: 404 for this key (a new key and
@@ -1674,22 +1718,26 @@ async function handleAnalyzeSpeakers(req) {
         let last = { ok: false, reason: "no_model" };
         for (let guard = 0; guard < 4; guard++) {
             const unavailable = await isUnavailableFn(cfg.geminiApiKey);
-            const model = COST.modelChain("cheap", cfg, cfg.costMode, unavailable).find(m => !tried.has(m));
+            const model = lab && lab.model ? (tried.has(lab.model) ? null : String(lab.model)) :
+                COST.modelChain("cheap", cfg, cfg.costMode, unavailable).find(m => !tried.has(m));
             if (!model) break;
             tried.add(model);
             let key = null;
             if (caches) {
-                try { key = await CST_CACHE.hashKey(["spk", SPEAKER_PROMPT_VERSION, model, roster.join("|"), lines.map(CST_CACHE.normalizeText)]); } catch (e) { key = null; }
+                try { key = await CST_CACHE.hashKey(["spk", version, model, roster.join("|") + (lastId ? "|last " + lastId : ""), lines.map(CST_CACHE.normalizeText)]); } catch (e) { key = null; }
                 const hit = key ? await caches.tr.get(key) : null;
                 if (hit && Array.isArray(hit.turns)) { track(meta, { hitsTr: 1, avoided: 1 }); return { ok: true, ...hit, fromCache: true }; }
             }
             const budget = await budgetState(meta, COST.estimateTextCost(model, Math.ceil(promptChars / 3.5), 400 + lines.length * 3));
             if (!budget.allowed || budget.runaway) return { ok: false, reason: "budget" };
-            last = await askSpeakers(model, cfg.geminiApiKey, user, lines.length, meta, promptChars);
+            const entryOf = a => ({ speakers: a.speakers, turns: a.turns, confidence: a.confidence, model, v: version, ...(a.upTo ? { upTo: a.upTo } : {}) });
+            // a reading that comes after our timer gave up was paid for: kept for the next ask
+            const keepLate = a => { if (key && caches) caches.tr.set(key, entryOf(a)); };
+            last = await askSpeakers(model, cfg.geminiApiKey, user, lines.length, meta, promptChars, system, !!lab, temperature, keepLate);
             if (last.ok) {
-                const entry = { speakers: last.speakers, turns: last.turns, confidence: last.confidence, model, v: SPEAKER_PROMPT_VERSION };
+                const entry = entryOf(last);
                 if (key && caches) caches.tr.set(key, entry);
-                return { ok: true, ...entry };
+                return { ok: true, ...entry, ...(lab ? { finish: last.finish, usage: last.usage, raw: last.raw, rawLength: last.rawLength } : {}) };
             }
             if (last.reason !== "not_found" && last.reason !== "unavailable_for_key") break;
         }
@@ -1699,27 +1747,64 @@ async function handleAnalyzeSpeakers(req) {
     return p;
 }
 
-async function askSpeakers(model, apiKey, user, n, meta, promptChars) {
-    const maxOutputTokens = Math.min(8192, 400 + n * 8);
-    const timeoutMs = Math.min(60000, 12000 + Math.round(user.length * 0.4));
+async function askSpeakers(model, apiKey, user, n, meta, promptChars, system = SPEAKER_SYSTEM_PROMPT, debug = false, temperature = SPEAKER_TEMPERATURE, onLateAnswer = null) {
+    // Room for a turn every two lines with its first words: 400 + 8 a line cut the answer off
+    // (bad_output) on 2 of 38 news panels, 90 and 117 lines with 40 to 50 turns; 1024 + 16 a line
+    // cut off a reading that listed every line (yF1rzzxe2vc, 3056 tokens for 71 of 128 lines). Only
+    // what is written is paid for; a cut answer is still used (readSpeakerAnswer)
+    const maxOutputTokens = Math.min(16384, 2048 + n * 32);
+    // Time for the longest answer the cap allows, written at 250 tokens a second. A request our timer
+    // drops is billed all the same and its answer is lost (geminiCall): 12 s + 0.4 ms a character
+    // dropped every live reading of a 900-line part (JBvcMfa7K6E, 22.5 s, 2.5.3), while the reading
+    // of nothing else waits on it (the voices start as one and change when it lands)
+    const timeoutMs = Math.min(120000, 15000 + Math.round(user.length * 0.4) + maxOutputTokens * 4);
+    // A dropped request is charged at once with what a reading usually writes (400 + 3 tokens a
+    // line, the budget's guess; it was 20 tokens, while the part of JBvcMfa7K6E dropped twice live
+    // wrote 16,368 when the lab read it). The request is left running: when its answer still comes,
+    // the real counts replace the guess and the reading is kept (onLateAnswer)
+    let estimate = null;
+    const onBilled = d => {
+        const u = usageOf(d, promptChars, 0);
+        if (!d) { u.out = Math.max(u.out, 400 + n * 3); estimate = u; }
+        trackText(meta, model, u);
+    };
+    const onLate = d => {
+        if (estimate) { const was = estimate; estimate = null; trackText(meta, model, usageOf(d, promptChars, 0), was, true); }
+        let a = null;
+        try { a = readSpeakerAnswer(d, n); } catch (e) { /* unusable: nothing to keep */ }
+        if (a && onLateAnswer) onLateAnswer(a);
+    };
     for (let pass = 0; pass < 2; pass++) {
-        const generationConfig = { temperature: 0, maxOutputTokens };
+        const generationConfig = { temperature, maxOutputTokens };
         if (!speakerSchemaUnsupported) { generationConfig.responseMimeType = "application/json"; generationConfig.responseSchema = SPEAKER_SCHEMA; }
         const thinking = thinkingConfigFor(model);
         if (thinking) generationConfig.thinkingConfig = thinking;
-        const sys = SPEAKER_SYSTEM_PROMPT + (speakerSchemaUnsupported ? "\nAnswer with JSON only: {\"speakers\": [{\"id\", \"label\", \"gender\"}], \"turns\": [{\"line\", \"speaker\", \"at\"}], \"confidence\"}." : "");
+        const sys = system + (speakerSchemaUnsupported ? "\nAnswer with JSON only: {\"speakers\": [{\"id\", \"label\", \"gender\"}], \"turns\": [{\"line\", \"speaker\", \"at\"}], \"confidence\"}." : "");
         const body = { system_instruction: { parts: [{ text: sys }] }, contents: [{ parts: [{ text: user }] }], generationConfig };
         let data;
         try {
             // srcChars 0: this answer is no translation, it must not move the output estimate
-            data = await geminiCall(model, apiKey, body, { timeoutMs, retries: 1, onBilled: d => trackText(meta, model, usageOf(d, promptChars, 0)) });
+            data = await geminiCall(model, apiKey, body, { timeoutMs, retries: 1, onBilled, onLate });
         } catch (e) {
             if (e.type === "invalid" && /thinking/i.test(e.message) && thinking) { noThinkingCfg.add(model); continue; }
             if (e.type === "invalid" && /schema|mime/i.test(e.message) && !speakerSchemaUnsupported) { speakerSchemaUnsupported = true; continue; }
             return { ok: false, reason: e.type || "error", error: e.message };
         }
-        try { return { ok: true, ...readSpeakerAnswer(data, n) }; }
-        catch (e) { return { ok: false, reason: "bad_output", error: e.message }; }
+        try {
+            const out = { ok: true, ...readSpeakerAnswer(data, n) };
+            // the speaker lab sees what the reading cost and how it ended
+            if (debug) {
+                out.finish = (((data || {}).candidates || [])[0] || {}).finishReason || "";
+                out.usage = data && data.usageMetadata;
+                if (out.finish === "MAX_TOKENS") { const t = responseText(data); out.raw = t.slice(0, 1500) + " ... " + t.slice(-4000); out.rawLength = t.length; }
+            }
+            return out;
+        } catch (e) {
+            const out = { ok: false, reason: "bad_output", error: e.message };
+            // the speaker lab sees what came back
+            if (debug) { out.raw = responseText(data).slice(0, 6000); out.finish = (((data || {}).candidates || [])[0] || {}).finishReason || ""; out.usage = data && data.usageMetadata; }
+            return out;
+        }
     }
     return { ok: false, reason: "bad_output" };
 }

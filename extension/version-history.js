@@ -4,6 +4,26 @@
 (function (root) {
     const HISTORY = [
         {
+            v: "2.5.3", luc: "16/10/2026", ten: "Nhận ra người nói chính xác hơn, mỗi người giữ đúng một giọng",
+            y: [
+                "Sửa lỗi video dài nhiều người nói vẫn chỉ có một giọng: phần AI đọc \"ai đang nói\" bị bỏ dở vì chờ quá ngắn (22,5 giây) dù Google vẫn tính tiền lượt đó. Nay thời gian chờ đủ cho câu trả lời dài nhất, và nếu câu trả lời đến muộn thì vẫn được giữ lại cho lần sau, không phải trả tiền lần hai. Đo thật trên một video 30 phút có 3 người nói: trước chỉ một giọng, nay 3 giọng khác nhau, không câu nào bị bỏ.",
+                "Phụ đề tự động chia lời thành nhiều mảnh rất ngắn. Tiện ích gộp các mảnh thành câu trước khi nhờ AI đọc, nên AI không còn ghi lượt nói cho gần như từng dòng: video 30 phút đọc xong trong một lần, khoảng 0,01 USD (chừng 300 đồng). Trước đó, riêng phần đầu 900 dòng đã viết tới 16.368 token (khoảng 0,027 USD) mà vẫn bị cắt dở.",
+                "Cách AI nhận ra người nói được viết lại và đo trên 30 video tin tức có ghi tên người nói: số chữ được đọc đúng giọng người nói tăng từ 81,5% lên 90,1% với phụ đề thường, từ 89,7% lên 93,5% với phụ đề sạch. AI nay biết dạng phỏng vấn (người dẫn hỏi, khách trả lời), bản tin (phóng viên dẫn, người được phỏng vấn nói từng đoạn ngắn) và độc thoại (một người, kể cả khi trích lời người khác).",
+                "Tối đa 8 giọng thay vì 5: Mỹ Duyên, Thái Sơn, Thục Đoan, Adam, Thùy Dung, Minh Triết, Kim Thanh, Đức Trí. Chương trình đông khách không còn phải cho hai người dùng chung một giọng.",
+                "Phụ đề đã ghi tên người nói ở mọi lượt (\"NAME:\") thì dùng luôn tên đó, không gọi AI, không tốn tiền. Tên kèm chức danh kiểu bản tin (\"TAMARA KEITH, National Public Radio:\") được nhận ra và không bị đọc thành tiếng.",
+                "Giọng đổi đúng chỗ người khác bắt đầu nói, kể cả khi chỗ đó nằm giữa một dòng phụ đề đã dịch: trên podcast có ghi tên, đúng 14 trên 14 chỗ (trước 3 trên 14).",
+                "Ngắt nghỉ tự nhiên hơn: khi một đoạn đọc quá dài phải cắt, tiện ích cho đoạn kéo dài thêm tối đa 2 giây để cắt ở chỗ được phép ngừng, thay vì cắt giữa một cụm từ. Trên 44 video đã lưu, số chỗ cắt giữa cụm từ giảm từ 39 xuống 17. Không câu nào bị bỏ, không chữ nào bị lược.",
+                "Sổ chi phí ghi đúng hơn: một lượt AI bị chờ quá giờ trước đây chỉ được ghi khoảng 20 token đầu ra, nay ghi theo mức thường gặp rồi sửa lại bằng số thật khi câu trả lời đến."
+            ],
+            bang: { cot: ["Đo thật", "2.5.2", "Nay"], hang: [
+                ["Chữ đọc đúng giọng người nói, 30 video tin tức, phụ đề thường", "81,5%", "90,1%"],
+                ["Chữ đọc đúng giọng người nói, 30 video tin tức, phụ đề sạch", "89,7%", "93,5%"],
+                ["Video 30 phút, 3 người nói: số giọng khi xem", "1", "3"],
+                ["Chỗ cắt giữa cụm từ, 44 video đã lưu", "39", "17"],
+                ["Câu bị bỏ / chữ bị lược", "0 / 0", "0 / 0"]
+            ] }
+        },
+        {
             v: "2.5.2", luc: "16/10/2026", ten: "Mỗi người nói một giọng, cài được trên mọi trình duyệt nhân Chromium",
             y: [
                 "Lồng tiếng tự nhận ra người nói và cho mỗi người một giọng riêng, tối đa 5 giọng, bật sẵn. Người nói nhiều nhất dùng giọng chính; từ người thứ ba trở đi tiện ích tự chọn giọng khác hẳn. Video chỉ có một người nói vẫn giữ một giọng, kể cả khi phụ đề tự động đánh dấu nhầm quanh đoạn nhạc hay câu trích lời. Muốn cả video một giọng: Cài đặt > Lồng tiếng > Giọng theo người nói.",

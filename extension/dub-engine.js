@@ -241,7 +241,7 @@
 
     // ---- Web Speech (giọng hệ thống, miễn phí, chạy offline) ----
     // Pitch of a speaker read in the first speaker's system voice (S2 was 0.88 before 2.5.2)
-    const SPEAKER_PITCH = { S2: 0.88, S3: 1.12, S4: 0.8, S5: 1.2 };
+    const SPEAKER_PITCH = { S2: 0.88, S3: 1.12, S4: 0.8, S5: 1.2, S6: 0.72, S7: 1.3, S8: 0.95 };
     function createWebSpeechProvider(env) {
         const synth = env.speechSynthesis;
         const Utter = env.SpeechSynthesisUtterance;
@@ -303,14 +303,36 @@
 
     // ---- Gemini TTS (giọng AI tự nhiên, trả audio PCM) ----
     // Gọi qua service worker (background.js, action "synthesizeSpeech").
+    // The third speaker on (2.5.3): the first free voice of the Settings list of the speaker's
+    // gender. Before, S3 and on fell back to S1, so a panel's third person spoke in the host's voice
+    const GEMINI_VOICES = {
+        voices: [["Kore", "Nữ"], ["Aoede", "Nữ"], ["Leda", "Nữ"], ["Zephyr", "Nữ"], ["Charon", "Nam"], ["Orus", "Nam"], ["Iapetus", "Nam"], ["Puck", "Nam"], ["Fenrir", "Nam"]]
+            .map(([id, gender]) => ({ id, gender })),
+        cast: { "Nữ": ["Aoede", "Leda", "Zephyr", "Kore"], "Nam": ["Orus", "Iapetus", "Puck", "Fenrir", "Charon"] },
+        defaultVoice: "Kore", defaultVoice2: "Charon"
+    };
     function createGeminiProvider(env, settings) {
+        const main = settings.geminiVoice || "Kore", second = settings.geminiVoice2 || "Charon";
+        // a voice picked before the list had it stays the viewer's own
+        const known = [main, second].filter(id => !GEMINI_VOICES.voices.some(v => v.id === id)).map(id => ({ id, gender: "" }));
+        const L = { ...GEMINI_VOICES, voices: [...GEMINI_VOICES.voices, ...known] };
+        const geminiCast = genders => castVoices(L, main, second, genders);
         const provider = {
             id: "gemini",
             label: "Giọng Gemini AI",
             caps: { live: false, prerender: true, rate: false, pitch: false, style: true, ssml: false, timeStretch: true },
             // Giọng AI tự nhiên nói nhanh hơn giọng hệ thống; thời lượng thật đo từ audio
             voiceModel: { ...PLAN.DEFAULT_VOICE_MODEL, sylPerSec: 4.6, rateExp: 1, pauseFactor: 1.3 },
-            voices: { S1: settings.geminiVoice || "Kore", S2: settings.geminiVoice2 || "Charon" },
+            voices: geminiCast([]),
+            castSig: "",
+            // the AI reading's genders (DubEngine.refresh), as for the free voice
+            setCast(genders) {
+                const sig = (genders || []).join(",");
+                if (sig === provider.castSig) return false;
+                provider.castSig = sig;
+                provider.voices = geminiCast(genders || []);
+                return true;
+            },
             get voiceLabel() { return provider.voices.S1; },
             async init() { return true; },
             // Khóa kho audio: mọi thứ QUYẾT ĐỊNH âm thanh (không dùng mã video) ->
@@ -377,7 +399,7 @@
     // the free server renders ~4x faster than real time, so a longer segment costs ~3 s ahead.
     const FREE_SEGMENTS = { joinGroups: true, segSoft: 8, segHard: 11 };
     // Who reads whom (2.5.2): S1 the viewer's voice; S2 the viewer's second voice, unless the AI
-    // reading says that speaker is of the other gender; S3 to S5 the first free catalogue voice of
+    // reading says that speaker is of the other gender; S3 to S8 (2.5.3, S5 before) the first free catalogue voice of
     // the speaker's gender (LOCAL_TTS.cast, the main voice's region first), genders alternating
     // when unknown so that neighbours sound apart. genders: "female" | "male" | "unknown" per voice.
     function castVoices(L, main, second, genders) {
@@ -393,7 +415,7 @@
         };
         const out = { S1: m ? m.id : main };
         const used = new Set([out.S1]);
-        for (let k = 1; k < 5; k++) {
+        for (let k = 1; k < PLAN.MAX_VOICES; k++) {
             const g = want(k);
             let pick = k === 1 && s2 && !used.has(s2.id) && (!g || s2.gender === g) ? s2 : null;
             if (!pick) {
@@ -418,7 +440,7 @@
             voiceModel: { ...PLAN.DEFAULT_VOICE_MODEL, sylPerSec: L.targetSps * 0.97, rateExp: 1, pauseFactor: 1.0 },
             voices: cast([]),
             castSig: "",
-            // the AI reading's genders for S1..S5 (DubEngine.refresh): a new cast only when they change
+            // the AI reading's genders for S1..S8 (DubEngine.refresh): a new cast only when they change
             setCast(genders) {
                 const sig = (genders || []).join(",");
                 if (sig === provider.castSig) return false;
@@ -751,7 +773,7 @@
             // who speaks when, from the source of every group, translated or not (2.4.8). With one
             // voice no turn at all: a reply inside a group is read on in the same breath, as before
             // (cut there, 45 saved videos: 53 more late starts, 2 s more silence, nothing gained)
-            // 2.5.2: up to five voices, and the AI reading of who speaks when there is one (setSpeakerHints)
+            // 2.5.2: a voice per speaker (eight from 2.5.3), and the AI reading of who speaks when there is one (setSpeakerHints)
             const speakerTurns = this.settings.secondVoice ? PLAN.speakerTurns(given, { ai: this.speakerHints || null }) : PLAN.NO_TURNS;
             this.turns = speakerTurns;
             if (this.provider && this.provider.setCast) this.provider.setCast(speakerTurns.genders);
@@ -1661,8 +1683,10 @@
                     reseeks: this.stats.corrections || 0, nudges: this.stats.nudges || 0, duckUps: this.stats.duckUps || 0,
                     // (2.4.6) how long Chrome took to start a voice (play() or a seek until it moved)
                     startUp: this.stats.startUp ? { n: this.stats.startUp.n, slow: this.stats.startUp.slow, maxMs: this.stats.startUp.maxMs, avgMs: Math.round(this.stats.startUp.sumMs / Math.max(1, this.stats.startUp.n)) } : null },
+                // who reads whom (2.5.3): the cast and each line's speaker
+                voices: this.provider.voices || null, speakers: this.turns ? { source: this.turns.source, voices: this.turns.voices, read: !!this.speakerHints } : null,
                 plans: this.plans.filter(p => p.end > t - 15 && p.start < t + 30).map(p => ({
-                    id: p.id, s: r2(p.start), e: r2(p.end), cont: !!p.continuesNext, syl: p.phrases.reduce((a, ph) => a + ph.syl, 0),
+                    id: p.id, s: r2(p.start), e: r2(p.end), cont: !!p.continuesNext, sp: p.speaker, syl: p.phrases.reduce((a, ph) => a + ph.syl, 0),
                     st: this.rendered.has(p.id) ? "ok" : this.pending.has(p.id) ? "tao" : (this.failed.get(p.id) || 0) >= 2 ? "loi" : "chua",
                     dur: this.rendered.has(p.id) ? r2(this.rendered.get(p.id).duration) : null
                 })),
@@ -2353,8 +2377,8 @@
                 }
             }
             const keys = new Set();
-            // every voice the video is read in, not only each line's own (2.5.2: up to five, and an AI
-            // reading that came later may have moved a line to another one)
+            // every voice the video is read in, not only each line's own (up to eight from 2.5.3, and an
+            // AI reading that came later may have moved a line to another one)
             const n = this.settings.secondVoice && this.turns ? this.turns.voices : 1;
             const speakers = Array.from({ length: n }, (_, k) => "S" + (k + 1));
             for (const p of plans) {
