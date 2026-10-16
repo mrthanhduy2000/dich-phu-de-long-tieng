@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "Vietnamese Subtitle Translator (Coursera + YouTube)",
     "description": "Dịch phụ đề Coursera, YouTube và các trang video khác sang tiếng Việt với Gemini AI và Lồng tiếng",
-    "version": "2.5.6",
+    "version": "2.5.7",
     "icons": {
         "16": "icons/icon-16.png",
         "32": "icons/icon-32.png",
@@ -46,6 +46,7 @@
                 "vi-segmenter.js",
                 "subtitle-style.js",
                 "player-ui.js",
+                "shortcuts.js",
                 "transcript.js",
                 "context-engine.js",
                 "vi-quality.js",
@@ -81,25 +82,5 @@
     "options_ui": {
         "page": "options.html",
         "open_in_tab": true
-    },
-    "commands": {
-        "bat-tat-phu-de": {
-            "suggested_key": {
-                "default": "Alt+S"
-            },
-            "description": "Bật/tắt phụ đề tiếng Việt"
-        },
-        "bat-tat-long-tieng": {
-            "suggested_key": {
-                "default": "Alt+D"
-            },
-            "description": "Bật/tắt lồng tiếng Việt"
-        },
-        "_execute_action": {
-            "suggested_key": {
-                "default": "Alt+Shift+V"
-            },
-            "description": "Mở bảng điều khiển tiện ích"
-        }
     }
 }

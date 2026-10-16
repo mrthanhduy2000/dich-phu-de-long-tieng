@@ -4,6 +4,16 @@
 (function (root) {
     const HISTORY = [
         {
+            v: "2.5.7", luc: "16/10/2026", ten: "Phím tắt tự đặt cho Windows và Mac",
+            y: [
+                "Phím tắt không còn đặt sẵn (trước đây là Alt+S, Alt+D, Alt+Shift+V). Vào Cài đặt > Dịch & AI > Phím tắt, bấm \"Tùy chỉnh\" ở việc muốn dùng rồi nhấn tổ hợp phím: bật/tắt phụ đề tiếng Việt, bật/tắt lồng tiếng Việt, mở bảng điều khiển trên video. Bấm \"Xóa\" để bỏ một phím.",
+                "Trên Mac phím hiện theo ký hiệu của Mac (⌘ Command, ⌥ Option, ⇧ Shift, ⌃ Control, ví dụ ⌥S); trên Windows hiện Ctrl, Alt, Shift (ví dụ Alt+S). Phím được nhận theo vị trí trên bàn phím nên Option trên Mac và bộ gõ tiếng Việt không làm sai phím.",
+                "Tổ hợp bị từ chối kèm lý do: phím đơn không giữ Ctrl, Alt, ⌘ hay ⌃ (sẽ trùng phím tắt của YouTube và khi gõ chữ), phím của trình duyệt như ⌘W, Ctrl+T, và tổ hợp đã dùng cho việc khác. Phím F1 đến F12 dùng một mình được.",
+                "Phím mới có tác dụng ngay trên tab video đang mở, không cần tải lại trang. Phím tắt chạy khi đang xem YouTube hoặc Coursera; ở trang video khác thì chạy sau khi đã bấm Dịch trong cửa sổ tiện ích. Gõ chữ trong ô tìm kiếm hay ô bình luận không kích hoạt phím tắt.",
+                "Cửa sổ tiện ích và bảng điều khiển trên YouTube hiện đúng phím bạn đã đặt; chưa đặt thì có nút \"Đặt phím tắt\" mở Cài đặt."
+            ]
+        },
+        {
             v: "2.5.6", luc: "16/10/2026", ten: "Chi phí đúng ngày, video tốn nhiều nhất theo tuần, tháng, quý, năm",
             y: [
                 "Sửa lỗi lệch ngày ở bảng chi phí: thẻ \"Hôm nay (16/10)\" ghi 790 lượt nhưng bảng 7 ngày lại xếp đúng 790 lượt đó vào ngày 15/10. Bảng trước đây chia ngày theo giờ của Google (giờ Thái Bình Dương, chậm hơn Việt Nam 14 đến 15 tiếng). Nay bảng 7 ngày và thẻ tháng dùng ngày theo giờ máy, khớp với thẻ Hôm nay. Số cũ được chuyển sang một lần: hôm nay lấy đúng số của thẻ Hôm nay, phần buổi sáng không bị tính thêm vào hôm qua.",

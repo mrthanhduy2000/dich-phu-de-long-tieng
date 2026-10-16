@@ -223,6 +223,34 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (costEl) costEl.addEventListener("click", () => openOptionsPageSafely());
 
+    // The viewer's own shortcuts (shortcuts.js), or a pointer to where they are set: none exists
+    // out of the box
+    const hintEl = document.getElementById("shortcutHint");
+    const SC = window.CST_SHORTCUTS;
+    if (hintEl && SC) {
+        let map = {};
+        try { map = SC.clean((await chrome.storage.sync.get({ [SC.KEY]: {} }))[SC.KEY]); } catch (e) { /* ngoài tiện ích */ }
+        const names = { "bat-tat-phu-de": "phụ đề", "bat-tat-long-tieng": "lồng tiếng", "mo-bang-dieu-khien": "bảng điều khiển" };
+        const set = SC.ACTIONS.filter(a => map[a.id]);
+        hintEl.textContent = "";
+        if (set.length) {
+            hintEl.append("Phím tắt: ");
+            set.forEach((a, i) => {
+                if (i) hintEl.append(" · ");
+                const k = document.createElement("kbd");
+                k.textContent = SC.format(map[a.id]);
+                hintEl.append(k, " " + names[a.id]);
+            });
+        } else {
+            const link = document.createElement("button");
+            link.type = "button";
+            link.className = "link-btn";
+            link.textContent = "Đặt phím tắt";
+            link.addEventListener("click", () => openOptionsPageSafely());
+            hintEl.append("Chưa có phím tắt. ", link);
+        }
+    }
+
     const forgetBtn = document.getElementById("forgetAudio");
     if (forgetBtn) forgetBtn.addEventListener("click", async () => {
         try {
@@ -261,7 +289,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             // Any http(s) page: clicking here grants activeTab, which is what lets the scripts be
-            // injected into a site the manifest does not list (see injectGenericPage in background.js)
+            // injected into a site the manifest does not list (docs/SUBTITLE.md, generic video pages)
             if (!tab || !/^https?:/.test(tab.url || "")) {
                 showStatus("Hãy mở một trang có video (Coursera, YouTube hoặc trang video khác) trước khi dịch.", "error");
                 return;

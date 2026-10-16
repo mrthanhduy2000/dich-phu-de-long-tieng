@@ -1937,38 +1937,6 @@ function pageKind(url) {
     } catch (e) { /* bỏ qua */ }
     return "";
 }
-// Phím tắt (Alt+S phụ đề, Alt+D lồng tiếng; đổi được ở chrome://extensions/shortcuts).
-// Chỉ chuyển tiếp cho tab đang xem; không cần thêm quyền nào.
-if (chrome.commands && chrome.commands.onCommand) {
-    chrome.commands.onCommand.addListener(async (command, tab) => {
-        try {
-            const t = tab || (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
-            if (!t || t.id == null) return;
-            try {
-                await chrome.tabs.sendMessage(t.id, { method: "phimTat", command });
-            } catch (e) {
-                // No content script: any other video site. The shortcut grants activeTab, so the
-                // scripts can be injected now and the command delivered to them.
-                if (!(await injectGenericPage(t))) return;
-                await chrome.tabs.sendMessage(t.id, { method: "phimTat", command });
-            }
-        } catch (e) { /* trang không cho chèn mã (chrome://, cửa hàng tiện ích): bỏ qua */ }
-    });
-}
-
-// Pages other than YouTube / Coursera get the ISOLATED content-script group on demand only, when
-// the viewer clicks Translate in the popup or presses a shortcut (both grant activeTab). No
-// broad host permission is requested. Already injected: the page answers the probe, nothing runs.
-async function injectGenericPage(tab) {
-    if (!tab || tab.id == null || !/^https?:/.test(tab.url || "") || !chrome.scripting) return false;
-    const [probe] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => !!(window.CST_UI && window.CST_STYLE) });
-    if (probe && probe.result) return true;
-    const group = (chrome.runtime.getManifest().content_scripts || []).find(g => g.world !== "MAIN" && (g.js || []).includes("content.js"));
-    if (!group) return false;
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: group.js });
-    return true;
-}
-
 async function reinjectOpenTabs() {
     if (!chrome.scripting || !chrome.tabs || !chrome.tabs.query) return 0;
     const groups = (chrome.runtime.getManifest().content_scripts || []);

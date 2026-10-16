@@ -1246,6 +1246,102 @@ document.addEventListener("DOMContentLoaded", async () => {
         historySummary.textContent = `${ds.length} bản, từ bản đầu tiên tới v${ds[0].v}. Bấm vào một bản để xem đã sửa gì; bản có số đo thật kèm bảng so sánh trước và sau.`;
     }
 
+    // ---- Shortcuts (shortcuts.js): none set out of the box; "Tùy chỉnh" records the next combination ----
+    const SC = window.CST_SHORTCUTS;
+    const scList = document.getElementById("shortcutList");
+    const scStatus = document.getElementById("shortcutStatus");
+    if (SC && scList) {
+        const mac = SC.isMac();
+        let scMap = {};
+        let recording = null;                // { action, chip, btn }
+        const lowerFirst = t => t.charAt(0).toLowerCase() + t.slice(1);
+        const say = (msg, warn) => { if (scStatus) { scStatus.textContent = msg; scStatus.style.color = warn ? "var(--primary)" : ""; } };
+        const desc = document.getElementById("shortcutDesc");
+        if (desc) desc.textContent = mac
+            ? "Chưa có phím nào được đặt sẵn. Bấm \"Tùy chỉnh\" rồi nhấn tổ hợp phím bạn muốn, có giữ ⌘ Command, ⌥ Option hoặc ⌃ Control. Dùng được khi đang xem YouTube hoặc Coursera."
+            : "Chưa có phím nào được đặt sẵn. Bấm \"Tùy chỉnh\" rồi nhấn tổ hợp phím bạn muốn, có giữ Ctrl hoặc Alt. Dùng được khi đang xem YouTube hoặc Coursera.";
+        const save = async map => {
+            scMap = SC.clean(map);
+            try { await chrome.storage.sync.set({ [SC.KEY]: scMap }); } catch (e) { say(`⚠ Chưa lưu được: ${e.message}`, true); }
+            renderShortcuts();
+        };
+        function stopRecording() {
+            if (!recording) return;
+            window.removeEventListener("keydown", onRecordKey, true);
+            recording = null;
+            renderShortcuts();
+        }
+        function onRecordKey(e) {
+            if (!recording) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.code === "Escape" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) { say("Đã hủy, giữ phím cũ."); stopRecording(); return; }
+            const combo = SC.fromEvent(e);
+            if (!combo) {
+                // only modifiers so far: show them while the viewer looks for the key
+                const held = SC.format({ code: "-", ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey }, mac).replace(/\+?-$/, "");
+                recording.chip.textContent = held ? held + (mac ? "…" : "+…") : "Nhấn tổ hợp phím…";
+                return;
+            }
+            const why = SC.problem(combo, scMap, recording.action, mac);
+            if (why) { say(`⚠ ${why}`, true); return; }
+            const action = recording.action;
+            window.removeEventListener("keydown", onRecordKey, true);
+            recording = null;
+            say(`✓ Đã đặt ${SC.format(combo, mac)} cho "${lowerFirst(SC.ACTIONS.find(a => a.id === action).label)}".`);
+            save({ ...scMap, [action]: combo });
+        }
+        function renderShortcuts() {
+            scList.textContent = "";
+            for (const a of SC.ACTIONS) {
+                const row = document.createElement("div");
+                row.className = "sc-row";
+                const label = document.createElement("span");
+                label.className = "sc-label";
+                label.textContent = a.label;
+                const chip = document.createElement("span");
+                const isRec = recording && recording.action === a.id;
+                chip.className = "sc-keys" + (isRec ? " recording" : scMap[a.id] ? "" : " empty");
+                chip.textContent = isRec ? "Nhấn tổ hợp phím…" : scMap[a.id] ? SC.format(scMap[a.id], mac) : "Chưa đặt";
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "btn btn-secondary";
+                btn.textContent = isRec ? "Hủy" : "Tùy chỉnh";
+                btn.addEventListener("click", () => {
+                    if (isRec) { say("Đã hủy, giữ phím cũ."); stopRecording(); return; }
+                    if (recording) stopRecording();
+                    recording = { action: a.id, chip, btn };
+                    say(mac ? "Nhấn tổ hợp phím, ví dụ ⌥S hoặc ⌃⇧D. Esc để hủy." : "Nhấn tổ hợp phím, ví dụ Alt+S hoặc Ctrl+Shift+D. Esc để hủy.");
+                    window.addEventListener("keydown", onRecordKey, true);
+                    renderShortcuts();
+                });
+                row.appendChild(label);
+                row.appendChild(chip);
+                row.appendChild(btn);
+                {
+                    // always there, hidden when there is nothing to clear, so the columns line up
+                    const del = document.createElement("button");
+                    if (!scMap[a.id] || isRec) del.style.visibility = "hidden";
+                    del.type = "button";
+                    del.className = "btn btn-secondary";
+                    del.textContent = "Xóa";
+                    del.title = "Bỏ phím tắt này";
+                    del.addEventListener("click", () => {
+                        const next = { ...scMap };
+                        delete next[a.id];
+                        say(`Đã bỏ phím tắt "${lowerFirst(a.label)}".`);
+                        save(next);
+                    });
+                    row.appendChild(del);
+                }
+                scList.appendChild(row);
+            }
+        }
+        renderShortcuts();
+        Promise.resolve().then(() => chrome.storage.sync.get({ [SC.KEY]: {} }))
+            .then(r => { scMap = SC.clean(r && r[SC.KEY]); renderShortcuts(); }, () => {});
+    }
+
     // ---- Giao diện Sáng / Tối / Theo máy ----
     const themeBtns = [...document.querySelectorAll(".theme-btn")];
     function veTheme() {

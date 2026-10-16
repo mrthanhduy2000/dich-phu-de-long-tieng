@@ -798,6 +798,16 @@
         .card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
         .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px 20px; }
         .stat-label { font-size: 13px; font-weight: 500; color: var(--text-main); margin-bottom: 2px; }
+        .sc-list { display: flex; flex-direction: column; }
+        .sc-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border); }
+        .sc-row:first-child { border-top: none; padding-top: 2px; }
+        .sc-label { flex: 1; font-size: 14px; color: var(--text-main); }
+        .sc-keys { min-width: 96px; text-align: center; font-size: 13px; font-weight: 600; letter-spacing: .3px; color: var(--text-main);
+            padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-soft); font-variant-numeric: tabular-nums; }
+        .sc-keys.empty { color: var(--text-sub); font-weight: 400; border-style: dashed; background: transparent; }
+        .sc-keys.recording { color: var(--primary); border-color: var(--primary); border-style: solid; }
+        .sc-row .btn { padding: 7px 12px; font-size: 13px; }
+        @media (max-width: 768px) { .sc-row { flex-wrap: wrap; } .sc-label { flex-basis: 100%; } }
         .shortcuts { font-size: 12px; color: var(--text-sub); margin-top: 12px; line-height: 1.8; }
         .shortcuts kbd { font-family: var(--font-sans); font-size: 11px; padding: 1px 6px; border: 1px solid var(--border);
             border-bottom-width: 2px; border-radius: 5px; background: var(--bg-soft); color: var(--text-main); }
@@ -884,7 +894,7 @@
                 <button type="button" class="theme-btn" data-theme-set="dark" title="Luôn dùng giao diện tối">Tối</button>
                 <button type="button" class="theme-btn" data-theme-set="auto" title="Theo cài đặt sáng/tối của máy">Theo máy</button>
             </div>
-            <span class="header-badge" title="Cập nhật lúc 16:21 16/10/2026">Phiên bản v2.5.6 · cập nhật 16:21 16/10/2026</span>
+            <span class="header-badge" title="Cập nhật lúc 17:12 16/10/2026">Phiên bản v2.5.7 · cập nhật 17:12 16/10/2026</span>
         </div>
     </header>
 
@@ -911,7 +921,7 @@
                 <ol class="welcome-steps">
                     <li><b>Dán khóa Gemini</b> vào ô "Gemini API Key" ngay bên dưới để dịch theo ngữ cảnh, tự nhiên hơn. Khóa miễn phí, lấy tại <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>. Chưa có khóa vẫn dịch được bằng Google Dịch.</li>
                     <li><b>Giọng đọc VieNeu:</b> <span id="welcomeVoice">đang kiểm tra…</span></li>
-                    <li><b>Ghim tiện ích</b> lên thanh công cụ (biểu tượng mảnh ghép, chọn ghim), rồi mở một video YouTube và bấm nút phụ đề Việt trên thanh điều khiển của trình phát. Phím tắt: <b>Alt+S</b> bật phụ đề, <b>Alt+D</b> bật lồng tiếng.</li>
+                    <li><b>Ghim tiện ích</b> lên thanh công cụ (biểu tượng mảnh ghép, chọn ghim), rồi mở một video YouTube và bấm nút phụ đề Việt trên thanh điều khiển của trình phát. Muốn dùng phím tắt thì tự đặt ở mục Dịch &amp; AI, thẻ Phím tắt.</li>
                 </ol>
                 <div class="welcome-actions">
                     <button type="button" class="btn btn-primary" id="welcomeDone">Đã hiểu</button>
@@ -1221,7 +1231,15 @@
                         <span class="toggle-text"><span class="toggle-title">Dùng phụ đề tiếng Việt có sẵn</span><span class="toggle-hint">Tắt nếu phụ đề Việt của video là bản dịch máy kém.</span></span>
                         <input type="checkbox" id="skipSameLang" checked>
                     </label>
-                    <p class="shortcuts">Phím tắt: <kbd>Alt+S</kbd> phụ đề · <kbd>Alt+D</kbd> lồng tiếng · <kbd>Alt+Shift+V</kbd> bảng điều khiển. Đổi tại chrome://extensions/shortcuts.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Phím tắt</h2>
+                        <p class="card-desc" id="shortcutDesc">Chưa có phím nào được đặt sẵn. Bấm "Tùy chỉnh" rồi nhấn tổ hợp phím bạn muốn.</p>
+                    </div>
+                    <div id="shortcutList" class="sc-list"></div>
+                    <div class="field-hint" id="shortcutStatus" role="status"></div>
                 </div>
 
                 <div class="card">
@@ -1425,6 +1443,7 @@
     <script src="vi-segmenter.js"></script>
     <script src="subtitle-style.js"></script>
     <script src="cost-policy.js"></script>
+    <script src="shortcuts.js"></script>
     <script src="dub-planner.js"></script>
     <script src="dub-prosody.js"></script>
     <script src="dub-speech.js"></script>

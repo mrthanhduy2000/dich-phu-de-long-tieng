@@ -1480,11 +1480,24 @@ function ytCapNhatTrangThaiNutThanhDieuKhien() {
         busy: !!yt.busy,
         on: !!(yt.active || isDub),
         title: yt.busy ? "Đang dịch phụ đề…"
-            : yt.active && isDub ? "Đang bật phụ đề Việt và lồng tiếng (Alt+S, Alt+D)"
-                : yt.active ? "Đang bật phụ đề tiếng Việt (Alt+S)"
-                    : isDub ? "Đang lồng tiếng Việt (Alt+D)"
-                        : "Dịch phụ đề & lồng tiếng tiếng Việt (Alt+S, Alt+D)"
+            : yt.active && isDub ? "Đang bật phụ đề Việt và lồng tiếng" + ytPhimTatGoi("bat-tat-phu-de", "bat-tat-long-tieng")
+                : yt.active ? "Đang bật phụ đề tiếng Việt" + ytPhimTatGoi("bat-tat-phu-de")
+                    : isDub ? "Đang lồng tiếng Việt" + ytPhimTatGoi("bat-tat-long-tieng")
+                        : "Dịch phụ đề & lồng tiếng tiếng Việt" + ytPhimTatGoi("bat-tat-phu-de", "bat-tat-long-tieng")
     });
+}
+
+// The viewer's own shortcut for an action (⌥S on a Mac, Alt+S on Windows), "" when none is set
+// (shortcuts.js; content.js keeps the stored ones in cstShortcuts)
+function ytPhimTat(action) {
+    const K = window.CST_SHORTCUTS;
+    const map = typeof cstShortcuts === "object" && cstShortcuts ? cstShortcuts : {};
+    return K && map[action] ? K.format(map[action]) : "";
+}
+// " (⌥S, ⌥D)" after a tooltip, or nothing when none of them is set
+function ytPhimTatGoi(...actions) {
+    const keys = actions.map(ytPhimTat).filter(Boolean);
+    return keys.length ? ` (${keys.join(", ")})` : "";
 }
 
 // The control-bar button shows the state (busy / on); the status argument is kept for the callers
@@ -1514,7 +1527,7 @@ function ytTaoNutThanhDieuKhien() {
     }
     if (existing) existing.remove();
 
-    const nhan = "Dịch phụ đề & lồng tiếng tiếng Việt (Alt+S, Alt+D)";
+    const nhan = "Dịch phụ đề & lồng tiếng tiếng Việt" + ytPhimTatGoi("bat-tat-phu-de", "bat-tat-long-tieng");
     const btn = CST_UI_KIT().taoNut(document, {
         size: 30,
         title: nhan,
@@ -1615,7 +1628,7 @@ function ytMoMenuNhanh(player, btn) {
     head.appendChild(x);
     menu.appendChild(head);
 
-    const rowSub = congTac("Phụ đề tiếng Việt", "Alt+S", async row => {
+    const rowSub = congTac("Phụ đề tiếng Việt", ytPhimTat("bat-tat-phu-de"), async row => {
         if (yt.active) { ytTatDich(); capNhat(); return; }
         row.setAttribute("aria-disabled", "true");
         capNhat();
@@ -1624,7 +1637,7 @@ function ytMoMenuNhanh(player, btn) {
         row.removeAttribute("aria-disabled");
         capNhat();
     });
-    const rowDub = congTac("Lồng tiếng Việt", "Alt+D", async row => {
+    const rowDub = congTac("Lồng tiếng Việt", ytPhimTat("bat-tat-long-tieng"), async row => {
         row.setAttribute("aria-disabled", "true");
         capNhat();
         await ytChuyenLongTieng(player);

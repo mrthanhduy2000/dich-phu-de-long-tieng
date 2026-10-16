@@ -2353,10 +2353,24 @@ async function courseraAutoTranslateNow() {
     return decision;
 }
 
-// Phím tắt: bật/tắt phụ đề (Alt+S) và lồng tiếng (Alt+D) ngay trên trang đang xem,
-// luôn báo lại bằng một thẻ nhỏ để người dùng biết phím vừa ăn
+// Shortcuts the viewer set in Settings (shortcuts.js; none out of the box): turn the subtitles or
+// the voice on and off, or open the quick menu, on the page being watched. Always answered with a
+// small toast so the viewer knows the key was taken.
 async function xuLyPhimTat(command, site) {
     const dubApi = window.CST_DUB;
+    if (command === "mo-bang-dieu-khien") {
+        if (site === "youtube" && typeof ytMoMenuNhanh === "function") {
+            const player = document.querySelector("#movie_player") || document.querySelector(".html5-video-player");
+            const btn = typeof YT_BTN === "string" ? document.querySelector(YT_BTN) : null;
+            if (!player || !btn) { cstToast("Hãy mở một video YouTube trước."); return { ok: false }; }
+            ytMoMenuNhanh(player, btn);
+            return { ok: true };
+        }
+        const btn = document.querySelector(CS_BTN);
+        if (!btn) { cstToast("Trang này chưa có bảng điều khiển của tiện ích."); return { ok: false }; }
+        csOpenMenu(btn);
+        return { ok: true };
+    }
     if (site === "youtube") {
         if (typeof yt === "undefined" || !yt.videoEl) { cstToast("Hãy mở một video YouTube trước."); return { ok: false }; }
         if (command === "bat-tat-phu-de") {
@@ -2395,6 +2409,32 @@ async function xuLyPhimTat(command, site) {
     }
     return { ok: false };
 }
+
+// The keys, read on the page itself (the browser's own extension shortcuts cannot be set from
+// Settings). Capture phase, so YouTube's player does not act on the same key first.
+let cstShortcuts = {};
+(function listenShortcuts() {
+    const K = window.CST_SHORTCUTS;
+    if (!K) return;
+    try {
+        Promise.resolve(chrome.storage.sync.get({ [K.KEY]: {} })).then(r => { cstShortcuts = K.clean(r && r[K.KEY]); }, () => {});
+    } catch (e) { /* ngoài tiện ích */ }
+    // a key set in Settings works here at once, without reloading the video's tab
+    try {
+        chrome.storage.onChanged.addListener((changes, area) => {
+            if (area === "sync" && changes[K.KEY]) cstShortcuts = K.clean(changes[K.KEY].newValue);
+        });
+    } catch (e) { /* ngoài tiện ích */ }
+    document.addEventListener("keydown", e => {
+        // a copy left behind by an extension reload does not answer (DANGER.md, reload guards)
+        if (state.dead || (typeof yt !== "undefined" && yt.dead) || e.repeat) return;
+        const action = K.actionFor(e, cstShortcuts);
+        if (!action) return;
+        e.preventDefault();
+        e.stopPropagation();
+        xuLyPhimTat(action, getCurrentSite()).catch(() => {});
+    }, true);
+})();
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const site = getCurrentSite();
