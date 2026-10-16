@@ -257,13 +257,13 @@
     // costExtraPct: tax or bank fee the viewer sees on the real bill, added to every amount shown.
     // Display only: budgets and the ledger stay in plain USD.
     const FX = { usdVnd: 26020, asOf: "2026-09-29", min: 5000, max: 100000 };
-    const CURRENCIES = ["vnd", "usd", "both"];
-    const MONEY_DEFAULTS = { costCurrency: "both", costUsdVnd: FX.usdVnd, costExtraPct: 0 };
+    // Every amount shows đồng with USD beside it (2.5.6: the VND / USD / both choice is gone, a
+    // stored costCurrency is ignored)
+    const MONEY_DEFAULTS = { costUsdVnd: FX.usdVnd, costExtraPct: 0 };
     function moneyOpts(cfg = {}) {
         const rate = Number(cfg.costUsdVnd);
         const extra = Number(cfg.costExtraPct);
         return {
-            currency: CURRENCIES.includes(cfg.costCurrency) ? cfg.costCurrency : MONEY_DEFAULTS.costCurrency,
             rate: rate >= FX.min && rate <= FX.max ? rate : FX.usdVnd,
             extraPct: extra > 0 && extra <= 50 ? extra : 0
         };
@@ -282,12 +282,12 @@
         const a = Math.abs(vnd || 0);
         return `${viNumber(vnd || 0, a === 0 || a >= 100 ? 0 : 1)} đ`;
     }
-    // { usd, vnd, text }: text follows the chosen currency; "both" puts đồng first, USD in brackets
+    // { usd, vnd, text }: text puts đồng first, USD in brackets
     function money(usd, opts) {
         const o = opts && opts.rate ? opts : moneyOpts(opts);
         const billed = (usd || 0) * (1 + o.extraPct / 100);
         const u = formatUsd(billed), v = formatVnd(billed * o.rate);
-        return { usd: u, vnd: v, text: o.currency === "usd" ? u : o.currency === "vnd" ? v : `${v} (${u})` };
+        return { usd: u, vnd: v, text: `${v} (${u})` };
     }
 
     // Chế độ sử dụng (tên dễ hiểu cho người dùng)
@@ -389,7 +389,7 @@
         TRANSLATION_MODELS, TTS_MODELS, LOCAL_TTS, DEFAULT_MODELS, RETIRED_MODELS, MODELS_VERSION, AUTO, AUTO_CANDIDATES, AUDIO_TOKENS_PER_SEC,
         findModel, modelLabel, costRank, thinkingLevelFor, modelChain, migrateModelSettings, afterShutdown, liveModel,
         estimateTextCost, estimateTtsCost, BUDGET_DEFAULTS, priceOf, PRICE_UNKNOWN, PRICES_CHECKED, PRICING_URL,
-        FX, CURRENCIES, MONEY_DEFAULTS, moneyOpts, formatUsd, formatVnd, money,
+        FX, MONEY_DEFAULTS, moneyOpts, formatUsd, formatVnd, money,
         MODES, getMode, routeDifficulty
     };
     if (typeof module === "object" && module.exports) module.exports = api;

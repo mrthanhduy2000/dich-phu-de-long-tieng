@@ -188,7 +188,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         costEl.classList.toggle("over", b.level === "over");
         costEl.hidden = false;
     }
-    // The currency chosen in Settings (VND / USD / both), shown by cost-policy.js
+    // Đồng with USD in brackets, at the rate set in Settings (cost-policy.js)
     const COST = window.CST_COST;
     const esc = x => String(x).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
     let money = x => `${x.toFixed(3).replace(".", ",")} USD`;

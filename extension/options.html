@@ -472,17 +472,25 @@
             transform: scale(1.12);
         }
 
+        /* the "any colour" swatch: a colour wheel with a plus, so it never reads as a second white */
         .color-dot-custom {
             width: 28px;
             height: 28px;
             border-radius: 50%;
             overflow: hidden;
-            border: 1px solid #cbd5e1;
+            border: 2px solid transparent;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
+            position: relative;
+            background: conic-gradient(#ff5252, #ffeb3b, #69f0ae, #00e5ff, #7c4dff, #ff5252);
+            transition: transform 0.12s, border-color 0.12s;
         }
+        .color-dot-custom::after { content: "+"; position: absolute; color: #fff; font-size: 16px; font-weight: 700;
+            line-height: 1; text-shadow: 0 0 3px rgba(0,0,0,.6); pointer-events: none; }
+        .color-dot-custom:hover { transform: scale(1.12); }
+        .color-dot-custom.active { border-color: var(--primary); transform: scale(1.12); }
 
         .color-dot-custom input[type="color"] {
             opacity: 0;
@@ -687,9 +695,17 @@
         }
         .form-slider, input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
         .is-off { display: none !important; }
-        .ver-item { border-top: 1px solid var(--border); padding: 16px 0; }
-        .ver-item:first-child { border-top: none; padding-top: 4px; }
-        .ver-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+        .ver-item { border-top: 1px solid var(--border); padding: 12px 0; }
+        .ver-item:first-child, .ver-count + .ver-item { border-top: none; padding-top: 4px; }
+        .ver-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; cursor: pointer; list-style: none; }
+        .ver-head::-webkit-details-marker { display: none; }
+        .ver-head::before { content: ""; align-self: center; width: 6px; height: 6px; border-right: 1.5px solid var(--text-sub);
+            border-bottom: 1.5px solid var(--text-sub); transform: rotate(-45deg); transition: transform .15s ease; flex-shrink: 0; }
+        .ver-item[open] > .ver-head::before { transform: rotate(45deg); }
+        .ver-head:hover .ver-name { color: var(--primary); }
+        .ver-badge { font-size: 11px; font-weight: 600; color: var(--success); border: 1px solid currentColor; border-radius: 999px; padding: 1px 8px; }
+        .ver-count { font-size: 12.5px; color: var(--text-sub); margin: 0 0 6px; }
+        .ver-more { margin-top: 12px; }
         .ver-num { font-family: var(--font-sans); font-size: 12px; font-weight: 700; color: var(--primary);
             background: var(--primary-light); border: 1px solid var(--primary-border); border-radius: 999px; padding: 2px 10px; }
         .ver-name { font-family: var(--font-serif); font-size: 15px; color: var(--text-main); }
@@ -707,8 +723,6 @@
         .cost-scroll .ver-table { margin-top: 6px; min-width: 460px; }
         .ver-table td.num, .ver-table th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
         .cost-cap { font-size: 12.5px; color: var(--text-main); font-weight: 600; margin-top: 16px; }
-        .cost-currency { margin-bottom: 16px; max-width: 420px; }
-        .cost-currency .mode-btn { padding: 7px 12px; font-size: 13px; }
         .cost-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
         .cost-kpi { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; background: var(--bg-card); min-width: 0; }
         .cost-kpi-label { font-size: 12px; color: var(--text-sub); }
@@ -719,14 +733,6 @@
         .cost-meter.warn i, .cost-meter.over i { background: var(--primary); }
         .cost-money-sub { display: block; font-size: 11px; color: var(--text-sub); }
         .cost-section { grid-column: 1 / -1; font-size: 13px; font-weight: 600; color: var(--text-main); margin-top: 8px; padding-top: 14px; border-top: 1px solid var(--border); }
-        .ed-video-title { color: var(--text-main); text-decoration: none; }
-        .ed-video-title:hover { color: var(--primary); text-decoration: underline; }
-        .ed-line { display: grid; grid-template-columns: 52px 1fr auto; gap: 6px 12px; align-items: start; padding: 10px 0; border-top: 1px dashed var(--border); }
-        .ed-line:first-of-type { border-top: none; }
-        .ed-time { font-size: 12px; color: var(--text-sub); font-variant-numeric: tabular-nums; padding-top: 9px; }
-        .ed-machine { grid-column: 2 / 4; font-size: 12.5px; color: var(--text-sub); text-decoration: line-through; text-decoration-color: rgba(127,127,127,.5); }
-        .ed-actions { display: flex; gap: 8px; margin-top: 8px; }
-        .ed-small { padding: 6px 12px; font-size: 12.5px; }
         .preview-dub-badge { position: absolute; top: 46px; left: 14px; z-index: 3; padding: 4px 10px; border-radius: 4px;
             background: rgba(0,0,0,.65); color: #fff; font-family: var(--font-sans); font-size: 12px; letter-spacing: .2px; }
         .preview-dub-badge[hidden] { display: none; }
@@ -818,6 +824,12 @@
         details.more[open] > summary::before { transform: rotate(45deg); }
         details.more > summary:hover { color: var(--text-main); }
         details.more > .form-grid, details.more > .more-body { margin-top: 14px; }
+        #costTop { margin-bottom: 18px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+        .cost-period { max-width: 520px; margin-bottom: 12px; }
+        .cost-period .mode-btn { padding: 7px 10px; font-size: 13px; }
+        .cost-top-sum { font-size: 12.5px; color: var(--text-sub); margin: 8px 0 0; }
+        .cost-vid { color: var(--text-main); text-decoration: none; }
+        .cost-vid:hover { color: var(--primary); text-decoration: underline; }
         .more-body { display: flex; flex-direction: column; gap: 10px; }
         .more-body .form-label { margin-top: 6px; }
 
@@ -829,7 +841,6 @@
         #groupList .group-count { grid-column: 2; margin-left: 0; font-size: 11px; }
         textarea.glossary-box { min-height: 96px; }
         .cst-note { margin: 10px 0 2px; }
-        .cost-currency { max-width: 300px; }
         .bottom-bar { padding: 12px 24px; }
         .header-content { gap: 12px; }
         @media (max-width: 768px) {
@@ -873,7 +884,7 @@
                 <button type="button" class="theme-btn" data-theme-set="dark" title="Luôn dùng giao diện tối">Tối</button>
                 <button type="button" class="theme-btn" data-theme-set="auto" title="Theo cài đặt sáng/tối của máy">Theo máy</button>
             </div>
-            <span class="header-badge" title="Cập nhật lúc 10:48 16/10/2026">Phiên bản v2.5.5 · cập nhật 10:48 16/10/2026</span>
+            <span class="header-badge" title="Cập nhật lúc 16:21 16/10/2026">Phiên bản v2.5.6 · cập nhật 16:21 16/10/2026</span>
         </div>
     </header>
 
@@ -925,7 +936,7 @@
                             <div class="yt-mock-avatar">
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="white"><path d="M8 5v14l11-7z"/></svg>
                             </div>
-                            <span class="yt-mock-title">Bài giảng 3: Dữ liệu thay đổi cách ra quyết định</span>
+                            <span class="yt-mock-title">Một năm sống tối giản: điều tôi học được</span>
                         </div>
                         <span class="preview-tag">Xem trước</span>
                     </div>
@@ -1296,16 +1307,23 @@
                         <h2 class="card-title">Chi phí Gemini (ước tính)</h2>
                         <p class="card-desc">Đếm token Google tính tiền cho từng lượt, kể cả lượt hỏng. Hóa đơn thật xem ở Google AI Studio.</p>
                     </div>
-                    <div class="segmented-control cost-currency" role="group" aria-label="Đơn vị tiền hiển thị">
-                        <button type="button" class="mode-btn" data-currency="vnd">VNĐ</button>
-                        <button type="button" class="mode-btn" data-currency="usd">USD</button>
-                        <button type="button" class="mode-btn" data-currency="both">Cả hai</button>
-                    </div>
                     <div id="costKpis" class="cost-kpis"></div>
                     <div id="costMeter" class="cost-meter" hidden><i></i></div>
                     <div class="field-hint" id="costSummary" style="margin-top: 10px;">Đang đọc...</div>
                     <div id="costTables"></div>
-                    <div class="field-hint" id="costVideos" style="margin-top: 10px;"></div>
+                    <details class="more" id="costTop">
+                        <summary>Video tốn nhiều nhất</summary>
+                        <div class="more-body">
+                            <div class="segmented-control cost-period" role="group" aria-label="Khoảng thời gian">
+                                <button type="button" class="mode-btn" data-period="day">Hôm nay</button>
+                                <button type="button" class="mode-btn" data-period="week">Tuần này</button>
+                                <button type="button" class="mode-btn" data-period="month">Tháng này</button>
+                                <button type="button" class="mode-btn" data-period="quarter">Quý này</button>
+                                <button type="button" class="mode-btn" data-period="year">Năm nay</button>
+                            </div>
+                            <div id="costVideos"></div>
+                        </div>
+                    </details>
                     <div class="form-grid form-gap">
                         <div class="form-group">
                             <label class="form-label" for="budgetDailyUsd" id="budgetDailyLabel">Ngân sách mỗi ngày (USD)</label>
@@ -1376,17 +1394,6 @@
                     <div class="field-hint" id="backupStatus" role="status"></div>
                 </div>
 
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">Phụ đề đã sửa</h2>
-                        <p class="card-desc" id="editsSummary">Dòng bạn sửa tay trong Bản chép lời luôn thay bản dịch máy, và giọng Việt đọc đúng câu đã sửa.</p>
-                    </div>
-                    <div class="form-group">
-                        <input type="search" id="editsFilter" class="form-input" placeholder="Tìm trong các dòng đã sửa" aria-label="Tìm trong các dòng đã sửa">
-                    </div>
-                    <div id="editsList"></div>
-                    <p class="field-hint">Cách sửa: mở Bản chép lời trên video, rê chuột vào một dòng, bấm biểu tượng bút chì.</p>
-                </div>
             </div>
 
             <!-- PHIÊN BẢN -->
@@ -1423,7 +1430,6 @@
     <script src="dub-speech.js"></script>
     <script src="dub-audio.js"></script>
     <script src="dub-engine.js"></script>
-    <script src="subtitle-edits.js"></script>
     <script src="settings-backup.js"></script>
     <script src="options.js"></script>
 </body>

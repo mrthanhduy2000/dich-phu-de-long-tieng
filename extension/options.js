@@ -228,7 +228,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         previewBox.style.backgroundColor = S.backgroundColor(s);
         previewBox.style.borderRadius = `${s.borderRadius}px`;
         subBgOpacityVal.textContent = `${s.bgOpacity}%`;
-        if (fontColorCustom) fontColorCustom.style.background = s.fontColor;
+        markFontColor(s.fontColor);
     }
 
     // Populate inputs from currentStyle
@@ -259,12 +259,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (subBgOpacity) subBgOpacity.value = s.bgOpacity;
         if (subBorderRadius) subBorderRadius.value = s.borderRadius;
 
-        // Highlight active palette dot if matches
-        if (fontColorPalette) {
-            fontColorPalette.querySelectorAll(".color-dot").forEach(d => {
-                d.classList.toggle("active", d.dataset.color.toLowerCase() === String(s.fontColor).toLowerCase());
-            });
-        }
+        markFontColor(s.fontColor);
 
         refreshFontStatus();
         updatePreview();
@@ -300,12 +295,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     bind(subBgOpacity, "input", "bgOpacity", v => parseInt(v, 10));
     bind(subBorderRadius, "change", "borderRadius", v => parseInt(v, 10));
 
+    // The preset dot of this colour lights up; a colour of the viewer's own lights the wheel instead
+    function markFontColor(color) {
+        if (!fontColorPalette) return;
+        const c = String(color || "").toLowerCase();
+        let preset = false;
+        fontColorPalette.querySelectorAll(".color-dot").forEach(d => {
+            const on = d.dataset.color.toLowerCase() === c;
+            d.classList.toggle("active", on);
+            preset = preset || on;
+        });
+        // the wheel wears the viewer's own colour while it is the one in use
+        if (fontColorCustom) {
+            fontColorCustom.classList.toggle("active", !preset && !!c);
+            fontColorCustom.style.background = !preset && c ? c : "";
+        }
+    }
+
     if (subFontColorPicker) {
         subFontColorPicker.addEventListener("input", () => {
             currentStyle.fontColor = subFontColorPicker.value;
-            if (fontColorPalette) {
-                fontColorPalette.querySelectorAll(".color-dot").forEach(d => d.classList.remove("active"));
-            }
+            markFontColor(currentStyle.fontColor);
             updatePreview();
         });
     }
@@ -313,9 +323,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (fontColorPalette) {
         fontColorPalette.querySelectorAll(".color-dot").forEach(dot => {
             dot.addEventListener("click", () => {
-                fontColorPalette.querySelectorAll(".color-dot").forEach(d => d.classList.remove("active"));
-                dot.classList.add("active");
                 currentStyle.fontColor = dot.dataset.color;
+                markFontColor(currentStyle.fontColor);
                 if (subFontColorPicker) subFontColorPicker.value = dot.dataset.color;
                 updatePreview();
             });
@@ -385,47 +394,35 @@ document.addEventListener("DOMContentLoaded", async () => {
         { key: "daily", input: budgetDailyInput, label: "budgetDailyLabel", hint: "budgetDailyHint", name: "mỗi ngày", usdStep: "0.1" },
         { key: "video", input: budgetVideoInput, label: "budgetVideoLabel", hint: "budgetVideoHint", name: "mỗi video", usdStep: "0.05" }
     ];
-    const budgetInVnd = () => moneyO.currency === "vnd";
+    // Budgets are kept and typed in USD (what Google bills); the hint gives the đồng
     function budgetHint(f) {
         const v = budgetUsd[f.key];
         const el = byId(f.hint);
-        if (el) el.textContent = !v ? "Không giới hạn" : budgetInVnd() ? `Bằng ${COST.formatUsd(v)}` : moneyO.currency === "both" ? `Khoảng ${COST.formatVnd(v * moneyO.rate)}` : "";
+        if (el) el.textContent = !v ? "Không giới hạn" : `Khoảng ${COST.formatVnd(v * moneyO.rate)}`;
     }
     function renderMoneyControls() {
-        const vnd = budgetInVnd();
         for (const f of BUDGET_FIELDS) {
             if (!f.input) continue;
-            f.input.step = vnd ? "1000" : f.usdStep;
-            if (document.activeElement !== f.input) f.input.value = vnd ? Math.round(budgetUsd[f.key] * moneyO.rate) : +budgetUsd[f.key].toFixed(4);
+            f.input.step = f.usdStep;
+            if (document.activeElement !== f.input) f.input.value = +budgetUsd[f.key].toFixed(4);
             const label = byId(f.label);
-            if (label) label.textContent = `Ngân sách ${f.name} (${vnd ? "đồng" : "USD"})`;
+            if (label) label.textContent = `Ngân sách ${f.name} (USD)`;
             budgetHint(f);
         }
-        document.querySelectorAll(".cost-currency .mode-btn").forEach(b => {
-            const on = b.dataset.currency === moneyO.currency;
-            b.classList.toggle("active", on);
-            b.setAttribute("aria-pressed", String(on));
-        });
-        const rateGroup = byId("costRateGroup");
-        if (rateGroup) rateGroup.hidden = moneyO.currency === "usd";
         const rateHint = byId("costRateHint");
         if (rateHint) rateHint.textContent = `Tham khảo ngày ${COST.FX.asOf.split("-").reverse().join("/")}: ${COST.formatVnd(COST.FX.usdVnd)} (giá giữa thị trường). Thẻ ngân hàng thường tính theo giá bán ra, cao hơn một chút: nhập đúng tỷ giá trên sao kê để khớp số tiền đã trả.`;
     }
     for (const f of BUDGET_FIELDS) f.input && f.input.addEventListener("input", () => {
         const val = Math.max(0, Number(f.input.value) || 0);
-        budgetUsd[f.key] = budgetInVnd() ? Math.round(val / moneyO.rate * 1e6) / 1e6 : val;
+        budgetUsd[f.key] = val;
         budgetHint(f);
     });
     function moneyChanged() {
-        moneyO = COST.moneyOpts({ costCurrency: moneyO.currency, costUsdVnd: rateInput && rateInput.value, costExtraPct: extraInput && extraInput.value });
+        moneyO = COST.moneyOpts({ costUsdVnd: rateInput && rateInput.value, costExtraPct: extraInput && extraInput.value });
         renderMoneyControls();
         showCostStats(lastCost);
     }
     [rateInput, extraInput].forEach(el => el && el.addEventListener("input", moneyChanged));
-    document.querySelectorAll(".cost-currency .mode-btn").forEach(b => b.addEventListener("click", () => {
-        moneyO = { ...moneyO, currency: b.dataset.currency };
-        moneyChanged();
-    }));
     renderMoneyControls();
     const bgSend = msg => new Promise(resolve => {
         try { chrome.runtime.sendMessage(msg, r => resolve(chrome.runtime.lastError ? null : r)); } catch (e) { resolve(null); }
@@ -622,20 +619,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     const nameOf = id => (COST.findModel(id) || { label: id }).label;
     const mins = sec => `${((sec || 0) / 60).toFixed(1).replace(".", ",")} phút`;
     const ddmm = d => d.slice(8, 10) + "/" + d.slice(5, 7);
-    // Money in the chosen currency: text for sentences, cell for tables (both: đồng over USD)
+    // Money: text for sentences ("28.903 đ (1,11 USD)"), cell for tables (đồng over USD)
     const fm = x => COST.money(x, moneyO).text;
-    const cell = x => { const m = COST.money(x, moneyO); return moneyO.currency === "both" ? `${m.vnd}<span class="cost-money-sub">${m.usd}</span>` : m.text; };
+    const cell = x => { const m = COST.money(x, moneyO); return `${m.vnd}<span class="cost-money-sub">${m.usd}</span>`; };
     const table = (caption, head, rows) => `<div class="cost-cap">${caption}</div><div class="cost-scroll"><table class="ver-table">` +
         `<tr>${head.map((h, i) => `<th${i ? ' class="num"' : ""}>${h}</th>`).join("")}</tr>` +
         rows.map(r => `<tr>${r.map((c, i) => `<td${i ? ' class="num"' : ""}>${c}</td>`).join("")}</tr>`).join("") + "</table></div>";
     const kpi = (label, usd, sub) => {
         const m = usd == null ? null : COST.money(usd, moneyO);
-        const value = !m ? "Chưa đủ dữ liệu" : moneyO.currency === "usd" ? m.usd : m.vnd;
-        const second = m && moneyO.currency === "both" ? `<div class="cost-kpi-sub">${m.usd}</div>` : "";
+        const value = !m ? "Chưa đủ dữ liệu" : m.vnd;
+        const second = m ? `<div class="cost-kpi-sub">${m.usd}</div>` : "";
         return `<div class="cost-kpi"><div class="cost-kpi-label">${label}</div><div class="cost-kpi-value">${value}</div>${second}${sub ? `<div class="cost-kpi-sub">${sub}</div>` : ""}</div>`;
     };
-    // This month by Google's (Pacific) billing day, from the days the ledger has recorded. The
-    // projection is only an extrapolation of the average so far, shown from 3 days of records.
+    // This month by the machine's calendar, from the days the ledger has recorded. The projection is
+    // only an extrapolation of the average so far, shown from 3 days of records.
     function monthOf(history, today) {
         if (!today) return null;
         const month = today.slice(0, 7);
@@ -651,16 +648,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     let lastCost = null;
     async function showCostStats(res) {
         const r = res || await bgSend({ action: "costStats" });
-        const sumEl = byId("costSummary"), vidEl = byId("costVideos"), tabEl = byId("costTables"), kpiEl = byId("costKpis"), meter = byId("costMeter");
+        const sumEl = byId("costSummary"), tabEl = byId("costTables"), kpiEl = byId("costKpis"), meter = byId("costMeter");
         if (!sumEl) return;
         if (!r || !r.ok || !r.day || !r.budget) { sumEl.textContent = "Chưa đọc được (mở trang này từ trong tiện ích)."; return; }
         lastCost = r;
         const d = r.day, b = r.budget, m = r.model;
         const dayUsd = (d.trUsd || 0) + (d.ttsUsd || 0);
-        const mon = monthOf(r.history, r.pacificToday);
+        const mon = monthOf(r.history, r.today);
         if (kpiEl) kpiEl.innerHTML = [
             kpi(`Hôm nay (${ddmm(d.day)})`, dayUsd, `${d.trCalls || 0} lượt · ${toks((d.inTok || 0) + (d.outTok || 0))} token`),
-            mon ? kpi(`Tháng ${mon.month} theo ngày của Google`, mon.total, mon.first.endsWith("-01") ? "" : `ghi từ ${ddmm(mon.first)}`) : "",
+            mon ? kpi(`Tháng ${mon.month}`, mon.total, mon.first.endsWith("-01") ? "" : `ghi từ ${ddmm(mon.first)}`) : "",
             mon ? kpi("Dự kiến cả tháng", mon.projected, mon.projected == null ? "cần ít nhất 3 ngày số liệu" : `nếu dùng đều như ${mon.span} ngày qua`) : "",
             d.trCalls ? kpi("Trung bình mỗi lượt dịch", d.trUsd / d.trCalls, m ? esc(m.label) : "") : ""
         ].join("");
@@ -721,21 +718,69 @@ document.addEventListener("DOMContentLoaded", async () => {
             html += table("Hôm nay theo loại token", ["Loại", "Token", "Chi phí"], rows);
         }
         const days = Object.keys(r.history || {}).sort().reverse().slice(0, 7);
-        if (days.length) html += table("7 ngày gần nhất theo ngày tính tiền của Google (giờ Thái Bình Dương, như trang Usage của AI Studio)",
+        if (days.length) html += table("7 ngày gần nhất",
             ["Ngày", "Lượt", "Token vào", "Token ra", "Chi phí"],
-            days.map(k => { const h = r.history[k]; return [k === r.pacificToday ? `${ddmm(k)} (hôm nay)` : ddmm(k), h.trCalls || 0, toks(h.inTok), toks(h.outTok), cell((h.trUsd || 0) + (h.ttsUsd || 0))]; }));
-        if (html) html += `<div class="field-hint" style="margin-top: 6px;">Đối chiếu: Google AI Studio, mục Usage hoặc Billing, chọn đúng ngày. Lệch nhỏ là bình thường (lượt quá giờ được ước lượng). Lệch nhiều thì API key này có thể đang được dùng ở nơi khác.</div>`;
+            days.map(k => { const h = r.history[k]; return [k === r.today ? `${ddmm(k)} (hôm nay)` : ddmm(k), h.trCalls || 0, toks(h.inTok), toks(h.outTok), cell((h.trUsd || 0) + (h.ttsUsd || 0))]; }));
+        if (html) html += `<div class="field-hint" style="margin-top: 6px;">Đối chiếu: Google AI Studio, mục Usage hoặc Billing. Google chia ngày theo giờ Thái Bình Dương, chậm hơn Việt Nam 14 đến 15 tiếng, nên số từng ngày ở đó lệch nửa ngày so với bảng này; cộng cả tuần hay cả tháng thì khớp. Lệch nhiều thì API key này có thể đang được dùng ở nơi khác.</div>`;
         if (tabEl) tabEl.innerHTML = html;
 
-        const vids = Object.entries(d.videos || {}).sort((a, c) => c[1].usd - a[1].usd).slice(0, 5);
-        vidEl.innerHTML = vids.length ? "<div><b>Video tốn nhiều nhất hôm nay:</b></div>" + vids.map(([k, v]) => {
-            const odd = v.videoSec && v.audioSec > v.videoSec * 1.2;
-            return `<div>${esc(v.title || k)}: ${fm(v.usd)}${v.videoSec ? `, video dài ${mins(v.videoSec)}` : ""}${v.audioSec ? `, ${mins(v.audioSec)} audio Gemini` : ""}${odd ? " ⚠ tạo audio nhiều bất thường so với độ dài video" : ""}</div>`;
-        }).join("") : "";
+        renderTopVideos();
     }
+    // The videos that cost most today, this week (from Monday), month, quarter or year, by local day
+    // (background.js videoSpend). The period picked is remembered on this machine.
+    let topPeriod = "day";
+    try { topPeriod = localStorage.getItem("cstTopPeriod") || "day"; } catch (e) { /* bỏ qua */ }
+    const PERIODS = { day: "hôm nay", week: "tuần này", month: "tháng này", quarter: "quý này", year: "năm nay" };
+    function periodStart(today, period) {
+        const [y, m, d] = today.split("-").map(Number);
+        const iso = x => `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, "0")}-${String(x.getUTCDate()).padStart(2, "0")}`;
+        if (period === "week") { const t = new Date(Date.UTC(y, m - 1, d)); t.setUTCDate(d - (t.getUTCDay() + 6) % 7); return iso(t); }
+        if (period === "month") return `${y}-${String(m).padStart(2, "0")}-01`;
+        if (period === "quarter") return `${y}-${String(m - (m - 1) % 3).padStart(2, "0")}-01`;
+        if (period === "year") return `${y}-01-01`;
+        return today;
+    }
+    function renderTopVideos() {
+        const vidEl = byId("costVideos"), r = lastCost;
+        if (!vidEl || !r || !r.today) return;
+        if (!PERIODS[topPeriod]) topPeriod = "day";
+        document.querySelectorAll(".cost-period .mode-btn").forEach(b => {
+            const on = b.dataset.period === topPeriod;
+            b.classList.toggle("active", on);
+            b.setAttribute("aria-pressed", String(on));
+        });
+        const from = periodStart(r.today, topPeriod);
+        let first = "";
+        const rows = Object.entries(r.videos || {}).map(([k, v]) => {
+            let usd = 0;
+            for (const [day, x] of Object.entries(v.days || {})) {
+                if (!first || day < first) first = day;
+                if (day >= from && day <= r.today) usd += x;
+            }
+            return { k, v, usd };
+        }).filter(x => x.usd > 0).sort((a, c) => c.usd - a.usd);
+        const total = rows.reduce((t, x) => t + x.usd, 0);
+        const name = ({ k, v }) => {
+            const title = esc(v.title || k);
+            const id = k.startsWith("yt:") ? k.slice(3) : "";
+            return /^[\w-]{6,20}$/.test(id) ? `<a class="cost-vid" href="https://www.youtube.com/watch?v=${id}" target="_blank" rel="noopener">${title}</a>` : title;
+        };
+        let html = rows.length
+            ? table(`${rows.length} video ${PERIODS[topPeriod]}, tổng ${fm(total)}`, ["Video", "Video dài", "Chi phí"],
+                rows.slice(0, 10).map(x => [name(x), x.v.videoSec ? mins(x.v.videoSec) : "", cell(x.usd)]))
+            : `<p class="cost-top-sum">Chưa có video nào tốn tiền ${PERIODS[topPeriod]}.</p>`;
+        if (rows.length > 10) html += `<p class="cost-top-sum">Còn ${rows.length - 10} video khác, tổng ${fm(rows.slice(10).reduce((t, x) => t + x.usd, 0))}.</p>`;
+        if (first && first > from) html += `<p class="cost-top-sum">Chi phí theo từng video được ghi từ ngày ${ddmm(first)}/${first.slice(0, 4)}.</p>`;
+        vidEl.innerHTML = html;
+    }
+    document.querySelectorAll(".cost-period .mode-btn").forEach(b => b.addEventListener("click", () => {
+        topPeriod = b.dataset.period;
+        try { localStorage.setItem("cstTopPeriod", topPeriod); } catch (e) { /* bỏ qua */ }
+        renderTopVideos();
+    }));
     document.getElementById("costRefresh")?.addEventListener("click", () => showCostStats());
     document.getElementById("costReset")?.addEventListener("click", async () => {
-        if (!confirm("Xóa thống kê chi phí ước tính của hôm nay và phiên này? Bảng theo ngày của Google được giữ lại để đối chiếu.")) return;
+        if (!confirm("Xóa thống kê chi phí ước tính của hôm nay và phiên này? Bảng 7 ngày và chi phí theo video được giữ lại để đối chiếu.")) return;
         showCostStats(await bgSend({ action: "costReset" }));
     });
     showCostStats();
@@ -1004,7 +1049,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             skipSameLang: skipSameLangBox ? skipSameLangBox.checked : true,
             budgetDailyUsd: budgetUsd.daily,
             budgetVideoUsd: budgetUsd.video,
-            costCurrency: moneyO.currency,
             costUsdVnd: moneyO.rate,
             costExtraPct: moneyO.extraPct,
 
@@ -1095,6 +1139,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     veNhanLongTieng();
 
     // ---- Lịch sử phiên bản (dữ liệu ở version-history.js) ----
+    // Each version folds; the newest is open. HIST_PAGE versions at first, more on request; a search
+    // looks through all of them and opens every match.
+    const HIST_PAGE = 15;
+    let histShown = HIST_PAGE;
+    let installed = "";
+    try { installed = chrome.runtime.getManifest().version; } catch (e) { /* ngoài tiện ích */ }
     function veLichSu(loc) {
         const box = document.getElementById("historyList");
         if (!box || !window.CST_HISTORY) return;
@@ -1109,10 +1159,18 @@ document.addEventListener("DOMContentLoaded", async () => {
             box.appendChild(p);
             return;
         }
-        for (const m of ds) {
-            const item = document.createElement("div");
+        if (tu) {
+            const p = document.createElement("p");
+            p.className = "ver-count";
+            p.textContent = `${ds.length} bản khớp`;
+            box.appendChild(p);
+        }
+        const shown = tu ? ds : ds.slice(0, histShown);
+        for (const [i, m] of shown.entries()) {
+            const item = document.createElement("details");
             item.className = "ver-item";
-            const head = document.createElement("div");
+            item.open = !!tu || i === 0;
+            const head = document.createElement("summary");
             head.className = "ver-head";
             const num = document.createElement("span");
             num.className = "ver-num";
@@ -1122,6 +1180,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             ten.textContent = m.ten;
             head.appendChild(num);
             head.appendChild(ten);
+            if (m.v === installed) {
+                const now = document.createElement("span");
+                now.className = "ver-badge";
+                now.textContent = "Đang dùng";
+                head.appendChild(now);
+            }
             if (m.luc) {
                 const t = document.createElement("span");
                 t.className = "ver-time";
@@ -1164,6 +1228,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
             box.appendChild(item);
         }
+        if (!tu && ds.length > shown.length) {
+            const more = document.createElement("button");
+            more.type = "button";
+            more.className = "btn btn-secondary ver-more";
+            more.textContent = `Xem thêm ${Math.min(20, ds.length - shown.length)} bản cũ hơn (còn ${ds.length - shown.length})`;
+            more.addEventListener("click", () => { histShown += 20; veLichSu(""); });
+            box.appendChild(more);
+        }
     }
     const historyFilter = document.getElementById("historyFilter");
     if (historyFilter) historyFilter.addEventListener("input", () => veLichSu(historyFilter.value));
@@ -1171,110 +1243,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const historySummary = document.getElementById("historySummary");
     if (historySummary && window.CST_HISTORY) {
         const ds = window.CST_HISTORY.HISTORY;
-        historySummary.textContent = `${ds.length} mục, từ bản gốc tới v${ds[0].v}. Mỗi bản ghi rõ đã sửa gì; bản nào có số đo thật thì kèm bảng so sánh trước và sau.`;
+        historySummary.textContent = `${ds.length} bản, từ bản đầu tiên tới v${ds[0].v}. Bấm vào một bản để xem đã sửa gì; bản có số đo thật kèm bảng so sánh trước và sau.`;
     }
-
-    // ---- Edited subtitle lines (subtitle-edits.js) ----
-    // Every video with at least one hand-corrected line. Change a line here and the open video tab
-    // picks it up through storage.onChanged; "Khôi phục" puts the machine translation back.
-    const editsList = document.getElementById("editsList");
-    const editsFilter = document.getElementById("editsFilter");
-    const editsSummary = document.getElementById("editsSummary");
-    const clock = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
-    async function renderEdits() {
-        const E = window.CST_EDITS;
-        if (!editsList || !E) return;
-        const all = await E.listAll();
-        const needle = ((editsFilter && editsFilter.value) || "").trim().toLowerCase();
-        const total = all.reduce((a, r) => a + Object.keys(r.lines).length, 0);
-        if (editsSummary && total) editsSummary.textContent = `${total} dòng đã sửa trong ${all.length} video. Mỗi lần mở lại video, bản sửa của bạn nằm trên bản dịch máy và giọng Việt đọc đúng câu đã sửa.`;
-        editsList.textContent = "";
-        const shown = all.map(r => ({ ...r, keys: Object.keys(r.lines).sort((a, b) => a - b).filter(k => {
-            const l = r.lines[k];
-            return !needle || (l.text + " " + l.orig + " " + (r.title || "")).toLowerCase().includes(needle);
-        }) })).filter(r => r.keys.length);
-        if (!shown.length) {
-            const p = document.createElement("p");
-            p.className = "ver-empty";
-            p.textContent = all.length ? "Không có dòng nào khớp với từ khóa này." : "Chưa sửa dòng nào. Bản sửa của bạn sẽ hiện ở đây.";
-            editsList.appendChild(p);
-            return;
-        }
-        for (const r of shown) {
-            const item = document.createElement("div");
-            item.className = "ver-item";
-            const head = document.createElement("div");
-            head.className = "ver-head";
-            const site = document.createElement("span");
-            site.className = "ver-num";
-            // keys: "yt:<id>", a Coursera path ("/learn/..."), or "<host>/<path>" for other sites
-            site.textContent = r.videoKey.startsWith("yt:") ? "YouTube" : r.videoKey.startsWith("/") ? "Coursera" : r.videoKey.split("/")[0].replace(/^www\./, "");
-            const title = document.createElement(r.url ? "a" : "span");
-            title.className = "ver-name ed-video-title";
-            title.textContent = r.title || r.videoKey;
-            if (r.url) { title.href = r.url; title.target = "_blank"; title.rel = "noopener"; }
-            const when = document.createElement("span");
-            when.className = "ver-time";
-            when.textContent = `${Object.keys(r.lines).length} dòng` + (r.updated ? ` · ${new Date(r.updated).toLocaleDateString("vi-VN")}` : "");
-            head.appendChild(site);
-            head.appendChild(title);
-            head.appendChild(when);
-            item.appendChild(head);
-            for (const k of r.keys) {
-                const l = r.lines[k];
-                const row = document.createElement("div");
-                row.className = "ed-line";
-                const t = document.createElement("span");
-                t.className = "ed-time";
-                t.textContent = clock(Number(k));
-                const input = document.createElement("input");
-                input.className = "form-input";
-                input.value = l.text;
-                input.setAttribute("aria-label", `Dòng lúc ${clock(Number(k))}`);
-                input.addEventListener("change", async () => {
-                    await E.save(r.videoKey, null, Number(k) / 1000, input.value, l.orig);
-                    renderEdits();
-                });
-                const undo = document.createElement("button");
-                undo.type = "button";
-                undo.className = "btn btn-secondary ed-small";
-                undo.textContent = "Khôi phục";
-                undo.title = "Bỏ bản sửa, dùng lại bản dịch máy";
-                undo.addEventListener("click", async () => { await E.removeLine(r.videoKey, Number(k) / 1000); renderEdits(); });
-                const machine = document.createElement("span");
-                machine.className = "ed-machine";
-                machine.textContent = l.orig;
-                machine.title = "Bản dịch máy";
-                row.appendChild(t);
-                row.appendChild(input);
-                row.appendChild(undo);
-                row.appendChild(machine);
-                item.appendChild(row);
-            }
-            const acts = document.createElement("div");
-            acts.className = "ed-actions";
-            const wipe = document.createElement("button");
-            wipe.type = "button";
-            wipe.className = "btn btn-secondary ed-small";
-            wipe.textContent = "Khôi phục cả video";
-            wipe.addEventListener("click", async () => {
-                // two clicks, not a blocking dialog: the first arms, the second clears
-                if (wipe.dataset.armed !== "1") { wipe.dataset.armed = "1"; wipe.textContent = "Bấm lần nữa để khôi phục hết"; return; }
-                await E.clearVideo(r.videoKey);
-                renderEdits();
-            });
-            acts.appendChild(wipe);
-            item.appendChild(acts);
-            editsList.appendChild(item);
-        }
-    }
-    if (editsFilter) editsFilter.addEventListener("input", renderEdits);
-    try {
-        chrome.storage.onChanged.addListener((changes, area) => {
-            if (area === "local" && Object.keys(changes).some(k => k.startsWith("edits:"))) renderEdits();
-        });
-    } catch (e) { /* ngoài extension */ }
-    renderEdits();
 
     // ---- Giao diện Sáng / Tối / Theo máy ----
     const themeBtns = [...document.querySelectorAll(".theme-btn")];
@@ -1329,9 +1299,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             await saveNow();                                   // a change still waiting for its 350 ms
             const sync = await chrome.storage.sync.get(null);
-            const local = await chrome.storage.local.get(null);
             const includeKey = !!(document.getElementById("backupIncludeKey") || {}).checked;
-            const data = BK.buildBackup(sync, local, { includeKey, appVersion: chrome.runtime.getManifest ? chrome.runtime.getManifest().version : "" });
+            const data = BK.buildBackup(sync, { includeKey, appVersion: chrome.runtime.getManifest ? chrome.runtime.getManifest().version : "" });
             const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
             const a = document.createElement("a");
             a.href = url;
@@ -1340,8 +1309,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             a.click();
             a.remove();
             setTimeout(() => URL.revokeObjectURL(url), 5000);
-            const n = Object.keys(data.local).length;
-            sayBackup(`✓ Đã xuất ${Object.keys(data.sync).length} mục cài đặt${n ? `, phụ đề đã sửa của ${n} video` : ""}${data.hasKey ? ", kèm API Key" : includeKey ? " (chưa có API Key nào để kèm)" : ", không kèm API Key"}. Tệp nằm trong thư mục Tải về.`);
+            sayBackup(`✓ Đã xuất ${Object.keys(data.sync).length} mục cài đặt${data.hasKey ? ", kèm API Key" : includeKey ? " (chưa có API Key nào để kèm)" : ", không kèm API Key"}. Tệp nằm trong thư mục Tải về.`);
         } catch (e) {
             sayBackup(`⚠ Chưa xuất được: ${e.message}`, true);
         }
@@ -1358,8 +1326,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const sm = parsed.summary;
             const when = sm.exported ? new Date(sm.exported).toLocaleString("vi-VN") : "không rõ";
             const ask = `Nhập tệp sao lưu (tạo lúc ${when}${sm.app ? `, phiên bản ${sm.app}` : ""})?\n\n` +
-                `- ${sm.settings} mục cài đặt${sm.hasKey ? ", kèm API Key" : " (không có API Key: giữ khóa đang dùng)"}\n` +
-                `- ${sm.edits} dòng phụ đề đã sửa trên ${sm.videos} video\n\n` +
+                `- ${sm.settings} mục cài đặt${sm.hasKey ? ", kèm API Key" : " (không có API Key: giữ khóa đang dùng)"}\n\n` +
                 "Cài đặt hiện tại sẽ bị thay bằng nội dung trong tệp.";
             if (!confirm(ask)) { sayBackup("Đã hủy, không đổi gì."); return; }
             let wroteSync = false;
@@ -1369,7 +1336,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 saveTimer = null;
                 await chrome.storage.sync.set(parsed.sync);
                 wroteSync = true;
-                if (Object.keys(parsed.local).length) await chrome.storage.local.set(parsed.local);
                 sayBackup("✓ Đã nhập. Đang tải lại trang Cài đặt…");
                 setTimeout(() => location.reload(), 600);
             } catch (e) {

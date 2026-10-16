@@ -444,7 +444,7 @@ function currentVideoMeta() {
 }
 
 // The video's title as the viewer knows it, for the cost card, the popup, the transcript panel and
-// the edits list (dubbing.js and youtube.js use it too). YouTube's tab title carries the unread
+// (dubbing.js and youtube.js use it too). YouTube's tab title carries the unread
 // notification count in front ("(3) ") and " - YouTube" behind; the raw title used to reach the
 // cost card with both.
 function pageVideoTitle() {
@@ -1058,7 +1058,7 @@ function repositionCues() {
 }
 
 // The Vietnamese cues of one group, cut once per translation (the progressive display and the final
-// pass ask for the same group again). Copies: the viewer's edits are laid over the cues in place.
+// pass ask for the same group again). Copies, so the caller may change them.
 function csGroupCues(groups, gi, vi) {
     const group = groups[gi];
     if (!group.cstSeg || group.cstSeg.vi !== vi) {
@@ -1079,7 +1079,6 @@ function csShowTranslated(track, groups, translations) {
     });
     state.dubGroups = dub;
     csShowGroups(track);
-    csApplyEdits();
 }
 
 // Our overlay paints from here on (cs.viCues from state.dubGroups, cs.origCues from the source).
@@ -1149,7 +1148,6 @@ function applyTranslation(track, groups, translations) {
     }
 
     csShowGroups(track);
-    csLoadEdits();
 
     console.log(`Da ap ban dich: ${originals.length} cue goc -> ${viCount} cue tieng Viet, dong dai nhat ${longestLine} ky tu`);
     if (state.glossaryMisses > 0) {
@@ -1264,8 +1262,6 @@ async function translateTrackSite(opts = {}) {
         shown = true;
         state.active = true;
         setIconState("on");
-        cs.edits = null;                  // the last page's edits must not touch these lines meanwhile
-        csLoadEdits();
         if (opts.onShown) { try { opts.onShown(); } catch (e) { /* bỏ qua */ } }
     };
     const v = csVideo();
@@ -1376,7 +1372,7 @@ const CS_GEN = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 const CS_BTN = `.cst-cs-btn[data-cst-gen="${CS_GEN}"]`;
 const CS_OVERLAY = `.cst-cs-overlay[data-cst-gen="${CS_GEN}"]`;
-const cs = { viCues: [], origCues: [], renderKey: "", raf: 0, timer: 0, styleKey: "", panelOpen: false, menuOpen: false, edits: null };
+const cs = { viCues: [], origCues: [], renderKey: "", raf: 0, timer: 0, styleKey: "", panelOpen: false, menuOpen: false };
 
 // The render loop runs every frame and asks where the video and the player box are. Finding them
 // walks the video's ancestors and measures every control-bar button (and, on generic pages, every
@@ -1763,28 +1759,6 @@ function csStopRender() {
 }
 
 // What the transcript panel needs from this player: the same two lists the overlay draws from.
-// ---- The viewer's own corrections (subtitle-edits.js) ----
-function csEditKey() {
-    return currentVideoMeta().videoKey;
-}
-
-// Lay the stored edits over what the overlay draws (cs.viCues) and what the voice reads
-// (state.dubGroups). They are separate objects on Coursera, so both lists are walked.
-function csApplyEdits() {
-    const E = window.CST_EDITS;
-    if (!E) return 0;
-    const n = E.sync(cs.edits, { groups: state.dubGroups, display: cs.viCues });
-    if (n) { cs.renderKey = ""; E.notify(); }
-    return n;
-}
-
-async function csLoadEdits() {
-    const E = window.CST_EDITS;
-    if (!E) return;
-    cs.edits = await E.load(csEditKey());
-    csApplyEdits();
-}
-
 function csTranscriptAdapter() {
     return {
         box: () => csPlayerBox(),
@@ -1793,12 +1767,6 @@ function csTranscriptAdapter() {
         title: () => pageVideoTitle(),
         dual: () => !!state.dualMode,
         theme: () => state.uiTheme || "auto",
-        saveEdit: async (line, text) => {
-            cs.edits = await window.CST_EDITS.save(csEditKey(),
-                { title: pageVideoTitle(), url: location.href },
-                line.start, text, line.machine);
-            csApplyEdits();
-        },
         onPanel: on => {
             cs.panelOpen = !!on;
             const ov = document.querySelector(CS_OVERLAY);
@@ -2213,14 +2181,6 @@ async function init() {
 
     // Lắng nghe thay đổi cài đặt từ options để cập nhật ngay
     try {
-        // An edit saved in another tab or in Settings shows here at once (reverts included)
-        chrome.storage.onChanged.addListener((changes, area) => {
-            if (area !== "local" || !window.CST_EDITS) return;
-            const ch = changes[window.CST_EDITS.keyOf(csEditKey())];
-            if (!ch) return;
-            cs.edits = ch.newValue || null;
-            csApplyEdits();
-        });
         chrome.storage.onChanged.addListener((changes, area) => {
             if (area === "sync") {
                 if (changes.subStyle) {

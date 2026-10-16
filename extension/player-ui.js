@@ -143,22 +143,6 @@
 .cst-tr-panel .cst-tr-vi { font-size:13.5px; line-height:1.55; }
 .cst-tr-panel .cst-tr-en { font-family:var(--cst-serif); font-style:italic; font-size:12.5px; line-height:1.45; }
 .cst-tr-row { position:relative; }
-.cst-tr-edit { flex-shrink:0; align-self:flex-start; width:26px; height:26px; margin:-2px -4px 0 0; border-radius:8px;
-    border:none; background:none; color:var(--cst-muted); font-size:13px; line-height:1; cursor:pointer; opacity:0;
-    transition:opacity .15s ease,background-color .15s ease,color .15s ease; }
-.cst-tr-row:hover .cst-tr-edit, .cst-tr-row:focus-within .cst-tr-edit, .cst-tr-edit:focus-visible { opacity:1; }
-.cst-tr-edit:hover { background:var(--cst-card-hover); color:var(--cst-text); }
-.cst-tr-row[data-cst-editing="1"] .cst-tr-edit { display:none; }
-.cst-tr-row[data-cst-editing="1"] { background:var(--cst-card); border-color:var(--cst-border-2); cursor:default; }
-.cst-tr-mark { display:block; margin-top:3px; font-size:10px; font-weight:600; letter-spacing:.2px; color:var(--cst-accent); }
-.cst-tr-form { display:flex; flex-direction:column; gap:6px; }
-.cst-tr-input { width:100%; min-height:52px; resize:vertical; padding:7px 9px; border-radius:8px;
-    border:1px solid var(--cst-accent); background:var(--cst-soft); color:var(--cst-text); font:inherit; font-size:13px; line-height:1.45; }
-.cst-tr-panel .cst-tr-input:focus-visible { outline:none; box-shadow:0 0 0 3px var(--cst-accent-shadow); }
-.cst-tr-acts { display:flex; flex-wrap:wrap; gap:6px; }
-.cst-tr-save { padding:5px 12px; border-radius:8px; border:none; background:var(--cst-accent); color:#FFFFFF;
-    font:inherit; font-size:12px; font-weight:600; cursor:pointer; transition:background-color .18s ease; }
-.cst-tr-save:hover { background:var(--cst-accent-hover); }
 .cst-tr-empty { padding:14px 4px; font-size:12.5px; color:var(--cst-text-2); text-align:center; }
 /* ---- Sections: a serif title and a hairline, like a chapter heading in a book ---- */
 .cst-sec { display:flex; align-items:center; gap:10px; margin:14px 2px 10px; }

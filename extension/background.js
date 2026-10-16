@@ -679,8 +679,10 @@ function trackText(meta, model, u, prev, late = true) {
     }
     track(meta, patch, model);
 }
-// Google bills by the day in Pacific time, so a second ledger keyed by that day lines up with
-// AI Studio's usage page. Last HISTORY_DAYS days, text calls only (TTS is off, PAID_TTS).
+// Spend per day, by the machine's own calendar like "Hôm nay" (2.5.6). Until 2.5.5 it was keyed by
+// Google's billing day (Pacific time, 14 to 15 hours behind Vietnam), so this morning's spend sat
+// under yesterday's date next to a "today" card with today's date. Last HISTORY_DAYS days, text
+// calls only (TTS is off, PAID_TTS).
 const HISTORY_DAYS = 31;
 const HISTORY_KEYS = ["trUsd", "ttsUsd", "trCalls", "inTok", "outTok", "thoughtTok", "cachedTok", "estCalls", "estUsd", "lateCalls"];
 function pacificDay(now = new Date()) {
@@ -690,6 +692,36 @@ function pacificDay(now = new Date()) {
 let ledger = { day: localDay(), ...emptyStats(), videos: {} };
 let sessionStats = emptyStats();
 let history = {};
+// Per video, per local day (2.5.6): the cost card ranks videos by today, this week, month, quarter,
+// year. { "<videoKey>": { title, videoSec, t, days: { "YYYY-MM-DD": usd } } }, VIDEO_KEEP videos
+// at most (the least recently charged go first), days older than VIDEO_DAYS dropped.
+let videoSpend = {};
+const VIDEO_KEEP = 400, VIDEO_DAYS = 400;
+// A Pacific-day history (2.5.5 and before) moved onto local days, once: today is the ledger's exact
+// count; yesterday is the Pacific day that ends this afternoon minus the part of it that is today's;
+// older days keep their date (they cannot be split, at most a day off)
+function historyToLocal(old, led, pacificToday) {
+    const out = {};
+    const minus = (a, b) => {
+        const r = { byModel: {} };
+        for (const k of HISTORY_KEYS) r[k] = Math.max(0, (a[k] || 0) - ((b && b[k]) || 0));
+        return r;
+    };
+    const today = led.day;
+    const y = new Date(today + "T12:00:00Z");
+    y.setUTCDate(y.getUTCDate() - 1);
+    const yesterday = y.toISOString().slice(0, 10);
+    const todayPart = minus(led, old[pacificToday] && pacificToday !== yesterday ? old[pacificToday] : null);
+    for (const [k, h] of Object.entries(old || {})) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || k >= today) continue;
+        const v = k === yesterday ? minus(h, todayPart) : { ...h };
+        if (HISTORY_KEYS.some(x => v[x] > 1e-9)) out[k] = { byModel: {}, ...v };
+    }
+    const t = { byModel: JSON.parse(JSON.stringify(led.byModel || {})) };
+    for (const k of HISTORY_KEYS) if (led[k]) t[k] = led[k];
+    if (HISTORY_KEYS.some(x => t[x])) out[today] = t;
+    return out;
+}
 const sessionArea = (typeof chrome !== "undefined" && chrome.storage && chrome.storage.session) || null;
 // Charges that arrive before the load (the first message after the worker wakes) wait for it in
 // track(): the load replaces the ledger and would drop them
@@ -697,13 +729,22 @@ let ledgerLoaded = false;
 const ledgerReady = new Promise(resolve => {
     const done = () => { ledgerLoaded = true; resolve(); };
     try {
-        chrome.storage.local.get({ costLedger: null, costHistory: null, costTokenRatio: null }, d => {
+        chrome.storage.local.get({ costLedger: null, costHistory: null, costHistoryTz: "", costVideos: null, costTokenRatio: null }, d => {
             // the measured characters-per-token survive a service-worker restart
             const tr = d && d.costTokenRatio;
             if (tr && tr.prompt > 1 && tr.prompt < 8) tokenRatio.prompt = tr.prompt;
             if (tr && tr.outPerSrc > 0.05 && tr.outPerSrc < 5) tokenRatio.outPerSrc = tr.outPerSrc;
             if (d && d.costLedger && d.costLedger.day === localDay()) ledger = { ...emptyStats(), videos: {}, ...d.costLedger };
             if (d && d.costHistory && typeof d.costHistory === "object") history = d.costHistory;
+            if (d && d.costHistory && typeof d.costHistory === "object" && d.costHistoryTz !== "local") {
+                history = historyToLocal(history, ledger, pacificDay());
+                try { chrome.storage.local.set({ costHistory: history, costHistoryTz: "local" }); } catch (e) { /* bỏ qua */ }
+            }
+            if (d && d.costVideos && typeof d.costVideos === "object") videoSpend = d.costVideos;
+            else {
+                // seed from today's ledger: what was spent before 2.5.6 on earlier days is not known per video
+                for (const [k, v] of Object.entries(ledger.videos || {})) if (v && v.usd > 0) videoSpend[k] = { title: v.title || "", videoSec: v.videoSec || 0, t: v.t || Date.now(), days: { [ledger.day]: v.usd } };
+            }
             if (!sessionArea) return done();
             sessionArea.get({ costSession: null }, x => { if (x && x.costSession) sessionStats = { ...emptyStats(), ...x.costSession }; done(); });
         });
@@ -714,7 +755,7 @@ function saveLedgerSoon() {
     if (ledgerTimer) return;
     ledgerTimer = setTimeout(() => {
         ledgerTimer = null;
-        try { chrome.storage.local.set({ costLedger: ledger, costHistory: history, costTokenRatio: tokenRatio }); if (sessionArea) sessionArea.set({ costSession: sessionStats }); } catch (e) { /* bỏ qua */ }
+        try { chrome.storage.local.set({ costLedger: ledger, costHistory: history, costHistoryTz: "local", costVideos: videoSpend, costTokenRatio: tokenRatio }); if (sessionArea) sessionArea.set({ costSession: sessionStats }); } catch (e) { /* bỏ qua */ }
     }, 1500);
 }
 function rollDay() { if (ledger.day !== localDay()) ledger = { day: localDay(), ...emptyStats(), videos: {} }; }
@@ -729,7 +770,7 @@ function track(meta, patch, model) {
     for (const [k, v] of Object.entries(patch)) { ledger[k] = (ledger[k] || 0) + v; sessionStats[k] = (sessionStats[k] || 0) + v; }
     if (model) { addByModel(ledger, model, patch); addByModel(sessionStats, model, patch); }
     if (HISTORY_KEYS.some(k => patch[k])) {
-        const pd = pacificDay();
+        const pd = ledger.day;
         const h = history[pd] || (history[pd] = { byModel: {} });
         for (const k of HISTORY_KEYS) if (patch[k]) h[k] = (h[k] || 0) + patch[k];
         if (model) addByModel(h, model, patch);
@@ -746,6 +787,19 @@ function track(meta, patch, model) {
         v.t = Date.now();
         const keys = Object.keys(ledger.videos);
         if (keys.length > 40) keys.sort((a, b) => ledger.videos[a].t - ledger.videos[b].t).slice(0, keys.length - 40).forEach(k => delete ledger.videos[k]);
+        const usd = (patch.trUsd || 0) + (patch.ttsUsd || 0);
+        if (usd) {
+            const s = videoSpend[vk] || (videoSpend[vk] = { title: "", videoSec: 0, t: 0, days: {} });
+            s.days[ledger.day] = (s.days[ledger.day] || 0) + usd;
+            if (meta.title) s.title = String(meta.title).slice(0, 80);
+            if (meta.videoSec) s.videoSec = meta.videoSec;
+            s.t = Date.now();
+            const vks = Object.keys(videoSpend);
+            if (vks.length > VIDEO_KEEP) vks.sort((a, b) => videoSpend[a].t - videoSpend[b].t).slice(0, vks.length - VIDEO_KEEP).forEach(k => delete videoSpend[k]);
+            const oldest = new Date(Date.now() - VIDEO_DAYS * 864e5);
+            const cut = `${oldest.getFullYear()}-${String(oldest.getMonth() + 1).padStart(2, "0")}-${String(oldest.getDate()).padStart(2, "0")}`;
+            for (const d of Object.keys(s.days)) if (d < cut) delete s.days[d];
+        }
     }
     saveLedgerSoon();
 }
@@ -1839,7 +1893,7 @@ async function handleCostStats() {
         const p = id && COST.priceOf(id);
         if (id) model = { id, label: COST.modelLabel(id), price: p.price, how: p.how, base: p.base, retry: pick.retry, retryLabel: pick.retry ? COST.modelLabel(pick.retry) : "" };
     } catch (e) { model = null; }
-    return { ok: true, day: ledger, session: sessionStats, budget, model, history, pacificToday: pacificDay() };
+    return { ok: true, day: ledger, session: sessionStats, budget, model, history, videos: videoSpend, today: ledger.day };
 }
 
 async function handleCostReset() {
@@ -1957,6 +2011,15 @@ try {
     chrome.storage.sync.get({ dubProvider: "", dubProvider181: false }, cfg => {
         if (cfg.dubProvider181 || COST.PAID_TTS) return;
         chrome.storage.sync.set({ dubProvider181: true, dubProvider: "vieneu" });
+    });
+    // 2.5.6: hand-corrected lines are gone (subtitle-edits.js); their "edits:<video>" records go too, once
+    chrome.storage.sync.get({ editsRemoved256: false }, cfg => {
+        if (cfg.editsRemoved256) return;
+        chrome.storage.local.get(null, all => {
+            const keys = Object.keys(all || {}).filter(k => k.startsWith("edits:"));
+            const done = () => chrome.storage.sync.set({ editsRemoved256: true });
+            if (keys.length) chrome.storage.local.remove(keys, done); else done();
+        });
     });
 } catch (e) { /* chạy ngoài extension */ }
 

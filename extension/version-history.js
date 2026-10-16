@@ -4,6 +4,17 @@
 (function (root) {
     const HISTORY = [
         {
+            v: "2.5.6", luc: "16/10/2026", ten: "Chi phí đúng ngày, video tốn nhiều nhất theo tuần, tháng, quý, năm",
+            y: [
+                "Sửa lỗi lệch ngày ở bảng chi phí: thẻ \"Hôm nay (16/10)\" ghi 790 lượt nhưng bảng 7 ngày lại xếp đúng 790 lượt đó vào ngày 15/10. Bảng trước đây chia ngày theo giờ của Google (giờ Thái Bình Dương, chậm hơn Việt Nam 14 đến 15 tiếng). Nay bảng 7 ngày và thẻ tháng dùng ngày theo giờ máy, khớp với thẻ Hôm nay. Số cũ được chuyển sang một lần: hôm nay lấy đúng số của thẻ Hôm nay, phần buổi sáng không bị tính thêm vào hôm qua.",
+                "Mọi số tiền luôn hiện cả tiền Việt và USD (USD nằm ngay dưới hoặc trong ngoặc). Bỏ nút chọn VNĐ / USD / Cả hai.",
+                "\"Video tốn nhiều nhất\" có nút mở ra, thu lại, và chọn được Hôm nay, Tuần này, Tháng này, Quý này, Năm nay. Bảng liệt kê 10 video tốn nhất của khoảng đó, độ dài video, số tiền, và tổng. Chi phí theo từng video được ghi từ bản này trở đi; ngày trước đó chưa có số theo video.",
+                "Bỏ hẳn tính năng \"Phụ đề đã sửa\": nút bút chì trong Bản chép lời, thẻ trong Cài đặt, và các dòng đã sửa lưu trên máy (được xóa một lần). Bản chép lời vẫn tìm, nhảy tới dòng và xuất tệp .srt như cũ. Tệp sao lưu cài đặt chỉ còn chứa cài đặt.",
+                "Lịch sử phiên bản gọn hơn: mỗi bản thu lại thành một dòng, bản mới nhất mở sẵn, ghi rõ bản đang dùng; hiện 15 bản gần nhất, bấm \"Xem thêm\" để xem bản cũ hơn. Tìm kiếm vẫn tìm trong mọi bản và mở các bản khớp.",
+                "Mục Phụ đề: ô chọn màu tùy ý trông như một vòng màu có dấu cộng, không còn giống chấm màu trắng thứ hai, và sáng viền khi đang dùng màu tự chọn. Khung xem trước dùng tên video đời sống thay cho tên bài giảng."
+            ]
+        },
+        {
             v: "2.5.5", luc: "16/10/2026", ten: "Trang Cài đặt gọn và đẹp hơn",
             y: [
                 "Trang Cài đặt sắp lại còn 5 mục: Phụ đề, Lồng tiếng, Dịch & AI, Chi phí & dữ liệu, Phiên bản. Ô đánh dấu đổi thành công tắc bật/tắt. Tùy chọn ít dùng (độ đậm, viền chữ, giãn dòng, model cho câu khó, quy đổi sang tiền Việt, danh sách thuật ngữ) được thu gọn, bấm vào mới hiện.",

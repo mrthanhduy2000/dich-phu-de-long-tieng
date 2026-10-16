@@ -161,14 +161,12 @@ async function ytGhiCache(videoId) {
             [key]: {
                 luc: Date.now(),
                 cues: yt.cues.map(c => [r(c.start), r(c.end), c.text]),
-                // the machine translation, never the viewer's edits: those live in subtitle-edits.js
-                // and are laid over it on load, so a revert made in Settings really reverts
-                vi: yt.viCues.map(c => [r(c.start), r(c.baseEnd != null ? c.baseEnd : c.end), (c.cstOrig ? c.cstOrig.lines : c.lines).join("\n")]),
+                vi: yt.viCues.map(c => [r(c.start), r(c.baseEnd != null ? c.baseEnd : c.end), c.lines.join("\n")]),
                 // Nhóm câu + bản dịch có ngữ cảnh: lồng tiếng xem lại không phải dịch lại
                 g: yt.groups.filter(g => g.translated && g.viText).map(g => [
-                    r(g.start), r(g.end), g.cstOrigViText != null ? g.cstOrigViText : g.viText,
+                    r(g.start), r(g.end), g.viText,
                     g.srcCues.map(c => [r(c.start), r(c.end), c.text]),
-                    g.viCues.map(c => [r(c.start), r(c.end), c.cstOrig ? c.cstOrig.text : c.text]),
+                    g.viCues.map(c => [r(c.start), r(c.end), c.text]),
                     g.midLine ? 1 : 0
                 ])
             }
@@ -210,7 +208,7 @@ async function ytDonCache() {
 }
 
 // Every YouTube tab ran ytDonCache on load, and it reads ALL of storage.local (up to 100 saved videos,
-// the viewer's edits, the cost ledger: megabytes) only to find stale keys. Once a day is enough; a
+// the cost ledger: megabytes) only to find stale keys. Once a day is enough; a
 // save that adds a video (ytGhiCache) still sweeps after itself.
 async function ytSweepCacheDaily() {
     try {
@@ -655,9 +653,8 @@ function ytGhepViCues() {
         if (all[i].start < all[i - 1].end) all[i - 1].end = Math.max(all[i - 1].start + 0.05, all[i].start);
     }
     // display copies that linger into the gap after them (CST_STYLE.lingerCues); the group cues
-    // keep the subtitle timing the voice plans from. Edits reach both (ytApplyEdits walks both).
+    // keep the subtitle timing the voice plans from.
     yt.viCues = window.CST_STYLE && window.CST_STYLE.lingerCues ? window.CST_STYLE.lingerCues(all.map(c => ({ ...c }))) : all;
-    ytApplyEdits();
 }
 
 // Translation windows fixed by the group list alone (1.7.3). ytChonCuaSo used to build a window
@@ -1151,7 +1148,6 @@ function ytHienThiNguyenTiengViet(viCues) {
     if (window.CST_STYLE && window.CST_STYLE.lingerCues) window.CST_STYLE.lingerCues(yt.viCues);
     yt.dubGroups = viCues.map(c => ({ start: c.start, end: c.end, viText: c.text, srcCues: [{ start: c.start, end: c.end, text: c.text }], viCues: [{ start: c.start, end: c.end, text: c.text }] }));
     yt.daDichXong = true;
-    ytApplyEdits();
     ytKichHoatHienThi();
 }
 
@@ -1347,7 +1343,6 @@ async function ytBatDauDich(opts = {}) {
 
         yt.currentVideoId = info.videoId || "";
         yt.videoTitle = info.title || "";
-        ytLoadEdits();
         yt.videoEl = document.querySelector("#movie_player video") || document.querySelector("video");
 
         const chon = ytChonTrack(info.tracks, ytSettings.skipSameLang, { spoken: sp.confidence >= 0.7 ? sp.lang : "", audio: info.audio });
@@ -1380,7 +1375,6 @@ async function ytBatDauDich(opts = {}) {
             }));
             ytRepairCachedLeaks();
             yt.daDichXong = true;
-            ytApplyEdits();
             ytKichHoatHienThi();
             console.log("Lay ban dich tu bo nho dem, khong can dich lai");
             return true;
@@ -1823,33 +1817,6 @@ function ytNhomLongTieng() {
 // Thông báo nhỏ trên trình phát (content.js dựng), không chặn trang như alert()
 // What the transcript panel needs from this player. The lists are the ones the overlay already
 // draws from, so the panel costs no extra work and fills in as the translation arrives.
-// ---- The viewer's own corrections (subtitle-edits.js) ----
-// Live translation shares cue objects between yt.groups and yt.viCues; the cache and the
-// "already Vietnamese" paths keep separate yt.dubGroups. All three are walked.
-function ytApplyEdits() {
-    const E = window.CST_EDITS;
-    if (!E) return 0;
-    if (!yt.edits && !(yt.viCues || []).some(c => c.cstOrig)) return 0;   // nothing stored, nothing to undo
-    const n = E.sync(yt.edits, { groups: [...(yt.groups || []), ...(yt.dubGroups || [])], display: yt.viCues });
-    if (n) { yt.renderKey = ""; E.notify(); }
-    return n;
-}
-
-function ytEditKey() {
-    return "yt:" + (yt.currentVideoId || ytLayMaVideo() || "");
-}
-
-async function ytLoadEdits() {
-    const E = window.CST_EDITS;
-    yt.edits = null;
-    if (!E) return;
-    const key = ytEditKey();
-    const rec = await E.load(key);
-    if (ytEditKey() !== key) return;                  // the viewer moved to another video meanwhile
-    yt.edits = rec;
-    ytApplyEdits();
-}
-
 function ytTranscriptAdapter() {
     return {
         box: () => document.querySelector("#movie_player") || document.querySelector(".html5-video-player"),
@@ -1858,12 +1825,6 @@ function ytTranscriptAdapter() {
         title: () => pageVideoTitle(),
         dual: () => ytSubStyle.mode === "dual" || state.dualMode,
         theme: () => ytSettings.uiTheme || "auto",
-        saveEdit: async (line, text) => {
-            yt.edits = await window.CST_EDITS.save(ytEditKey(),
-                { title: pageVideoTitle(), url: location.href },
-                line.start, text, line.machine);
-            ytApplyEdits();
-        },
         onPanel: on => {
             yt.panelOpen = !!on;
             const player = document.querySelector("#movie_player") || document.querySelector(".html5-video-player");
@@ -2025,14 +1986,6 @@ async function ytKhoiDong() {
 
     // Lắng nghe thay đổi tùy chọn trực tiếp từ options page
     try {
-        // An edit saved in another tab or in Settings shows here at once (reverts included)
-        chrome.storage.onChanged.addListener((changes, area) => {
-            if (area !== "local" || !window.CST_EDITS || !yt.currentVideoId) return;
-            const ch = changes[window.CST_EDITS.keyOf(ytEditKey())];
-            if (!ch) return;
-            yt.edits = ch.newValue || null;
-            ytApplyEdits();
-        });
         chrome.storage.onChanged.addListener((changes, area) => {
             if (area === "sync") {
                 if (changes.subStyle) {
