@@ -770,6 +770,79 @@
         .welcome-steps li { margin-bottom: 8px; }
         .welcome-steps a { color: var(--primary); }
         .welcome-actions { display: flex; justify-content: flex-end; }
+
+        /* ============================================================
+           2.5.5: simpler page. Switches instead of check boxes, one-line hints, what is seldom
+           changed folded under a "more" line, cards that breathe.
+           ============================================================ */
+        .content-area > .tab-panel > .card { padding: 22px 24px; }
+        .card > .card-title { margin-bottom: 16px; }
+        .card-header { margin-bottom: 12px; }
+        .card-desc { font-size: 13px; line-height: 1.5; }
+        .form-grid { gap: 16px 20px; }
+        .form-gap { margin-top: 14px; }
+        .form-wide { grid-column: 1 / -1; }
+        .form-label { font-size: 13px; gap: 8px; }
+        .field-hint { font-size: 12px; }
+        .sidebar { gap: 2px; }
+        .nav-tab { width: 100%; }
+        .nav-tab-quiet { margin-top: 10px; font-size: 13px; }
+        .input-row { display: flex; gap: 8px; }
+        .input-row .btn { white-space: nowrap; }
+        .card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px 20px; }
+        .stat-label { font-size: 13px; font-weight: 500; color: var(--text-main); margin-bottom: 2px; }
+        .shortcuts { font-size: 12px; color: var(--text-sub); margin-top: 12px; line-height: 1.8; }
+        .shortcuts kbd { font-family: var(--font-sans); font-size: 11px; padding: 1px 6px; border: 1px solid var(--border);
+            border-bottom-width: 2px; border-radius: 5px; background: var(--bg-soft); color: var(--text-main); }
+
+        .toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 0; cursor: pointer; }
+        .toggle + .toggle { border-top: 1px solid var(--border); }
+        .form-grid + .toggle { margin-top: 10px; }
+        .toggle-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .toggle-title { font-size: 14px; font-weight: 500; color: var(--text-main); }
+        .toggle-hint { font-size: 12px; color: var(--text-sub); line-height: 1.45; }
+        .toggle input[type="checkbox"] { -webkit-appearance: none; appearance: none; flex: none; margin: 0; width: 38px; height: 22px;
+            border-radius: 999px; background: var(--border); position: relative; cursor: pointer; transition: background .15s ease; }
+        .toggle input[type="checkbox"]::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
+            border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: transform .15s ease; }
+        .toggle input[type="checkbox"]:checked { background: var(--primary); }
+        .toggle input[type="checkbox"]:checked::after { transform: translateX(16px); }
+
+        details.more { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+        details.more > summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 8px;
+            font-size: 13px; font-weight: 500; color: var(--text-sub); }
+        details.more > summary::-webkit-details-marker { display: none; }
+        details.more > summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor;
+            border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s ease; }
+        details.more[open] > summary::before { transform: rotate(45deg); }
+        details.more > summary:hover { color: var(--text-main); }
+        details.more > .form-grid, details.more > .more-body { margin-top: 14px; }
+        .more-body { display: flex; flex-direction: column; gap: 10px; }
+        .more-body .form-label { margin-top: 6px; }
+
+        #groupList { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; }
+        #groupList .group-row { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 9px; row-gap: 1px;
+            border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 10px; font-size: 13px; }
+        #groupList .group-row input { grid-row: 1 / 3; }
+        #groupList .group-row:has(input:checked) { border-color: var(--primary-border); background: var(--primary-light); }
+        #groupList .group-count { grid-column: 2; margin-left: 0; font-size: 11px; }
+        textarea.glossary-box { min-height: 96px; }
+        .cst-note { margin: 10px 0 2px; }
+        .cost-currency { max-width: 300px; }
+        .bottom-bar { padding: 12px 24px; }
+        .header-content { gap: 12px; }
+        @media (max-width: 768px) {
+            .header-content { flex-wrap: wrap; padding: 12px 16px; }
+            .brand-title { font-size: 17px; }
+            .header-badge { display: none; }
+            .layout-main { padding: 0 16px; margin-top: 12px; gap: 12px; }
+            .sidebar { flex-direction: row; overflow-x: auto; gap: 4px; padding-bottom: 4px; scrollbar-width: none; }
+            .nav-tab { width: auto; white-space: nowrap; padding: 7px 12px; }
+            .nav-tab-quiet { margin-top: 0; }
+            .content-area > .tab-panel > .card { padding: 18px 16px; }
+            .bottom-bar { padding: 10px 16px; }
+        }
     </style>
     <script src="chrome-shim.js"></script>
     <script src="theme.js"></script>
@@ -800,7 +873,7 @@
                 <button type="button" class="theme-btn" data-theme-set="dark" title="Luôn dùng giao diện tối">Tối</button>
                 <button type="button" class="theme-btn" data-theme-set="auto" title="Theo cài đặt sáng/tối của máy">Theo máy</button>
             </div>
-            <span class="header-badge" title="Cập nhật lúc 09:58 16/10/2026">Phiên bản v2.5.4 · cập nhật 09:58 16/10/2026</span>
+            <span class="header-badge" title="Cập nhật lúc 10:48 16/10/2026">Phiên bản v2.5.5 · cập nhật 10:48 16/10/2026</span>
         </div>
     </header>
 
@@ -808,47 +881,11 @@
     <main class="layout-main">
         <!-- Sidebar Navigation -->
         <aside class="sidebar">
-            <button class="nav-tab active" data-tab="tab-subtitle">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="2" y="4" width="20" height="16" rx="2"></rect>
-                    <path d="M6 15h4M14 15h4M6 11h12"></path>
-                </svg>
-                Kiểu phụ đề
-            </button>
-            <button class="nav-tab" data-tab="tab-gemini">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2l2.4 6.8L21 11.2l-5.6 4.8 1.8 7-6.2-4.2-6.2 4.2 1.8-7L1 11.2l6.6-2.4z"/>
-                </svg>
-                Gemini AI & Model
-            </button>
-            <button class="nav-tab" data-tab="tab-glossary">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-                </svg>
-                Từ điển thuật ngữ
-            </button>
-            <button class="nav-tab" data-tab="tab-dubbing">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                </svg>
-                Lồng tiếng & Giọng đọc
-            </button>
-            <button class="nav-tab" data-tab="tab-edits">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 20h9"></path>
-                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
-                </svg>
-                Phụ đề đã sửa
-            </button>
-            <button class="nav-tab" data-tab="tab-history">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="9"></circle>
-                    <polyline points="12 7 12 12 15.5 14"></polyline>
-                </svg>
-                Lịch sử phiên bản
-            </button>
+            <button class="nav-tab active" data-tab="tab-subtitle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M6 15h4M14 15h4M6 11h12"></path></svg>Phụ đề</button>
+            <button class="nav-tab" data-tab="tab-dubbing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>Lồng tiếng</button>
+            <button class="nav-tab" data-tab="tab-gemini"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3c.4 4.6 3.9 8.1 8.5 8.5-4.6.4-8.1 3.9-8.5 8.5-.4-4.6-3.9-8.1-8.5-8.5C8.1 11.1 11.6 7.6 12 3Z"></path></svg>Dịch &amp; AI</button>
+            <button class="nav-tab" data-tab="tab-data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"></ellipse><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"></path></svg>Chi phí &amp; dữ liệu</button>
+            <button class="nav-tab nav-tab-quiet" data-tab="tab-history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15.5 14"></polyline></svg>Phiên bản</button>
         </aside>
 
         <!-- Content Area -->
@@ -870,9 +907,8 @@
                 </div>
             </div>
 
-            <!-- TAB 1: KIỂU PHỤ ĐỀ (The main focus requested!) -->
+            <!-- PHỤ ĐỀ -->
             <div id="tab-subtitle" class="tab-panel active">
-                
                 <!-- Segmented Mode Control -->
                 <div class="segmented-control">
                     <button type="button" id="subModeSingle" class="mode-btn active">Chỉ bản dịch</button>
@@ -937,50 +973,14 @@
                     </div>
                 </div>
 
-                <!-- Card: Vị trí -->
                 <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">Vị trí</h2>
-                        <p class="card-desc">Tùy chỉnh vị trí hiển thị dòng phụ đề trên khung phát video.</p>
-                    </div>
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label class="form-label" for="subPosition">Vị trí</label>
-                            <select id="subPosition" class="form-select">
-                                <option value="bottom" selected>Dưới (Mặc định)</option>
-                                <option value="top">Trên</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="subOffset">
-                                Khoảng cách lề (%)
-                                <span class="value-pill" id="subOffsetVal">1%</span>
-                            </label>
-                            <input type="range" id="subOffset" class="form-slider" min="0" max="20" value="1">
-                        </div>
-                        <div class="form-group" style="grid-column: 1 / -1;">
-                            <label class="group-row" style="padding: 0;">
-                                <input type="checkbox" id="subPinBottom">
-                                <span>Luôn giữ sát lề đã chọn (YouTube)</span>
-                            </label>
-                            <div class="field-hint">Bật: phụ đề không bao giờ dịch lên khi thanh điều khiển hiện ra (thanh có thể che tạm phụ đề lúc rê chuột). Tắt: phụ đề chỉ nhích lên vừa đủ khi bị thanh điều khiển che.</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Card: Kiểu bản dịch (Typography) -->
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">Kiểu bản dịch</h2>
-                        <p class="card-desc">Cỡ chữ, phông chữ, màu sắc và hiệu ứng viền chữ.</p>
-                    </div>
+                    <h2 class="card-title">Chữ</h2>
                     <div class="form-grid">
                         <div class="form-group">
                             <label class="form-label" for="subFontFamily">Phông chữ</label>
                             <select id="subFontFamily" class="form-select"></select>
                             <div class="field-hint" id="fontStatus">Phông web được tải kèm bộ dấu tiếng Việt khi bạn chọn.</div>
                         </div>
-
                         <div class="form-group">
                             <label class="form-label" for="subFontSize">Cỡ chữ</label>
                             <select id="subFontSize" class="form-select">
@@ -1000,45 +1000,10 @@
                                 <option value="240">240%</option>
                                 <option value="270">270%</option>
                             </select>
-                            <div class="field-hint">Tự co giãn theo khung video. Chữ to đến mức một dòng không vừa khung thì phụ đề được ngắt lại theo cú pháp, không tràn.</div>
+                            <div class="field-hint">Co giãn theo khung video, không tràn dòng.</div>
                         </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="subFontWeight">Độ dày phông chữ</label>
-                            <select id="subFontWeight" class="form-select">
-                                <option value="300">300 (Mỏng)</option>
-                                <option value="400">400 (Bình thường)</option>
-                                <option value="500" selected>500 (Vừa)</option>
-                                <option value="600">600 (Bán đậm)</option>
-                                <option value="700">700 (Đậm)</option>
-                                <option value="800">800 (Rất đậm)</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="subLineHeight">Giãn dòng</label>
-                            <select id="subLineHeight" class="form-select">
-                                <option value="1.25">Gọn (1,25)</option>
-                                <option value="1.38" selected>Chuẩn cho dấu tiếng Việt (1,38)</option>
-                                <option value="1.5">Thoáng (1,5)</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="subStrokeStyle">Kiểu viền chữ</label>
-                            <select id="subStrokeStyle" class="form-select"></select>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="subStrokeColor">Màu viền / bóng</label>
-                            <div class="inline-color">
-                                <input type="color" id="subStrokeColor" value="#000000">
-                                <span class="field-hint">Viền tính theo tỷ lệ cỡ chữ nên luôn cân đối.</span>
-                            </div>
-                        </div>
-
-                        <div class="form-group" style="grid-column: 1 / -1;">
-                            <label class="form-label">Màu chữ bản dịch</label>
+                        <div class="form-group form-wide">
+                            <span class="form-label">Màu chữ</span>
                             <div class="color-palette" id="fontColorPalette">
                                 <button type="button" class="color-dot active" style="background:#ffffff;" data-color="#ffffff" title="Trắng"></button>
                                 <button type="button" class="color-dot" style="background:#ffeb3b;" data-color="#ffeb3b" title="Vàng tươi"></button>
@@ -1051,9 +1016,49 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    <details class="more">
+                        <summary>Độ đậm, viền chữ, giãn dòng</summary>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label" for="subFontWeight">Độ đậm</label>
+                                <select id="subFontWeight" class="form-select">
+                                    <option value="300">300 (Mỏng)</option>
+                                    <option value="400">400 (Bình thường)</option>
+                                    <option value="500" selected>500 (Vừa)</option>
+                                    <option value="600">600 (Bán đậm)</option>
+                                    <option value="700">700 (Đậm)</option>
+                                    <option value="800">800 (Rất đậm)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="subLineHeight">Giãn dòng</label>
+                                <select id="subLineHeight" class="form-select">
+                                    <option value="1.25">Gọn (1,25)</option>
+                                    <option value="1.38" selected>Chuẩn cho dấu tiếng Việt (1,38)</option>
+                                    <option value="1.5">Thoáng (1,5)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="subStrokeStyle">Kiểu viền chữ</label>
+                                <select id="subStrokeStyle" class="form-select"></select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="subStrokeColor">Màu viền / bóng</label>
+                                <div class="inline-color">
+                                    <input type="color" id="subStrokeColor" value="#000000">
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
 
+                <!-- shown in Song ngữ mode only (updatePreview hides it otherwise) -->
+                <div class="card" id="origOptions">
+                    <h2 class="card-title">Dòng gốc</h2>
+                    <div class="form-grid">
                         <div class="form-group">
-                            <label class="form-label" for="subOrigScale">Cỡ dòng gốc (song ngữ)</label>
+                            <label class="form-label" for="subOrigScale">Cỡ dòng gốc</label>
                             <select id="subOrigScale" class="form-select">
                                 <option value="65">65%</option>
                                 <option value="72">72%</option>
@@ -1062,46 +1067,47 @@
                                 <option value="100">100% (Bằng bản dịch)</option>
                             </select>
                         </div>
-
                         <div class="form-group">
-                            <label class="form-label" for="subOrigColor">Màu dòng gốc (song ngữ)</label>
+                            <label class="form-label" for="subOrigColor">Màu dòng gốc</label>
                             <div class="inline-color">
                                 <input type="color" id="subOrigColor" value="#d4d4d8">
-                                <span class="field-hint">Nên nhạt hơn bản dịch để mắt ưu tiên đọc tiếng Việt.</span>
+                                <span class="field-hint">Nhạt hơn bản dịch để mắt đọc tiếng Việt trước.</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Card: Nền chung -->
                 <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">Nền chung</h2>
-                        <p class="card-desc">Màu nền hộp phụ đề, độ mờ nền và góc bo tròn.</p>
-                    </div>
+                    <h2 class="card-title">Vị trí và nền</h2>
                     <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label" for="subPosition">Vị trí</label>
+                            <select id="subPosition" class="form-select">
+                                <option value="bottom" selected>Dưới (Mặc định)</option>
+                                <option value="top">Trên</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="subOffset">Khoảng cách lề <span class="value-pill" id="subOffsetVal">1%</span></label>
+                            <input type="range" id="subOffset" class="form-slider" min="0" max="20" value="1">
+                        </div>
                         <div class="form-group">
                             <label class="form-label" for="subBgColor">Màu nền</label>
                             <select id="subBgColor" class="form-select">
-                                <option value="#000000" selected>Màu đen (#000000)</option>
-                                <option value="#1e293b">Xám đậm (#1e293b)</option>
-                                <option value="#0f172a">Xanh đen (#0f172a)</option>
+                                <option value="#000000" selected>Đen</option>
+                                <option value="#1e293b">Xám đậm</option>
+                                <option value="#0f172a">Xanh đen</option>
                                 <option value="transparent">Trong suốt</option>
                             </select>
                         </div>
-
                         <div class="form-group">
-                            <label class="form-label" for="subBgOpacity">
-                                Độ mờ nền (%)
-                                <span class="value-pill" id="subBgOpacityVal">75%</span>
-                            </label>
+                            <label class="form-label" for="subBgOpacity">Độ mờ nền <span class="value-pill" id="subBgOpacityVal">75%</span></label>
                             <input type="range" id="subBgOpacity" class="form-slider" min="0" max="100" step="5" value="75">
                         </div>
-
                         <div class="form-group">
                             <label class="form-label" for="subBorderRadius">Bo góc nền</label>
                             <select id="subBorderRadius" class="form-select">
-                                <option value="0">0px (Vuông góc)</option>
+                                <option value="0">Vuông</option>
                                 <option value="4">4px</option>
                                 <option value="6" selected>6px (Mặc định)</option>
                                 <option value="8">8px</option>
@@ -1110,365 +1116,68 @@
                             </select>
                         </div>
                     </div>
+                    <label class="toggle">
+                        <span class="toggle-text"><span class="toggle-title">Luôn giữ sát lề (YouTube)</span><span class="toggle-hint">Không nhích lên khi thanh điều khiển hiện ra.</span></span>
+                        <input type="checkbox" id="subPinBottom">
+                    </label>
                 </div>
             </div>
 
-            <!-- TAB 2: GEMINI AI & MODEL -->
-            <div id="tab-gemini" class="tab-panel">
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">Chế độ sử dụng</h2>
-                        <p class="card-desc">Cân bằng giữa chất lượng và chi phí Gemini.</p>
-                    </div>
-                    <div class="form-group">
-                        <select id="costMode" class="form-select">
-                            <option value="premium">Cao cấp: dịch kỹ + giọng AI</option>
-                            <option value="balanced" selected>Cân bằng (khuyên dùng)</option>
-                            <option value="economy">Tiết kiệm: giọng hệ thống miễn phí</option>
-                            <option value="subtitles">Chỉ phụ đề</option>
-                        </select>
-                        <div class="field-hint" id="costModeDesc"></div>
-                    </div>
-                    <label class="group-row" style="margin-top: 14px; font-weight: 600;">
-                        <input type="checkbox" id="autoTranslate" checked>
-                        <span>Tự động dịch sang tiếng Việt</span>
-                    </label>
-                    <div class="field-hint">Phụ đề đã là tiếng Việt thì bỏ qua.</div>
-                    <label class="group-row" style="margin-top: 14px; font-weight: 600;">
-                        <input type="checkbox" id="skipSameLang" checked>
-                        <span>Bỏ qua dịch khi video đã có phụ đề tiếng Việt</span>
-                    </label>
-                    <div class="field-hint">Bật: video đã có phụ đề tiếng Việt thì dùng luôn, không dịch, không tốn phí. Tắt: vẫn dịch từ phụ đề gốc (thường là tiếng Anh), hữu ích khi phụ đề Việt có sẵn là bản dịch máy kém.</div>
-                    <label class="group-row" style="margin-top: 14px; font-weight: 600;">
-                        <input type="checkbox" id="autoDub" checked>
-                        <span>Tự động lồng tiếng Việt khi mở video</span>
-                    </label>
-                    <div class="field-hint">Phím tắt: <b>Alt+S</b> bật/tắt phụ đề, <b>Alt+D</b> bật/tắt lồng tiếng, <b>Alt+Shift+V</b> mở bảng điều khiển. Đổi phím tại trang phím tắt tiện ích của trình duyệt: chrome://extensions/shortcuts (Edge: edge://extensions/shortcuts).</div>
-
-                    <label class="group-row">
-                        <input type="checkbox" id="perCueMode">
-                        <span>Dịch từng dòng phụ đề riêng (khớp mốc thời gian tuyệt đối, câu dịch kém liền mạch hơn)</span>
-                    </label>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title" style="color: var(--accent-blue);">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 2l2.4 6.8L21 11.2l-5.6 4.8 1.8 7-6.2-4.2-6.2 4.2 1.8-7L1 11.2l6.6-2.4z"/>
-                            </svg>
-                            Trí tuệ nhân tạo Gemini AI
-                        </h2>
-                        <p class="card-desc">Dịch theo ngữ cảnh nhiều câu, tự nhiên hơn.</p>
-                    </div>
-
-                    <label class="group-row" style="margin-bottom: 16px; font-weight: 600;">
-                        <input type="checkbox" id="optUseAi" checked>
-                        <span>Kích hoạt Dịch thông minh với Gemini AI</span>
-                    </label>
-
-                    <div class="form-group" style="margin-bottom: 16px;">
-                        <label class="form-label" for="geminiApiKeyInput">Gemini API Key (Tùy chọn):</label>
-                        <div style="display: flex; gap: 8px;">
-                            <input type="password" id="geminiApiKeyInput" class="form-input" placeholder="Dán API key AIzaSy... (nếu có)">
-                            <button type="button" class="btn btn-secondary" id="testAiKeyBtn" style="white-space: nowrap;">Kiểm tra Key</button>
-                        </div>
-                        <p class="card-desc" style="font-size: 12px; margin-top: 4px;">
-                            Lấy khóa miễn phí tại <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent-blue);">Google AI Studio</a>. Khóa chỉ lưu trong trình duyệt này.
-                        </p>
-                        <div id="aiKeyStatus" style="font-size: 13px; margin-top: 6px; font-weight: 500;"></div>
-                    </div>
-
-                    <div class="form-group" style="margin-bottom: 14px;">
-                        <label class="form-label" for="geminiModelSelect">Model dịch thường (dùng cho hầu hết phụ đề):</label>
-                        <!-- Danh sách model dựng từ danh mục duy nhất trong cost-policy.js -->
-                        <select id="geminiModelSelect" class="form-select">
-                            <option value="custom">-- Nhập tên Model tùy chỉnh khác --</option>
-                        </select>
-                        <div class="field-hint" id="modelEffective"></div>
-                    </div>
-
-                    <div class="form-group" style="margin-bottom: 14px;">
-                        <label class="form-label" for="geminiStrongModel">Model mạnh (chỉ cho câu khó, ở chế độ Cao cấp):</label>
-                        <select id="geminiStrongModel" class="form-select"></select>
-                        <div class="field-hint">Chỉ dùng cho câu khó.</div>
-                    </div>
-
-                    <div class="form-group" id="customModelRow" style="display: none; margin-bottom: 14px;">
-                        <label class="form-label" for="customModelInput">Tên Model tùy chỉnh:</label>
-                        <input type="text" id="customModelInput" class="form-input" placeholder="Tên model chính xác theo tài liệu Gemini API">
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">Sao lưu cài đặt</h2>
-                        <p class="card-desc">Lưu toàn bộ cài đặt, danh sách thuật ngữ và các dòng phụ đề đã sửa ra một tệp. Gỡ tiện ích rồi cài lại sẽ mất hết những thứ này; có tệp sao lưu thì nhập lại là xong.</p>
-                    </div>
-                    <div class="form-grid">
-                        <div class="form-group" style="grid-column: 1 / -1;">
-                            <label class="group-row" style="font-weight: 600;">
-                                <input type="checkbox" id="backupIncludeKey" data-no-save="1" checked>
-                                <span>Kèm Gemini API Key trong tệp</span>
-                            </label>
-                            <div class="field-hint">Khóa được ghi dạng chữ thường trong tệp: đừng gửi tệp cho người khác hay đưa lên mạng. Bỏ chọn nếu chỉ muốn sao lưu phần còn lại.</div>
-                        </div>
-                        <div class="form-group" style="grid-column: 1 / -1; flex-direction: row; gap: 8px; flex-wrap: wrap;">
-                            <button type="button" class="btn btn-secondary" id="backupExport">Xuất tệp sao lưu</button>
-                            <button type="button" class="btn btn-secondary" id="backupImport">Nhập từ tệp…</button>
-                            <input type="file" id="backupFile" accept=".json,application/json" data-no-save="1" hidden>
-                        </div>
-                        <div class="form-group" style="grid-column: 1 / -1;">
-                            <div class="field-hint" id="backupStatus" role="status"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">Bộ nhớ đệm</h2>
-                        <p class="card-desc">Lưu trên máy để xem lại không tốn thêm phí.</p>
-                    </div>
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <div class="form-label">Bản dịch</div>
-                            <div class="field-hint" id="cacheTr">Đang đọc...</div>
-                        </div>
-                        <div class="form-group">
-                            <div class="form-label">Audio lồng tiếng</div>
-                            <div class="field-hint" id="cacheAudio">Đang đọc...</div>
-                        </div>
-                        <div class="form-group">
-                            <div class="form-label">Video YouTube đã lưu</div>
-                            <div class="field-hint" id="cacheVideos">Đang đọc...</div>
-                        </div>
-                        <div class="form-group">
-                            <div class="form-label">Rà soát chất lượng</div>
-                            <div class="field-hint" id="cacheReview">Đang đọc...</div>
-                        </div>
-                        <div class="form-group" style="grid-column: 1 / -1; flex-direction: row; gap: 8px; flex-wrap: wrap;">
-                            <button type="button" class="btn btn-secondary" id="clearTrCache">Xóa bản dịch đã lưu</button>
-                            <button type="button" class="btn btn-secondary" id="clearAudioCache">Xóa audio đã lưu</button>
-                            <button type="button" class="btn btn-secondary" id="clearAllCache">Xóa tất cả</button>
-                            <button type="button" class="btn btn-secondary" id="clearReviewedVideos">Xóa video đã rà soát</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">Chi phí &amp; ngân sách (ước tính)</h2>
-                        <p class="card-desc">Tiện ích cộng số token mà Google tính tiền cho từng lượt dịch, kể cả lượt hỏng phải gửi lại và lượt quá giờ, rồi nhân với bảng giá. Số liệu chỉ lưu trên máy này; hóa đơn thật xem ở Google AI Studio.</p>
-                    </div>
-                    <div class="segmented-control cost-currency" role="group" aria-label="Đơn vị tiền hiển thị">
-                        <button type="button" class="mode-btn" data-currency="vnd">VNĐ</button>
-                        <button type="button" class="mode-btn" data-currency="usd">USD</button>
-                        <button type="button" class="mode-btn" data-currency="both">VNĐ và USD</button>
-                    </div>
-                    <div id="costKpis" class="cost-kpis"></div>
-                    <div id="costMeter" class="cost-meter" hidden><i></i></div>
-                    <div class="field-hint" id="costSummary" style="margin-top: 10px;">Đang đọc...</div>
-                    <div id="costTables"></div>
-                    <div class="field-hint" id="costVideos" style="margin-top: 10px;"></div>
-                    <div class="form-grid" style="margin-top: 8px;">
-                        <div class="cost-section">Quy đổi sang tiền Việt</div>
-                        <div class="form-group" id="costRateGroup">
-                            <label class="form-label" for="costUsdVnd">Tỷ giá (đồng cho 1 USD)</label>
-                            <input type="number" id="costUsdVnd" class="form-input" min="5000" max="100000" step="10">
-                            <div class="field-hint" id="costRateHint"></div>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="costExtraPct">Thuế và phí cộng thêm (%)</label>
-                            <input type="number" id="costExtraPct" class="form-input" min="0" max="50" step="0.1">
-                            <div class="field-hint">Thuế hoặc phí chuyển đổi ngoại tệ của thẻ, xem trên sao kê hay hóa đơn Google. Để 0 nếu không có. Chỉ đổi con số hiển thị, không đổi ngân sách.</div>
-                        </div>
-                        <div class="cost-section">Ngân sách</div>
-                        <div class="form-group">
-                            <label class="form-label" for="budgetDailyUsd" id="budgetDailyLabel">Ngân sách mỗi ngày (USD)</label>
-                            <input type="number" id="budgetDailyUsd" class="form-input" min="0" step="0.1">
-                            <div class="field-hint" id="budgetDailyHint"></div>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="budgetVideoUsd" id="budgetVideoLabel">Ngân sách mỗi video (USD)</label>
-                            <input type="number" id="budgetVideoUsd" class="form-input" min="0" step="0.05">
-                            <div class="field-hint" id="budgetVideoHint"></div>
-                        </div>
-                        <div class="field-hint" style="grid-column: 1 / -1;">Chạm ngân sách thì thôi dịch lại câu khó bằng model mạnh; vượt gấp đôi ngân sách ngày thì tạm dùng Google Dịch miễn phí. Nhập 0 để bỏ giới hạn.</div>
-                        <div class="form-group" style="grid-column: 1 / -1; flex-direction: row; gap: 8px; flex-wrap: wrap;">
-                            <button type="button" class="btn btn-secondary" id="costRefresh">Cập nhật số liệu</button>
-                            <button type="button" class="btn btn-secondary" id="costReset">Xóa thống kê</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB 3: TỪ ĐIỂN THUẬT NGỮ -->
-            <div id="tab-glossary" class="tab-panel">
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">Bảo vệ thuật ngữ chuyên ngành</h2>
-                        <p class="card-desc">Tên riêng và thuật ngữ quen dùng tiếng Anh được giữ nguyên; thuật ngữ đã có tên tiếng Việt chuẩn (như "độ lệch chuẩn", "lãi suất") luôn được dịch thống nhất một cách.</p>
-                    </div>
-
-                    <label class="group-row" style="margin-bottom: 16px; font-weight: 600;">
-                        <input type="checkbox" id="glossaryEnabled" checked>
-                        <span>Bật bảo vệ thuật ngữ khi dịch</span>
-                    </label>
-
-                    <h3 style="font-size: 14px; margin-bottom: 8px;">Nhóm ngành</h3>
-                    <p class="card-desc" style="margin-bottom: 12px;">Chỉ bật các ngành bạn đang học để câu dịch tự nhiên hơn.</p>
-                    <div id="groupList" style="margin-bottom: 24px;"></div>
-
-                    <h3 style="font-size: 14px; margin-bottom: 8px;">Danh sách từ giữ nguyên</h3>
-                    <p class="card-desc" style="margin-bottom: 8px;">Mỗi dòng một từ hoặc cụm từ. Không bị máy dịch biến đổi.</p>
-                    <div class="example-box"># Ví dụ
-Claude Code
-Google Ads
-landing page
-conversion rate</div>
-                    <textarea id="userKeep" class="glossary-box" placeholder="Mỗi dòng một thuật ngữ..."></textarea>
-
-                    <h3 style="font-size: 14px; margin: 20px 0 8px;">Quy tắc dịch riêng (from => to)</h3>
-                    <p class="card-desc" style="margin-bottom: 8px;">Ép một cụm từ hiển thị chính xác theo ý muốn của bạn.</p>
-                    <div class="example-box"># Ví dụ
-machine learning => học máy
-cash flow => dòng tiền
-Claude's code => Claude Code</div>
-                    <textarea id="userNormalize" class="glossary-box" placeholder="từ gốc => dạng muốn hiện"></textarea>
-                </div>
-            </div>
-
-            <!-- TAB 4: LỒNG TIẾNG & GIỌNG ĐỌC -->
-            <div id="tab-edits" class="tab-panel">
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">Phụ đề đã sửa</h2>
-                        <p class="card-desc" id="editsSummary">Những dòng bạn đã sửa tay trong Bản chép lời. Mỗi lần mở lại video, tiện ích đặt bản sửa của bạn lên trên bản dịch máy, và giọng Việt đọc đúng câu đã sửa.</p>
-                    </div>
-                    <div class="form-group">
-                        <input type="search" id="editsFilter" class="form-input" placeholder="Tìm trong các dòng đã sửa" aria-label="Tìm trong các dòng đã sửa">
-                    </div>
-                    <div id="editsList"></div>
-                    <p class="field-hint">Cách sửa: mở Bản chép lời trong thực đơn trên video, rê chuột vào một dòng rồi bấm biểu tượng bút chì.</p>
-                </div>
-            </div>
-
-            <div id="tab-history" class="tab-panel">
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">Lịch sử phiên bản</h2>
-                        <p class="card-desc" id="historySummary">Từ bản gốc tới bản đang dùng: mỗi bản ghi rõ đã sửa gì, kèm bảng so sánh trước và sau khi có số đo thật.</p>
-                    </div>
-                    <div class="form-group">
-                        <input type="search" id="historyFilter" class="form-input" placeholder="Tìm trong lịch sử (ví dụ: giọng, phụ đề, phím tắt)" aria-label="Tìm trong lịch sử phiên bản">
-                    </div>
-                    <div id="historyList"></div>
-                </div>
-            </div>
-
+            <!-- LỒNG TIẾNG -->
             <div id="tab-dubbing" class="tab-panel">
                 <div class="card">
                     <div class="card-header">
-                        <h2 class="card-title">Lồng tiếng Việt AI</h2>
-                        <p class="card-desc">Đọc bản dịch bằng giọng Việt, khớp nhịp với người nói gốc.</p>
+                        <h2 class="card-title">Lồng tiếng Việt</h2>
+                        <p class="card-desc">Giọng VieNeu chạy ngay trên máy, miễn phí.</p>
                     </div>
-
-                    <div class="form-grid">
+                    <label class="toggle">
+                        <span class="toggle-text"><span class="toggle-title">Tự động lồng tiếng khi mở video</span></span>
+                        <input type="checkbox" id="autoDub" checked>
+                    </label>
+                    <div class="cst-note" id="localTtsStatus">Đang kiểm tra máy chủ VieNeu...</div>
+                    <div class="form-grid form-gap">
                         <div class="form-group">
-                            <label class="form-label" for="dubProvider">Nguồn giọng nói</label>
-                            <select id="dubProvider" class="form-select">
-                                <option value="vieneu" selected>VieNeu trên máy (miễn phí, tự nhiên)</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group" style="grid-column: 1 / -1;">
-                            <label class="group-row" style="font-weight: 600;">
-                                <input type="checkbox" id="dubPrepareWait" checked>
-                                <span>Chờ chuẩn bị trước khi phát (tối đa 5 giây)</span>
-                            </label>
-                            <div class="field-hint">Mở video mới hoặc tua tới đoạn mới: tạm dừng tới khi có giọng Việt cho câu đầu.</div>
-                        </div>
-
-                        <div class="form-group" style="grid-column: 1 / -1;">
-                            <div class="cst-note" id="localTtsStatus">Đang kiểm tra máy chủ VieNeu...</div>
-                        </div>
-
-
-                        <div class="form-group">
-                            <label class="form-label" for="dubLocalVoice">Giọng VieNeu (người nói chính)</label>
+                            <label class="form-label" for="dubLocalVoice">Giọng chính</label>
                             <select id="dubLocalVoice" class="form-select"></select>
                         </div>
-
-                        <div class="form-group" style="grid-column: 1 / -1;">
+                        <div class="form-group">
                             <label class="form-label" for="dubSpeakers">Giọng theo người nói</label>
                             <select id="dubSpeakers" class="form-select">
-                                <option value="auto" selected>Tự động: mỗi người nói một giọng (tối đa 8)</option>
+                                <option value="auto" selected>Mỗi người một giọng (tối đa 8)</option>
                                 <option value="one">Một giọng cho cả video</option>
                             </select>
-                            <div class="field-hint">Tự động: video có nhiều người nói (phỏng vấn, podcast, trò chuyện) thì mỗi người một giọng riêng, người nói nhiều nhất luôn dùng giọng chính, từ người thứ ba trở đi tiện ích tự chọn giọng khác hẳn. Video chỉ có một người nói thì giữ một giọng, kể cả khi phụ đề tự động đánh dấu nhầm quanh đoạn nhạc hay câu trích lời người khác.</div>
-                            <label class="group-row" style="font-weight: 600; margin-top: 10px;">
-                                <input type="checkbox" id="dubSpeakerAi" checked>
-                                <span>Dùng Gemini nhận ra ai đang nói (YouTube)</span>
-                            </label>
-                            <div class="field-hint">Phụ đề phần lớn video không đánh dấu đổi người nói. Có khóa Gemini thì tiện ích đọc lời gốc một lần cho mỗi video để biết ai nói câu nào, nam hay nữ (ước tính vài chục đồng cho video 10 phút, cộng vào chi phí hôm nay; xem lại không tốn thêm). Tắt: chỉ dựa vào dấu &gt;&gt; và TÊN: trong phụ đề.</div>
                         </div>
-
                         <div class="form-group">
-                            <label class="form-label" for="dubLocalVoice2">Giọng VieNeu (người nói thứ hai)</label>
+                            <label class="form-label" for="dubLocalVoice2">Giọng thứ hai</label>
                             <select id="dubLocalVoice2" class="form-select"></select>
-                            <div class="field-hint">Khi Gemini nhận ra người nói thứ hai khác giới với giọng này, tiện ích chọn một giọng đúng giới.</div>
+                            <div class="field-hint">Người thứ ba trở đi được chọn giọng khác hẳn.</div>
                         </div>
+                    </div>
+                    <label class="toggle">
+                        <span class="toggle-text"><span class="toggle-title">Dùng Gemini nhận ra ai đang nói</span><span class="toggle-hint">Đọc lời gốc một lần mỗi video YouTube (vài chục đồng), lưu cho lần xem sau.</span></span>
+                        <input type="checkbox" id="dubSpeakerAi" checked>
+                    </label>
+                    <div class="card-actions">
+                        <button type="button" class="btn btn-secondary" id="testVoice">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                            Nghe thử
+                        </button>
+                        <span class="field-hint" id="testVoiceStatus"></span>
+                    </div>
+                </div>
 
+                <div class="card">
+                    <h2 class="card-title">Âm lượng và tốc độ</h2>
+                    <div class="form-grid">
                         <div class="form-group">
-                            <label class="form-label" for="dubGeminiVoice">Giọng Gemini (người nói chính)</label>
-                            <select id="dubGeminiVoice" class="form-select">
-                                <option value="Kore" selected>Kore: nữ, rõ ràng, chắc chắn</option>
-                                <option value="Aoede">Aoede: nữ, nhẹ nhàng, thoáng</option>
-                                <option value="Leda">Leda: nữ, trẻ trung</option>
-                                <option value="Zephyr">Zephyr: nữ, tươi sáng</option>
-                                <option value="Charon">Charon: nam, trầm, hợp giảng bài</option>
-                                <option value="Orus">Orus: nam, chắc chắn</option>
-                                <option value="Iapetus">Iapetus: nam, rõ ràng</option>
-                                <option value="Puck">Puck: nam, sôi nổi</option>
-                                <option value="Fenrir">Fenrir: nam, hào hứng</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="dubGeminiVoice2">Giọng Gemini (người nói thứ hai)</label>
-                            <select id="dubGeminiVoice2" class="form-select">
-                                <option value="Charon" selected>Charon: nam, trầm</option>
-                                <option value="Kore">Kore: nữ, rõ ràng</option>
-                                <option value="Aoede">Aoede: nữ, nhẹ nhàng</option>
-                                <option value="Puck">Puck: nam, sôi nổi</option>
-                                <option value="Leda">Leda: nữ, trẻ trung</option>
-                                <option value="Orus">Orus: nam, chắc chắn</option>
-                            </select>
-                            <div class="field-hint">Khi phụ đề có đổi người nói.</div>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="dubVoice">Giọng hệ thống tiếng Việt</label>
-                            <select id="dubVoice" class="form-select"></select>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="dubDuck">
-                                Âm lượng tiếng gốc khi có lời Việt
-                                <span class="value-pill" id="dubDuckValue">20%</span>
-                            </label>
+                            <label class="form-label" for="dubDuck">Tiếng gốc khi có lời Việt <span class="value-pill" id="dubDuckValue">20%</span></label>
                             <input type="range" id="dubDuck" class="form-slider" min="0" max="60" step="5" value="20">
-                            <div class="field-hint">Mức tiếng gốc trong lúc giọng Việt đang đọc. Để khoảng 10 đến 20% vẫn nghe được nhạc nền; 0% là tắt hẳn.</div>
+                            <div class="field-hint">10 đến 20% vẫn nghe được nhạc nền.</div>
                         </div>
-
                         <div class="form-group">
-                            <label class="form-label" for="dubVolume">
-                                Âm lượng lồng tiếng
-                                <span class="value-pill" id="dubVolumeValue">100%</span>
-                            </label>
+                            <label class="form-label" for="dubVolume">Âm lượng lồng tiếng <span class="value-pill" id="dubVolumeValue">100%</span></label>
                             <input type="range" id="dubVolume" class="form-slider" min="40" max="100" step="5" value="100">
                         </div>
-
                         <div class="form-group">
                             <label class="form-label" for="dubMaxRate">Tốc độ đọc tối đa</label>
                             <select id="dubMaxRate" class="form-select">
@@ -1479,24 +1188,218 @@ Claude's code => Claude Code</div>
                                 <option value="1.4">1,4 lần</option>
                                 <option value="1.5">1,5 lần</option>
                             </select>
-                            <div class="field-hint">Tự động: giọng nhanh dần theo tốc độ nói của video, tới khoảng 1,6 lần khi người nói rất nhanh. Chọn mức thấp hơn nếu muốn nghe rõ hơn: giọng Việt có thể trễ sau hình vài giây ở đoạn nói nhanh, nhưng không bao giờ bị bỏ chữ.</div>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="dubTtsModel">Model Gemini TTS (nâng cao, để trống = tự chọn)</label>
-                            <input type="text" id="dubTtsModel" class="form-input">
-                        </div>
-
-                        <div class="form-group" style="grid-column: 1 / -1; margin-top: 8px;">
-                            <button type="button" class="btn btn-secondary" id="testVoice">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                                </svg>
-                                Nghe thử lồng tiếng
-                            </button>
-                            <div class="field-hint" id="testVoiceStatus"></div>
+                            <div class="field-hint">Thấp hơn thì rõ hơn nhưng có thể trễ vài giây; không bao giờ bỏ chữ.</div>
                         </div>
                     </div>
+                    <label class="toggle">
+                        <span class="toggle-text"><span class="toggle-title">Chờ giọng sẵn sàng rồi mới phát</span><span class="toggle-hint">Khi mở video hoặc tua, dừng tối đa 5 giây để câu đầu có tiếng.</span></span>
+                        <input type="checkbox" id="dubPrepareWait" checked>
+                    </label>
+                </div>
+            </div>
+
+            <!-- DỊCH & AI -->
+            <div id="tab-gemini" class="tab-panel">
+                <div class="card">
+                    <h2 class="card-title">Dịch phụ đề</h2>
+                    <label class="toggle">
+                        <span class="toggle-text"><span class="toggle-title">Tự động dịch sang tiếng Việt</span><span class="toggle-hint">Phụ đề đã là tiếng Việt thì bỏ qua.</span></span>
+                        <input type="checkbox" id="autoTranslate" checked>
+                    </label>
+                    <label class="toggle">
+                        <span class="toggle-text"><span class="toggle-title">Dùng phụ đề tiếng Việt có sẵn</span><span class="toggle-hint">Tắt nếu phụ đề Việt của video là bản dịch máy kém.</span></span>
+                        <input type="checkbox" id="skipSameLang" checked>
+                    </label>
+                    <p class="shortcuts">Phím tắt: <kbd>Alt+S</kbd> phụ đề · <kbd>Alt+D</kbd> lồng tiếng · <kbd>Alt+Shift+V</kbd> bảng điều khiển. Đổi tại chrome://extensions/shortcuts.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Gemini AI</h2>
+                        <p class="card-desc">Dịch theo ngữ cảnh nhiều câu, tự nhiên hơn Google Dịch.</p>
+                    </div>
+                    <label class="toggle">
+                        <span class="toggle-text"><span class="toggle-title">Dịch bằng Gemini</span></span>
+                        <input type="checkbox" id="optUseAi" checked>
+                    </label>
+                    <div class="form-grid form-gap">
+                        <div class="form-group form-wide">
+                            <label class="form-label" for="geminiApiKeyInput">Gemini API Key</label>
+                            <div class="input-row">
+                                <input type="password" id="geminiApiKeyInput" class="form-input" placeholder="Dán khóa AIzaSy…">
+                                <button type="button" class="btn btn-secondary" id="testAiKeyBtn">Kiểm tra</button>
+                            </div>
+                            <div class="field-hint">Lấy miễn phí tại <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>. Khóa chỉ lưu trong trình duyệt này.</div>
+                            <div id="aiKeyStatus" class="field-hint"></div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="costMode">Chế độ</label>
+                            <select id="costMode" class="form-select">
+                                <option value="premium">Cao cấp: dịch kỹ nhất</option>
+                                <option value="balanced" selected>Cân bằng (khuyên dùng)</option>
+                                <option value="economy">Tiết kiệm</option>
+                                <option value="subtitles">Chỉ phụ đề</option>
+                            </select>
+                            <div class="field-hint" id="costModeDesc"></div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="geminiModelSelect">Model</label>
+                            <!-- Danh sách model dựng từ danh mục duy nhất trong cost-policy.js -->
+                            <select id="geminiModelSelect" class="form-select">
+                                <option value="custom">Nhập tên model khác…</option>
+                            </select>
+                            <div class="field-hint" id="modelEffective"></div>
+                        </div>
+                        <div class="form-group" id="customModelRow" style="display: none;">
+                            <label class="form-label" for="customModelInput">Tên model</label>
+                            <input type="text" id="customModelInput" class="form-input" placeholder="Đúng tên trong tài liệu Gemini API">
+                        </div>
+                    </div>
+                    <details class="more">
+                        <summary>Nâng cao</summary>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label" for="geminiStrongModel">Model mạnh (câu khó, chế độ Cao cấp)</label>
+                                <select id="geminiStrongModel" class="form-select"></select>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Thuật ngữ</h2>
+                        <p class="card-desc">Giữ nguyên tên riêng; dịch thống nhất thuật ngữ đã có tên tiếng Việt chuẩn.</p>
+                    </div>
+                    <label class="toggle">
+                        <span class="toggle-text"><span class="toggle-title">Bảo vệ thuật ngữ khi dịch</span></span>
+                        <input type="checkbox" id="glossaryEnabled" checked>
+                    </label>
+                    <details class="more">
+                        <summary>Nhóm ngành và danh sách riêng</summary>
+                        <div class="more-body">
+                            <p class="field-hint">Chỉ bật các ngành bạn hay xem để câu dịch tự nhiên hơn.</p>
+                            <div id="groupList"></div>
+                            <label class="form-label" for="userKeep">Từ giữ nguyên (mỗi dòng một từ)</label>
+                            <textarea id="userKeep" class="glossary-box" placeholder="Claude Code&#10;landing page&#10;conversion rate"></textarea>
+                            <label class="form-label" for="userNormalize">Quy tắc dịch riêng (gốc =&gt; muốn hiện)</label>
+                            <textarea id="userNormalize" class="glossary-box" placeholder="machine learning =&gt; học máy&#10;cash flow =&gt; dòng tiền"></textarea>
+                        </div>
+                    </details>
+                </div>
+            </div>
+
+            <!-- CHI PHÍ & DỮ LIỆU -->
+            <div id="tab-data" class="tab-panel">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Chi phí Gemini (ước tính)</h2>
+                        <p class="card-desc">Đếm token Google tính tiền cho từng lượt, kể cả lượt hỏng. Hóa đơn thật xem ở Google AI Studio.</p>
+                    </div>
+                    <div class="segmented-control cost-currency" role="group" aria-label="Đơn vị tiền hiển thị">
+                        <button type="button" class="mode-btn" data-currency="vnd">VNĐ</button>
+                        <button type="button" class="mode-btn" data-currency="usd">USD</button>
+                        <button type="button" class="mode-btn" data-currency="both">Cả hai</button>
+                    </div>
+                    <div id="costKpis" class="cost-kpis"></div>
+                    <div id="costMeter" class="cost-meter" hidden><i></i></div>
+                    <div class="field-hint" id="costSummary" style="margin-top: 10px;">Đang đọc...</div>
+                    <div id="costTables"></div>
+                    <div class="field-hint" id="costVideos" style="margin-top: 10px;"></div>
+                    <div class="form-grid form-gap">
+                        <div class="form-group">
+                            <label class="form-label" for="budgetDailyUsd" id="budgetDailyLabel">Ngân sách mỗi ngày (USD)</label>
+                            <input type="number" id="budgetDailyUsd" class="form-input" min="0" step="0.1">
+                            <div class="field-hint" id="budgetDailyHint"></div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="budgetVideoUsd" id="budgetVideoLabel">Ngân sách mỗi video (USD)</label>
+                            <input type="number" id="budgetVideoUsd" class="form-input" min="0" step="0.05">
+                            <div class="field-hint" id="budgetVideoHint"></div>
+                        </div>
+                    </div>
+                    <p class="field-hint" style="margin-top: 8px;">Chạm ngân sách thì thôi dịch lại câu khó; vượt gấp đôi ngân sách ngày thì tạm dùng Google Dịch. Nhập 0 để bỏ giới hạn.</p>
+                    <details class="more">
+                        <summary>Quy đổi sang tiền Việt</summary>
+                        <div class="form-grid">
+                            <div class="form-group" id="costRateGroup">
+                                <label class="form-label" for="costUsdVnd">Tỷ giá (đồng cho 1 USD)</label>
+                                <input type="number" id="costUsdVnd" class="form-input" min="5000" max="100000" step="10">
+                                <div class="field-hint" id="costRateHint"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="costExtraPct">Thuế và phí thẻ (%)</label>
+                                <input type="number" id="costExtraPct" class="form-input" min="0" max="50" step="0.1">
+                                <div class="field-hint">Chỉ đổi số hiển thị, không đổi ngân sách.</div>
+                            </div>
+                        </div>
+                    </details>
+                    <div class="card-actions">
+                        <button type="button" class="btn btn-secondary" id="costRefresh">Cập nhật số liệu</button>
+                        <button type="button" class="btn btn-secondary" id="costReset">Xóa thống kê</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Bộ nhớ đệm</h2>
+                        <p class="card-desc">Bản dịch và giọng đọc lưu trên máy để xem lại không tốn thêm.</p>
+                    </div>
+                    <div class="stat-grid">
+                        <div><div class="stat-label">Bản dịch</div><div class="field-hint" id="cacheTr">Đang đọc...</div></div>
+                        <div><div class="stat-label">Giọng đọc</div><div class="field-hint" id="cacheAudio">Đang đọc...</div></div>
+                        <div><div class="stat-label">Video YouTube</div><div class="field-hint" id="cacheVideos">Đang đọc...</div></div>
+                        <div><div class="stat-label">Rà soát chất lượng</div><div class="field-hint" id="cacheReview">Đang đọc...</div></div>
+                    </div>
+                    <div class="card-actions">
+                        <button type="button" class="btn btn-secondary" id="clearTrCache">Xóa bản dịch</button>
+                        <button type="button" class="btn btn-secondary" id="clearAudioCache">Xóa giọng đọc</button>
+                        <button type="button" class="btn btn-secondary" id="clearReviewedVideos">Xóa video đã rà soát</button>
+                        <button type="button" class="btn btn-secondary" id="clearAllCache">Xóa tất cả</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Sao lưu</h2>
+                        <p class="card-desc">Cài đặt, thuật ngữ và phụ đề đã sửa trong một tệp, để nhập lại khi cài lại tiện ích.</p>
+                    </div>
+                    <label class="toggle">
+                        <span class="toggle-text"><span class="toggle-title">Kèm Gemini API Key</span><span class="toggle-hint">Khóa ghi dạng chữ thường: đừng gửi tệp cho người khác.</span></span>
+                        <input type="checkbox" id="backupIncludeKey" data-no-save="1" checked>
+                    </label>
+                    <div class="card-actions">
+                        <button type="button" class="btn btn-secondary" id="backupExport">Xuất tệp</button>
+                        <button type="button" class="btn btn-secondary" id="backupImport">Nhập từ tệp…</button>
+                        <input type="file" id="backupFile" accept=".json,application/json" data-no-save="1" hidden>
+                    </div>
+                    <div class="field-hint" id="backupStatus" role="status"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Phụ đề đã sửa</h2>
+                        <p class="card-desc" id="editsSummary">Dòng bạn sửa tay trong Bản chép lời luôn thay bản dịch máy, và giọng Việt đọc đúng câu đã sửa.</p>
+                    </div>
+                    <div class="form-group">
+                        <input type="search" id="editsFilter" class="form-input" placeholder="Tìm trong các dòng đã sửa" aria-label="Tìm trong các dòng đã sửa">
+                    </div>
+                    <div id="editsList"></div>
+                    <p class="field-hint">Cách sửa: mở Bản chép lời trên video, rê chuột vào một dòng, bấm biểu tượng bút chì.</p>
+                </div>
+            </div>
+
+            <!-- PHIÊN BẢN -->
+            <div id="tab-history" class="tab-panel">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Lịch sử phiên bản</h2>
+                        <p class="card-desc" id="historySummary">Mỗi bản ghi rõ đã sửa gì, kèm số đo trước và sau.</p>
+                    </div>
+                    <div class="form-group">
+                        <input type="search" id="historyFilter" class="form-input" placeholder="Tìm trong lịch sử (ví dụ: giọng, phụ đề, phím tắt)" aria-label="Tìm trong lịch sử phiên bản">
+                    </div>
+                    <div id="historyList"></div>
                 </div>
             </div>
 

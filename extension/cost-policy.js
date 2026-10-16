@@ -299,23 +299,23 @@
     //   translateAhead: YouTube chỉ dịch trước bấy nhiêu giây quanh vị trí xem
     const MODES = {
         premium: {
-            label: "Cao cấp: dịch kỹ + giọng AI",
-            desc: "Câu khó được dịch lại bằng model mạnh hơn, lồng tiếng bằng giọng Gemini AI, tạo audio trước tối đa 30 giây.",
+            label: "Cao cấp: dịch kỹ nhất",
+            desc: "Câu khó được dịch lại bằng model mạnh hơn; tốn phí Gemini nhiều nhất.",
             escalate: true, refine: "strong", tts: "gemini", prefetch: 30, translateAhead: 180
         },
         balanced: {
             label: "Cân bằng (khuyên dùng)",
-            desc: "Model rẻ cho mọi câu, chỉ dịch lại khi lỗi nặng; giọng Gemini AI; tạo audio trước ít hơn.",
+            desc: "Model rẻ cho mọi câu, chỉ dịch lại khi lỗi nặng.",
             escalate: false, refine: "cheap", tts: "gemini", prefetch: 18, translateAhead: 120
         },
         economy: {
-            label: "Tiết kiệm: giọng miễn phí trên máy",
-            desc: "Model rẻ, không dịch lại; lồng tiếng bằng giọng Việt chạy trên máy (VieNeu nếu đang bật, không thì giọng hệ thống), không tốn phí TTS.",
+            label: "Tiết kiệm",
+            desc: "Model rẻ, không dịch lại câu nào.",
             escalate: false, refine: "none", tts: "local", prefetch: 18, translateAhead: 90
         },
         subtitles: {
             label: "Chỉ phụ đề",
-            desc: "Chỉ dịch phụ đề bằng model rẻ, tắt lồng tiếng.",
+            desc: "Chỉ dịch phụ đề, tắt lồng tiếng.",
             escalate: false, refine: "none", tts: "none", prefetch: 0, translateAhead: 90
         }
     };

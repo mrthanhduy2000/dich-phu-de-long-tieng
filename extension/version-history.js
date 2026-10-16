@@ -4,6 +4,16 @@
 (function (root) {
     const HISTORY = [
         {
+            v: "2.5.5", luc: "16/10/2026", ten: "Trang Cài đặt gọn và đẹp hơn",
+            y: [
+                "Trang Cài đặt sắp lại còn 5 mục: Phụ đề, Lồng tiếng, Dịch & AI, Chi phí & dữ liệu, Phiên bản. Ô đánh dấu đổi thành công tắc bật/tắt. Tùy chọn ít dùng (độ đậm, viền chữ, giãn dòng, model cho câu khó, quy đổi sang tiền Việt, danh sách thuật ngữ) được thu gọn, bấm vào mới hiện.",
+                "Bỏ các ô không còn tác dụng: \"Nguồn giọng nói\" (chỉ còn một lựa chọn là VieNeu trên máy), hai ô giọng Gemini và ô model Gemini TTS (giọng trả phí đã tắt từ bản 1.8.1), \"Giọng hệ thống tiếng Việt\" (tiện ích tự chọn khi máy chủ VieNeu chưa chạy), và chế độ dịch từng dòng phụ đề riêng.",
+                "Màu và cỡ của dòng gốc chỉ hiện khi bật Song ngữ. Công tắc tự động lồng tiếng chuyển sang mục Lồng tiếng. Tên và mô tả các chế độ chi phí viết lại cho dễ hiểu.",
+                "Bảng điều khiển nhanh trên YouTube chỉ giữ những gì hay đổi khi đang xem: phụ đề, kiểu hiển thị, cỡ chữ, lồng tiếng, giọng, âm lượng. Bỏ nút \"Chép chẩn đoán\" và công tắc \"Bỏ qua dịch khi video đã có tiếng Việt\" (công tắc này vẫn ở Cài đặt > Dịch & AI).",
+                "Trang Cài đặt dùng được cả khi cửa sổ hẹp: các mục xếp thành một hàng cuộn ngang."
+            ]
+        },
+        {
             v: "2.5.4", luc: "16/10/2026", ten: "Không đọc chú thích âm thanh",
             y: [
                 "Lồng tiếng không còn đọc các chú thích âm thanh của phụ đề như \"(Nhạc nền sôi động)\", \"(tiếng gõ cửa)\", \"(Vỗ tay nhiệt liệt)\", \"[Âm nhạc]\", dù được dịch theo cách nào. Trước đây chỉ bỏ được dạng ngắn như \"(Âm nhạc)\", \"(Vỗ tay)\"; dạng có thêm chữ mô tả vẫn bị đọc thành lời. Chú thích vẫn hiện trên phụ đề, chỉ không đọc.",

@@ -1699,13 +1699,9 @@ function ytMoMenuNhanh(player, btn) {
     });
     menu.appendChild(size.el);
 
-    const rowSkip = congTac("Bỏ qua dịch khi video đã có tiếng Việt", null, async row => {
-        ytSettings.skipSameLang = row.getAttribute("aria-checked") !== "true";
-        await chrome.storage.sync.set({ skipSameLang: ytSettings.skipSameLang });
-        capNhat();
-    });
-    menu.appendChild(rowSkip);
-
+    // 2.5.5: the menu keeps what is changed while watching. "Use the Vietnamese captions a video
+    // already has" is set once, in Settings, and the diagnostics copy is no longer a button here
+    // (CST_DUB.diagnostics() is still there for whoever looks into a problem)
     const foot = el("div", "cst-menu-foot");
     const btnTranscript = el("button", null, "Bản chép lời");
     btnTranscript.type = "button";
@@ -1716,21 +1712,7 @@ function ytMoMenuNhanh(player, btn) {
     });
     const btnOptions = el("button", null, "Cài đặt");
     btnOptions.type = "button";
-    // Dubbing diagnostics (1.9.9): one click copies what the voice engine did lately (lines dropped
-    // and why, resets, errors, late starts, server speed), to paste where the problem is looked into
-    const btnDiag = el("button", null, "Chép chẩn đoán");
-    btnDiag.type = "button";
-    btnDiag.title = "Chép tình trạng lồng tiếng gần đây (câu bị bỏ và lý do, lỗi, tốc độ máy chủ giọng) để gửi khi cần kiểm tra lỗi";
-    btnDiag.addEventListener("click", async () => {
-        const api = window.CST_DUB;
-        const text = api && api.diagnostics ? api.diagnostics() : "";
-        let ok = false;
-        try { await navigator.clipboard.writeText(text); ok = !!text; } catch (e) { ok = false; }
-        dongMenu();
-        ytBao(ok ? "Đã chép chẩn đoán lồng tiếng. Dán vào cuộc trò chuyện để kiểm tra." : "Không chép được chẩn đoán (trình duyệt chặn bộ nhớ tạm hoặc lồng tiếng chưa bật).", { warn: !ok });
-    });
     foot.appendChild(btnTranscript);
-    foot.appendChild(btnDiag);
     foot.appendChild(btnOptions);
     menu.appendChild(foot);
 
@@ -1754,8 +1736,6 @@ function ytMoMenuNhanh(player, btn) {
         volume.el.style.display = isDub ? "block" : "none";
         volume.refresh();
         size.refresh();
-        rowSkip.setAttribute("aria-checked", String(!!ytSettings.skipSameLang));
-        rowSkip.cstSub.textContent = ytSettings.skipSameLang ? "Đang bật" : "Đang tắt";
         const dual = ytSubStyle.mode === "dual" || state.dualMode;
         btnSingle.setAttribute("aria-pressed", String(!dual));
         btnDual.setAttribute("aria-pressed", String(dual));
@@ -1825,7 +1805,7 @@ function ytMoMenuNhanh(player, btn) {
     // Two sections, each holding only its own controls: what is on the page, then what is spoken
     const kit = CST_UI_KIT();
     if (kit.buildSection) {
-        [head, kit.buildSection(document, "Phụ đề"), rowSub, modeBox, size.el, rowSkip,
+        [head, kit.buildSection(document, "Phụ đề"), rowSub, modeBox, size.el,
             kit.buildSection(document, "Giọng đọc"), rowDub, voiceBox, volume.el, canhBao, foot].forEach(n => menu.appendChild(n));
     }
     player.appendChild(menu);

@@ -175,6 +175,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         subModeDual.classList.toggle("active", dual);
         subModeSingle.classList.toggle("active", !dual);
         previewOrigLine.style.display = dual ? "block" : "none";
+        // the original line's own options matter in Song ngữ only
+        const origOptions = document.getElementById("origOptions");
+        if (origOptions) origOptions.classList.toggle("is-off", !dual);
 
         // 2. Position & Offset
         subOffsetVal.textContent = `${s.offset}%`;
@@ -459,7 +462,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const customOp = geminiModelSelect.querySelector('option[value="custom"]');
             const autoOp = document.createElement("option");
             autoOp.value = COST.AUTO;
-            autoOp.textContent = "Tự động: model rẻ nhất mà API key gọi được (khuyên dùng)";
+            autoOp.textContent = "Tự động (khuyên dùng)";
             geminiModelSelect.insertBefore(autoOp, customOp);
             COST.TRANSLATION_MODELS.forEach(m => {
                 const op = document.createElement("option");
@@ -488,10 +491,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         const eff = document.getElementById("modelEffective");
         if (eff && st && st.ok && st.hasKey && st.effective) {
-            eff.textContent = `Đang dùng thực tế với key này: ${COST.modelLabel(st.effective.cheap) || "chưa có model khả dụng"}` +
-                (st.effective.cheapRetry ? ` (lượt dịch tới thử lại ${COST.modelLabel(st.effective.cheapRetry)} một lần)` : "") +
-                ` · câu khó: ${COST.modelLabel(st.effective.strong) || "không có"}` +
-                ` · giọng AI: ${COST.modelLabel(st.effective.tts) || "không có"}`;
+            // the paid voice is off (cost-policy PAID_TTS): its model is not named here
+            eff.textContent = `Đang dùng: ${COST.modelLabel(st.effective.cheap) || "chưa có model khả dụng"}` +
+                (st.effective.cheapRetry ? ` (lượt tới thử lại ${COST.modelLabel(st.effective.cheapRetry)} một lần)` : "") +
+                ` · câu khó: ${COST.modelLabel(st.effective.strong) || "không có"}`;
         } else if (eff) eff.textContent = "";
     }
     async function refreshModelStatus(key) {

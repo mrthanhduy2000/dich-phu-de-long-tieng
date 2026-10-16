@@ -242,9 +242,9 @@ body {
 .brand-badge {
     font-size: 11px;
     font-weight: 500;
-    color: var(--claude-accent);
-    background-color: var(--claude-accent-subtle);
-    border: 1px solid var(--claude-accent-border);
+    color: var(--claude-text-muted);
+    background-color: transparent;
+    border: 1px solid var(--claude-border);
     padding: 2px 7px;
     border-radius: 999px;
     letter-spacing: 0.2px;
