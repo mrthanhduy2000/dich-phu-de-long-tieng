@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chào mừng - Vietnamese Subtitle Translator</title>
+    <script src="chrome-shim.js"></script>
+    <script src="theme.js"></script>
+    <style>
+        :root {
+            --bg: #FAF9F5; --card: #FFFFFF; --subtle: #F6F4EE; --text: #262420; --text-2: #57524A;
+            --border: #E8E4DC; --accent-fill: #B4573A; --accent-fill-hover: #A24C31; --link: #A24C31;
+            --ok: #2E7D32; --ok-bg: #E8F5E9; --err: #B3261E; --err-bg: #FDF2F2; --focus: #B4573A;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+                --bg: #1F1E1B; --card: #282622; --subtle: #23211E; --text: #ECE8E1; --text-2: #A8A39A;
+                --border: #3A3732; --accent-fill: #B4573A; --accent-fill-hover: #A24C31; --link: #E8A590;
+                --ok: #81C784; --ok-bg: #1B2E1D; --err: #F2A6A0; --err-bg: #3A1F1D; --focus: #E8A590;
+            }
+        }
+        :root[data-theme="dark"] {
+            --bg: #1F1E1B; --card: #282622; --subtle: #23211E; --text: #ECE8E1; --text-2: #A8A39A;
+            --border: #3A3732; --accent-fill: #B4573A; --accent-fill-hover: #A24C31; --link: #E8A590;
+            --ok: #81C784; --ok-bg: #1B2E1D; --err: #F2A6A0; --err-bg: #3A1F1D; --focus: #E8A590;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        main { max-width: 680px; margin: 0 auto; padding: 48px 20px 64px; }
+        h1 { font: 600 30px/1.25 Georgia, "Iowan Old Style", serif; margin: 0 0 8px; }
+        .lead { color: var(--text-2); margin: 0 0 32px; }
+        ol { list-style: none; margin: 0; padding: 0; counter-reset: step; }
+        li.step { counter-increment: step; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 20px 20px 64px; margin-bottom: 14px; position: relative; }
+        li.step::before { content: counter(step); position: absolute; left: 20px; top: 20px; width: 28px; height: 28px; border-radius: 50%; background: var(--accent-fill); color: #fff; font-weight: 600; text-align: center; line-height: 28px; font-size: 14px; }
+        li.step.done::before { content: "\2713"; background: var(--ok); color: #fff; }
+        :root[data-theme="dark"] li.step.done::before { color: #10200f; }
+        h2 { font-size: 17px; margin: 0 0 6px; }
+        p { margin: 0 0 10px; }
+        .muted { color: var(--text-2); font-size: 14px; }
+        a { color: var(--link); }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+        input[type="password"], input[type="text"] { flex: 1 1 240px; min-width: 0; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--subtle); color: var(--text); font: inherit; }
+        .btn { padding: 9px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
+        .btn-primary { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
+        .btn-primary:hover { background: var(--accent-fill-hover); }
+        .btn[disabled] { opacity: .6; cursor: default; }
+        input:focus-visible, .btn:focus-visible, a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+        .status { margin-top: 10px; padding: 8px 12px; border-radius: 8px; font-size: 14px; background: var(--subtle); color: var(--text); }
+        .status:empty { display: none; }
+        .status.ok { background: var(--ok-bg); color: var(--ok); }
+        .status.err { background: var(--err-bg); color: var(--err); }
+        details { margin-top: 8px; }
+        summary { cursor: pointer; color: var(--link); }
+        code { background: var(--subtle); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+        footer { margin-top: 24px; display: flex; gap: 16px; flex-wrap: wrap; }
+        @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Cài xong rồi, còn ba bước nhỏ</h1>
+    <p class="lead">Làm một lần là xong. Bước 1 và 3 đủ để dịch phụ đề; bước 2 chỉ cần nếu bạn muốn nghe lồng tiếng.</p>
+
+    <ol>
+        <li class="step" id="stepKey">
+            <h2>Nhập khóa Gemini để dịch tự nhiên hơn</h2>
+            <p class="muted">Khóa miễn phí. Chưa có khóa vẫn dịch được bằng Google Dịch, chỉ kém sát ngữ cảnh hơn.</p>
+            <ol class="muted" style="list-style: decimal; padding-left: 20px; margin: 0 0 8px;">
+                <li>Mở <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> và đăng nhập tài khoản Google.</li>
+                <li>Bấm "Create API key", rồi sao chép chuỗi bắt đầu bằng <code>AIza</code>.</li>
+                <li>Dán vào ô bên dưới và bấm "Lưu và kiểm tra".</li>
+            </ol>
+            <div class="row">
+                <label for="apiKey" hidden>Khóa Gemini</label>
+                <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Dán khóa Gemini (AIza...)">
+                <button type="button" class="btn btn-primary" id="btnTest">Lưu và kiểm tra</button>
+            </div>
+            <div class="status" id="keyStatus" role="status" aria-live="polite"></div>
+            <p class="muted" style="margin-top:10px">Khóa chỉ lưu trên máy bạn và chỉ gửi tới Google khi dịch. <a href="https://github.com/mrthanhduy2000/vietnamese-subtitle-translator/blob/main/docs/PRIVACY.md" target="_blank" rel="noopener">Xem dữ liệu nào rời khỏi máy</a>.</p>
+        </li>
+
+        <li class="step" id="stepVoice">
+            <h2>Muốn nghe lồng tiếng? Bật giọng VieNeu</h2>
+            <p class="muted">Giọng đọc tiếng Việt chạy ngay trên máy bạn, miễn phí. Có thể bỏ qua nếu chỉ cần phụ đề.</p>
+            <div class="status" id="voiceStatus" role="status" aria-live="polite">Đang kiểm tra...</div>
+            <details id="voiceHelp" hidden>
+                <summary>Cách bật</summary>
+                <p class="muted" style="margin-top:8px">Bộ cài một lệnh sẽ tự bật máy chủ mỗi khi mở máy. Chạy tay: <code id="voiceCmd">mở ~/VieNeu-TTS/cst-start.command</code>. Sau đó bấm kiểm tra lại.</p>
+            </details>
+            <div class="row"><button type="button" class="btn" id="btnVoice">Kiểm tra lại</button></div>
+        </li>
+
+        <li class="step" id="stepTry">
+            <h2>Thử với một video mẫu</h2>
+            <p class="muted">Mở video ngắn có phụ đề tiếng Anh, rồi bấm nút phụ đề Việt trên thanh điều khiển của trình phát. Nên ghim tiện ích lên thanh công cụ (biểu tượng mảnh ghép, chọn ghim) để mở menu nhanh.</p>
+            <div class="row"><a class="btn btn-primary" id="sampleLink" href="https://www.youtube.com/watch?v=jNQXAC9IVRw" target="_blank" rel="noopener">Mở video mẫu</a></div>
+        </li>
+    </ol>
+
+    <footer>
+        <a href="options.html">Mở trang Cài đặt đầy đủ</a>
+    </footer>
+</main>
+<script src="cost-policy.js"></script>
+<script src="onboarding.js"></script>
+</body>
+</html>

@@ -22,6 +22,7 @@
         dubGeminiVoice2: "Charon",
         dubTtsModel: "",
         dubVoiceName: "",
+        dubSystemFallback: true,      // no VieNeu (server down, machine too weak): the browser's Vietnamese voice speaks instead
         dubDuck: 0.2,                 // mức tiếng gốc khi có lời Việt (giữ nhạc nền nghe được)
         dubVolume: 1,
         dubSpeakers: "auto",          // voices follow the speakers (2.5.2): "auto" | "one" (everyone in the main voice)
@@ -107,12 +108,24 @@
         };
     }
 
-    function sendMessage(msg) {
+    function sendMessageOnce(msg) {
         return new Promise(resolve => {
             try {
                 chrome.runtime.sendMessage(msg, r => resolve(chrome.runtime.lastError ? { ok: false, error: chrome.runtime.lastError.message } : r));
             } catch (e) { resolve({ ok: false, error: e.message }); }
         });
+    }
+
+    // Retry only when the service worker never received the message (it was asleep). A closed port
+    // after delivery is not retried here: synthesis may already have been paid for.
+    async function sendMessage(msg) {
+        let r = await sendMessageOnce(msg);
+        for (const delay of [250, 1000]) {
+            if (!r || r.ok !== false || !/receiving end does not exist|could not establish connection/i.test(String(r.error))) break;
+            await new Promise(res => setTimeout(res, delay));
+            r = await sendMessageOnce(msg);
+        }
+        return r;
     }
 
     async function readSettings() {
@@ -172,13 +185,16 @@
         let primary = null;
         const sys = hasSystem ? system : null;
         const loc = hasLocal ? local : null;
-        if (localOnly) primary = loc;
+        // The browser voice is a free fallback for a machine that cannot run VieNeu; it hands back to VieNeu
+        // by itself once the server answers (doiVieNeuSanSang). dubSystemFallback off keeps VieNeu-only.
+        const systemOk = s.dubSystemFallback !== false;
+        if (localOnly) primary = loc || (systemOk ? sys : null);
         else if (s.dubProvider === "system") primary = sys || loc || gemini;
         else if (s.dubProvider === "gemini") primary = gemini || loc || sys;
         else primary = loc || gemini || sys;                    // auto + vieneu: VieNeu trước
         // VieNeu lỗi giữa chừng (tắt máy chủ): chuyển sang giọng hệ thống miễn phí, không tự
         // chuyển sang Gemini (tránh tốn tiền ngoài ý muốn)
-        const fallback = !localOnly && (primary === gemini || primary === loc) && sys ? sys : null;
+        const fallback = (localOnly ? systemOk && primary === loc : (primary === gemini || primary === loc)) && sys ? sys : null;
         const localMissing = (localOnly || s.dubProvider === "vieneu") && !hasLocal;
         return { primary, fallback, hasSystem, canGemini, hasLocal, localMissing };
     }
@@ -296,7 +312,7 @@
         // Bật theo dõi SAU khi bộ đọc đã chạy: stop() bên trên (dọn bộ đọc cũ) cũng tắt bộ theo dõi,
         // nên đặt ở giữa hàm thì nó bị xóa ngay và giọng không bao giờ tự chuyển về VieNeu
         if (localMissing) doiVieNeuSanSang(opts);
-        else if (primary && primary.id === "vieneu") canhBaoMayChuCham(opts);
+        else if (primary && primary.id === "vieneu") canhBaoMayChuCham();
         startDebug(engine);
         dub.container = opts.container || null;
         engine.start();
@@ -390,6 +406,7 @@
 
     function stop() {
         if (watchTimer) { clearInterval(watchTimer); watchTimer = null; }
+        clearInterval(slowTimer);
         startSeq++;                               // lượt bật đang chờ (nếu có) tự hủy, không tạo bộ đọc nữa
         dub.starting = false;
         if (dub.engine) { try { dub.engine.stop(); } catch (e) { /* bỏ qua */ } }
@@ -407,7 +424,7 @@
             if (changes.dubVolume) e.settings.volume = level(changes.dubVolume.newValue, 1);
             if (changes.dubMaxRate) e.settings.maxRate = Number(changes.dubMaxRate.newValue) || null;   // next sentence on
             // Đổi giọng / nhà cung cấp: khởi động lại engine với cùng nguồn
-            if (changes.dubSpeakers || changes.dubSpeakerAi || changes.dubProvider || changes.dubGeminiVoice || changes.dubGeminiVoice2 || changes.dubVoiceName || changes.dubTtsModel || changes.costMode || changes.dubLocalVoice || changes.dubLocalVoice2) {
+            if (changes.dubSpeakers || changes.dubSpeakerAi || changes.dubProvider || changes.dubSystemFallback || changes.dubGeminiVoice || changes.dubGeminiVoice2 || changes.dubVoiceName || changes.dubTtsModel || changes.costMode || changes.dubLocalVoice || changes.dubLocalVoice2) {
                 const src = { video: e.d.video, getGroups: e.d.getGroups, container: dub.container };
                 start(src);
             }
@@ -416,18 +433,31 @@
 
     // ---------- Máy chủ giọng chạy chậm: nói cho người xem biết, một lần mỗi trang ----------
     // Máy chủ chậm thì giọng Việt trễ dần mà không có lỗi nào; người xem chỉ thấy "giọng bị trễ".
-    async function canhBaoMayChuCham(opts) {
-        if (dub.slowWarned) return;
-        const r = await sendMessage({ action: "localTtsStatus" });
-        const rtf = r && Number(r.rtf);
-        if (!rtf || rtf < 0.8) return;                      // 0 = chưa đo được lượt nào
-        dub.slowWarned = true;
-        if (window.CST_UI && window.CST_UI.toast) {
-            window.CST_UI.toast(
-                `Máy chủ giọng đang chậm: tạo 1 giây lời nói mất ${rtf.toFixed(2)} giây (bình thường khoảng 0,25). Giọng Việt có thể trễ dần.`,
-                { warn: true, actionLabel: "Mở Cài đặt", onAction: () => sendMessage({ action: "openOptions" }) }
-            );
-        }
+    // Tốc độ đo từ chính các lượt engine đã tạo (không phải lần bật trước), kiểm tra định kỳ, và lời
+    // khuyên là tốc độ phát video mà giọng theo kịp (dub-hardware.js: giữ nguyên tốc độ thì tạo trước
+    // xa hơn cũng không cứu được khi rtf > 1, phải phát chậm lại).
+    let slowTimer = null, slowHits = 0;
+    function canhBaoMayChuCham() {
+        clearInterval(slowTimer);
+        slowHits = 0;
+        const HW = window.CST_HW;
+        if (!HW || dub.slowWarned) return;
+        const engine = dub.engine;
+        slowTimer = setInterval(() => {
+            const v = engine && engine.d && engine.d.video;
+            if (dub.engine !== engine || dub.slowWarned || !v) { clearInterval(slowTimer); return; }
+            let h = null;
+            try { h = engine.health(v.currentTime); } catch (e) { return; }
+            const advice = h && !h.live ? HW.slowAdvice({ rtf: h.rtf, playbackRate: v.playbackRate }) : null;
+            slowHits = advice ? slowHits + 1 : 0;
+            if (slowHits < 2) return;                           // two checks in a row: one slow take is noise
+            dub.slowWarned = true;
+            clearInterval(slowTimer);
+            if (!(window.CST_UI && window.CST_UI.toast)) return;
+            window.CST_UI.toast(advice.text, advice.rate
+                ? { warn: true, actionLabel: `Phát ${String(advice.rate).replace(".", ",")}×`, onAction: () => { try { v.playbackRate = advice.rate; } catch (e) { /* trình phát từ chối */ } } }
+                : { warn: true, actionLabel: "Mở Cài đặt", onAction: () => sendMessage({ action: "openOptions" }) });
+        }, 8000);
     }
 
     // ---------- Tự chuyển về giọng VieNeu ngay khi máy chủ sẵn sàng ----------

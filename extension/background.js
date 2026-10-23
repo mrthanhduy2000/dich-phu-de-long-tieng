@@ -81,8 +81,15 @@ async function callMyMemoryTranslate(text, sourceLang = "en", targetLang = "vi")
         const res = await fetch(url, { signal: controller.signal });
         if (!res.ok) throw new Error(`MyMemory HTTP ${res.status}`);
         const data = await res.json();
-        if (data && data.responseData && data.responseData.translatedText) {
-            return { text: data.responseData.translatedText, detectedLang: sl, engine: "mymemory" };
+        // MyMemory reports quota and language errors as HTTP 200 with the notice in translatedText
+        // ("MYMEMORY WARNING: YOU USED ALL AVAILABLE FREE TRANSLATIONS..."); that must never be shown
+        const mmText = data && data.responseData && data.responseData.translatedText;
+        const mmStatus = Number(data && data.responseStatus);
+        // "auto" is read as English here, so a Chinese/Thai/Arabic line comes back unchanged: that echo
+        // is not a translation (a source with no Latin letter at all cannot be its own Vietnamese)
+        const echoed = mmText && mmText.trim() === String(text).trim() && /\p{L}/u.test(text) && !/[A-Za-z\u00C0-\u024F]/.test(text);
+        if (mmText && !echoed && (!mmStatus || mmStatus === 200) && !/^\s*(MYMEMORY WARNING|PLEASE SELECT TWO DISTINCT LANGUAGES|INVALID LANGUAGE PAIR)/i.test(mmText)) {
+            return { text: mmText, detectedLang: sl, engine: "mymemory" };
         }
         throw new Error("Invalid MyMemory data");
     } finally {
@@ -315,7 +322,7 @@ async function geminiCall(model, apiKey, body, policy = {}) {
     const kh = await keyHash(apiKey);
     if ((accessOf(kh, model) || {}).s === "unavailable") throw new GeminiError("unavailable_for_key", `${model}: ${ERROR_TEXT.unavailable_for_key}`, { blocked: true });
     const cd = modelCooldown.get(model);
-    if (cd && cd.until > Date.now()) throw new GeminiError(cd.type, `${model} tạm ngưng ${Math.ceil((cd.until - Date.now()) / 1000)} giây: ${cd.reason}`, { blocked: true });
+    if (cd && cd.until > Date.now()) throw new GeminiError(cd.type, `${model} tạm ngưng ${Math.ceil((cd.until - Date.now()) / 1000)} giây: ${cd.reason}`, { blocked: true, resting: true });
 
     const retries = policy.retries == null ? 2 : policy.retries;
     const timeoutMs = policy.timeoutMs || 15000;
@@ -441,9 +448,30 @@ function sanitizeModelOutput(out, inputTokens) {
     t = t.replace(PLACEHOLDER_RE, (m, id) => (allowed.has(id) ? `[[__T${id}__]]` : " "));
     t = t.replace(/^\s*(?:bản dịch(?: tiếng việt)?|translation)\s*:\s*/i, "");
     t = t.replace(/\*\*(.+?)\*\*/g, "$1");
+    // Zero-width characters are invisible on screen but break the voice's text and width math;
+    // a no-break space is an ordinary space
+    t = t.replace(/[\u200B-\u200D\u2060\uFEFF]/g, "").replace(/\u00A0/g, " ");
     t = t.replace(/\s*\n\s*/g, " ").replace(/[ \t]{2,}/g, " ").trim();
+    // (2.8.6) A trailing ".." copied from the source ("Že vás baví..") is an ellipsis; a range
+    // ("1..10") or a path ("../") is left alone
+    t = t.replace(/(?<![.\p{N}])\.\.(?![.\p{L}\p{N}\/])/gu, "...");
     const m = t.match(/^["“](.*)["”]$/s);
     if (m && !/["“”]/.test(m[1])) t = m[1].trim();
+    return t;
+}
+
+// Formatting the model adds that the source did not have: an echoed list number ("1. Xin chào"),
+// *italics*, <i>/<b> tags, HTML entities. Each rule applies only when the source line has no
+// such mark, so a lecture that really says "1. Introduction", "a < b" or "a & b" is left alone.
+function stripAddedFormatting(text, source) {
+    let t = String(text || "");
+    const src = String(source || "");
+    if (!/^\s*\d+\s*[.)]/.test(src)) t = t.replace(/^\s*\d{1,3}\s*[.)]\s+(?=\S)/, "");
+    if (!/[*_]/.test(src)) t = t.replace(/(?<![*\w])\*([^*\s](?:[^*]*[^*\s])?)\*(?![*\w])/g, "$1");
+    if (!/</.test(src)) t = t.replace(/<\/?(?:i|b|u|em|strong|br)\s*\/?>/gi, " ").replace(/ {2,}/g, " ").trim();
+    if (!/&/.test(src)) {
+        t = t.replace(/&(amp|lt|gt|quot|#39|apos);/g, (m, e) => ({ amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", apos: "'" })[e]);
+    }
     return t;
 }
 
@@ -479,6 +507,10 @@ function buildUnitPrompt(req) {
     const parts = [];
     if (ctx.topic) parts.push(`[CHỦ ĐỀ] ${ctx.topic}`);
     if (ctx.domain) parts.push(`[LĨNH VỰC] ${ctx.domain}`);
+    if (ctx.selfRef === "tôi" || ctx.selfRef === "mình") parts.push(`[XƯNG HÔ] Người nói tự xưng "${ctx.selfRef}" ở các đoạn trước: giữ đúng cách xưng này.`);
+    // (2.7.4) An everyday video is talk, not a lecture (ContextSession.buildRequest). Blind A/B over
+    // 36 windows of 6 vlogs (tr-lab run reg1): more natural with this line in 30, without it in 2
+    if (ctx.register === "talk") parts.push("[VĂN PHONG] Video đời thường: viết như người Việt nói chuyện tự nhiên, gần gũi, không trang trọng kiểu bài giảng hay 'quý vị'.");
     if (ctx.terms && ctx.terms.length) parts.push(`[THUẬT NGỮ ĐÃ THỐNG NHẤT] ${ctx.terms.map(t => `${t.en} = ${t.vi}`).join("; ")}`);
     if (ctx.senseHints && ctx.senseHints.length) parts.push(`[GỢI Ý NGHĨA] ${ctx.senseHints.join("; ")}`);
     if (ctx.phraseHints && ctx.phraseHints.length) parts.push(`[CỤM TỪ, THÀNH NGỮ] ${ctx.phraseHints.join("; ")}`);
@@ -533,6 +565,7 @@ function usageOf(data, promptChars, srcChars) {
 // tried after another one failed gets none, so falling through the chain adds one quick call each.
 // The checked translation of one answer; throws a GeminiError when it is unusable (cutOff: the
 // answer hit the output cap, worth one more pass with a larger cap)
+const EMPTY_KEEP_WORDS = 3;
 function readUnitAnswer(data, req, allowed) {
     const cand = data.candidates?.[0] || {};
     let obj;
@@ -545,11 +578,31 @@ function readUnitAnswer(data, req, allowed) {
     }
     const arr = Array.isArray(obj.t) ? obj.t : (Array.isArray(obj.translations) ? obj.translations : []);
     let translations = arr.map(x => sanitizeModelOutput(x, allowed));
+    if (translations.length === req.sentences.length) translations = translations.map((t, i) => stripAddedFormatting(t, req.sentences[i]));
     if (translations.length !== req.sentences.length) {
         if (req.sentences.length === 1 && translations.length > 1) translations = [translations.join(" ")];
         else throw new GeminiError("bad_output", `Số mục không khớp (gửi ${req.sentences.length}, nhận ${translations.length})`);
     }
-    if (translations.some(t => !t)) throw new GeminiError("bad_output", "Có mục dịch rỗng");
+    // (2.7.7) An item left empty that is a name or a word or three ("vanmathi", "that's all", "B.com")
+    // keeps its source words, and the window stays Gemini's: one such item sent the whole window to
+    // Google on every model and every heal, so the video was never saved (cstFallbackLog: 3 videos
+    // in 51 new ones, every one an item the model took for no speech). A longer item left empty may
+    // be lost meaning: the window still fails, as before, and so does one with many empty items.
+    // (2.8.8) An item that is a bracketed note and nothing else ("[موسیقی]", music in Persian, a note
+    // the list in vi-quality.js does not know) may come back empty in any number: it keeps its source,
+    // the dub planner leaves square-bracket notes silent. It failed a Persian video's windows (3 of 4)
+    const noteOnly = i => { const t = String(req.sentences[i] || ""); return /[\[♪♫]/.test(t) && !/[\p{L}\p{N}]/u.test(t.replace(/\[[^\][]*\]|[♪♫]+|>>/g, " ")); };
+    for (let i = 0; i < translations.length; i++) if (!translations[i] && noteOnly(i)) translations[i] = String(req.sentences[i]).trim();
+    const empty = translations.map((t, i) => (t ? -1 : i)).filter(i => i >= 0);
+    if (empty.length) {
+        const short = i => (String(req.sentences[i] || "").match(/[\p{L}\p{N}]+/gu) || []).length <= EMPTY_KEEP_WORDS;
+        if (empty.length * 4 > translations.length || !empty.every(short)) {
+            // which lines came back empty, for cstFallbackLog (content.js noteFallback): the class is
+            // told by them, and the window's source is gone once the video is closed
+            throw new GeminiError("bad_output", "Có mục dịch rỗng", { detail: `${empty.length}/${translations.length} rỗng: ` + empty.slice(0, 4).map(i => JSON.stringify(String(req.sentences[i] || "").slice(0, 60))).join(" | ") });
+        }
+        for (const i of empty) translations[i] = String(req.sentences[i] || "").trim();
+    }
     return { translations, terms: Array.isArray(obj.terms) ? obj.terms.filter(t => t && t.en && t.vi).slice(0, 5) : [] };
 }
 
@@ -820,16 +873,26 @@ const metaOf = req => ({ videoKey: req.videoKey || "", videoSec: Number(req.vide
 // Khóa bản dịch: mọi thứ quyết định kết quả, gồm ĐÚNG model tạo ra bản dịch
 // (bản của 2.5 và 3.1 không bao giờ dùng lẫn). Không gồm bản dịch câu trước hay
 // danh sách thuật ngữ đang học (thay đổi theo phiên) để mở lại video vẫn trúng.
-async function unitCacheKey(req, model) {
+// (next release) Nor the protected glossary terms: the key reads the ORIGINAL source text (req.source),
+// not the text with [[__T0__]] codes in it. The old key held the codes and the term list, so every
+// release that added names (+34,700 in 2.9.5) re-billed each window that matched a new name. The
+// entry keeps the terms it was translated with (entry.placeholders) and the page restores with those,
+// so a cached window stays whole whatever the glossary says now. protectFp is the user's own glossary
+// choices (custom renderings, groups switched off): changing those must still miss.
+async function unitCacheKey(req, model, legacy) {
     const c = req.context || {};
     const N = CST_CACHE.normalizeText;
+    const src = !legacy && Array.isArray(req.source) && req.source.length === (req.sentences || []).length ? req.source : req.sentences;
     return CST_CACHE.hashKey([
         "tr", TR_PROMPT_VERSION, "en", "vi", model,
-        (req.sentences || []).map(N),
-        (req.placeholders || []).map(p => p.term),
+        (src || []).map(N),
+        ...(legacy ? [(req.placeholders || []).map(p => p.term)] : (req.protectFp ? ["gl:" + req.protectFp] : [])),
         N(c.domain), N(c.topic).slice(0, 120), N(c.prevSource).slice(-200), N(c.nextSource).slice(0, 120),
         // source text, so deterministic; only when present, so every key without it stays as it was
-        ...(c.refSource ? [N(c.refSource).slice(0, 200)] : [])
+        ...(c.refSource ? [N(c.refSource).slice(0, 200)] : []),
+        // the first person asked for (2.7.4): a line read with it is not the one read without
+        ...(c.selfRef ? ["self:" + c.selfRef] : []),
+        ...(c.register ? ["reg:" + c.register] : [])
     ]);
 }
 
@@ -848,14 +911,15 @@ async function handleTranslateUnit(request) {
     const tier = request.tier === "strong" && budget.allowed ? "strong" : "cheap";
     const unavailable = await isUnavailableFn(cfg.geminiApiKey);
     const chain = COST.modelChain(tier, cfg, cfg.costMode, unavailable);
-    const req = { ...request, sentences };
+    const source = Array.isArray(request.source) && request.source.length === sentences.length ? request.source.map(x => String(x || "").trim()) : null;
+    const req = { ...request, sentences, ...(source ? { source } : {}) };
     // 1-2. CACHE (RAM -> IndexedDB) theo ĐÚNG model sẽ được gọi (model đầu chuỗi, đã bỏ
     // các model key không gọi được). Lượt dịch lại (refine) thì bỏ qua cache.
     // The later models of the chain are looked up too, but only those priced at or above the first:
     // when the first model was rate-limited, the next one translated and saved under its own key, and
     // a revisit that looked up the first model alone paid Gemini again for the same lines. A cheaper
     // model's translation never answers a request meant for a stronger one (tier "strong").
-    if (caches && !request.refine && chain.length) {
+    if (caches && !request.refine && !request.noCache && chain.length) {
         const floor = COST.costRank(chain[0]);
         const models = chain.filter((m, i) => i === 0 || COST.costRank(m) >= floor);
         const keys = await Promise.all(models.map(m => unitCacheKey(req, m).catch(() => null)));
@@ -865,8 +929,21 @@ async function handleTranslateUnit(request) {
             // costs at most two read timeouts before Gemini is asked
             const first = await caches.tr.get(key);
             const rest = first ? [] : await Promise.all(keys.slice(1).map(k => (k ? caches.tr.get(k) : null)));
-            const at = first ? 0 : rest.findIndex(Boolean) + 1;
-            const hit = first || rest[at - 1];
+            let at = first ? 0 : rest.findIndex(Boolean) + 1;
+            let hit = first || rest[at - 1];
+            // a window saved before this change sits under the key that held the codes: found there, it is
+            // copied to the new key with the terms it was translated with, so the next glossary update
+            // leaves it alone
+            if (!hit && source) {
+                const old = await Promise.all(models.map(m => unitCacheKey(req, m, true).catch(() => null)));
+                const found = await Promise.all(old.map(k => (k ? caches.tr.get(k) : null)));
+                const j = found.findIndex(Boolean);
+                if (j >= 0) {
+                    hit = { ...found[j], placeholders: req.placeholders || [] };
+                    if (keys[j]) caches.tr.set(keys[j], hit);
+                    at = j;
+                }
+            }
             if (hit) { track(meta, { hitsTr: 1, avoided: 1 }); return { ok: true, ...hit, fromCache: true, latency: 0, cacheKey: keys[at] }; }
             const late = !request.refine && lateUnits.get(key);
             if (late) {
@@ -899,7 +976,7 @@ function lateAnswerKeeper(req, model, tier) {
     return {
         keep(answer) {
             if (!answer) return settle(null);
-            const entry = { ...answer, engine: "gemini", model, tier };
+            const entry = { ...answer, engine: "gemini", model, tier, placeholders: req.placeholders || [] };
             keyP.then(k => { if (k && caches) caches.tr.set(k, entry); settle(entry); });
         },
         // called when the request timed out: from now on a twin request can wait for this answer
@@ -921,7 +998,7 @@ async function translateUnitMiss(request, sentences, cfg, tier, meta, budget) {
     // Model không gọi được (404 model không tồn tại / không cấp cho key này) -> ghi nhớ,
     // TÍNH LẠI chuỗi và dùng ngay model Gemini kế tiếp; chỉ khi không còn model Gemini
     // nào gọi được (hoặc lỗi khác) mới dùng Google dự phòng.
-    let aiFailedReason = null;
+    let aiFailedReason = null, aiFailedDetail = "";
     let firstTried = null;
     // Google by choice (Gemini off, no key) is the translation the viewer asked for: "google", kept
     // by the per-video cache. Google because Gemini failed or the budget ran out: "google_fallback",
@@ -947,11 +1024,12 @@ async function translateUnitMiss(request, sentences, cfg, tier, meta, budget) {
                 let key = null;
                 if (caches) {
                     try { key = await unitCacheKey({ ...request, sentences }, model); } catch (e) { key = null; }
-                    if (key) caches.tr.set(key, { translations: r.translations, terms: r.terms, engine: r.engine, model: r.model, tier: r.tier });
+                    if (key) caches.tr.set(key, { translations: r.translations, terms: r.terms, engine: r.engine, model: r.model, tier: r.tier, placeholders: request.placeholders || [] });
                 }
                 return { ok: true, ...r, cacheKey: key, budget: budget.level };
             } catch (e) {
                 aiFailedReason = e.message;
+                aiFailedDetail = e.detail || "";
                 if (e.type === "timeout" && late) late.expect();
                 // The next model of the chain is tried when this failure belongs to this model and
                 // passes: gone for this key (404), its own rate limit or daily quota, overloaded
@@ -960,7 +1038,11 @@ async function translateUnitMiss(request, sentences, cfg, tier, meta, budget) {
                 // to Google Translate (no context), and a YouTube video could keep that version.
                 // Not tried again: a timeout (a second one doubles the wait), a key, payment or
                 // request problem (every model fails the same), an abort.
-                if (!NEXT_MODEL_ON.has(e.type)) break;
+                // (2.7.4) A model resting after its own slow answer (timeoutCooldownMs) costs nothing to
+                // skip: the next model is asked. Treated as a timeout, it sent every window of those
+                // 15 s to Google, and a video with one slow answer was never saved (cstFallbackLog:
+                // 4 of 5 fallbacks of a 25-video run were "tạm ngưng ... phản hồi quá chậm").
+                if (!NEXT_MODEL_ON.has(e.type) && !e.resting) break;
             }
         }
     } else {
@@ -981,6 +1063,7 @@ async function translateUnitMiss(request, sentences, cfg, tier, meta, budget) {
         ok: true, translations, terms: [],
         engine: byChoice ? "google" : "google_fallback",
         fallbackReason: aiFailedReason,
+        ...(aiFailedDetail ? { fallbackDetail: aiFailedDetail } : {}),
         latency: Date.now() - tStart
     };
 }
@@ -1052,6 +1135,7 @@ async function cachedParts(parts) {
 // Audio nhiều đoạn gộp trong một lượt TTS -> cắt lại theo khoảng lặng, làm sạch từng đoạn
 // opts.maxPause: rút ngắn khoảng lặng dài bên trong từng đoạn (giọng VieNeu)
 // opts.breath (VieNeu): word indices of the breathing commas in opts.text, kept at a breath's length
+// opts.slack (VieNeu, BACKLOG 48): seconds a loose line hands to its punctuation pauses
 // opts.text (VieNeu, one part): pauses follow the text (AUDIO.shapePauses): kept at punctuation and
 // at clause openings of long sentences, closed elsewhere; opts.clean (VieNeu): rumble cut at
 // opts.hpHz and hiss removal (AUDIO.cleanTake)
@@ -1065,7 +1149,7 @@ function splitTtsAudio(b64OrBytes, mime, sr, parts, opts = {}) {
     if (parts.length > 1 && split.confidence < 0.5) return null;
     return parts.map((p, k) => {
         let piece = AUDIO.slice(samples, sr, split.parts[k].start, split.parts[k].end);
-        if (opts.text && parts.length === 1 && AUDIO.shapePauses) piece = AUDIO.shapePauses(piece, sr, opts.text, { maxPause: opts.maxPause, breath: opts.breath }).samples;
+        if (opts.text && parts.length === 1 && AUDIO.shapePauses) piece = AUDIO.shapePauses(piece, sr, opts.text, { maxPause: opts.maxPause, breath: opts.breath, slack: opts.slack }).samples;
         else if (opts.maxPause) piece = AUDIO.compressPauses(piece, sr, { maxPause: opts.maxPause });
         const clean = AUDIO.prepareSpeech(piece, sr);
         return { key: p.key, wav: AUDIO.encodeWav(clean, sr), duration: clean.length / sr, sampleRate: sr };
@@ -1484,7 +1568,10 @@ async function synthesizeLocalOnce(req, text, parts, signal) {
         const maxPause = req.maxPause ? Math.max(0.1, Math.min(LOCAL.maxPause, Number(req.maxPause) || LOCAL.maxPause)) : LOCAL.maxPause;
         // (2.1.8) word indices of the breathing commas in text: kept at a breath's length
         const breath = Array.isArray(req.breath) ? req.breath.filter(i => Number.isInteger(i) && i >= 0).slice(0, 64) : undefined;
-        const pieces = splitTtsAudio(bytes, mime, sr, parts, { maxPause, text, breath, clean: true, hpHz: localHighPass(req.voice) });
+        // (BACKLOG 48) a line much shorter than its slot: seconds its punctuation pauses may grow by
+        // (never for a dense line, which asks for short pauses)
+        const slack = !req.maxPause && Number(req.slack) > 0 ? Math.min(2, Number(req.slack)) : 0;
+        const pieces = splitTtsAudio(bytes, mime, sr, parts, { maxPause, text, breath, slack, clean: true, hpHz: localHighPass(req.voice) });
         if (!pieces) return { ok: false, errorType: "split", error: "Không cắt được audio theo từng đoạn" };
         // stored together; a write never throws and is capped (cst-cache WRITE_TIMEOUT_MS)
         await Promise.all(pieces.map(p => caches.audio.set(p.key, { wav: p.wav, duration: p.duration, sampleRate: p.sampleRate })));
@@ -1539,7 +1626,7 @@ async function localCacheBytes() {
     let bytes = 0, count = 0;
     const videos = { count: 0, bytes: 0, fresh: 0, max: YT_SAVED_MAX, reviewed: REVIEW_MARK.videos, until: REVIEW_MARK.until };
     for (const [k, v] of Object.entries(all)) {
-        if (!/^ytcache|^ctxterms_/.test(k)) continue;
+        if (!/^ytcache|^cscache|^ctxterms_/.test(k)) continue;
         const chars = JSON.stringify(v).length;
         bytes += chars * 2;
         count++;
@@ -1548,7 +1635,7 @@ async function localCacheBytes() {
         videos.bytes += Math.round(chars * 1.15);              // UTF-8, as youtube.js ytCacheBytes
         if (((v && v.luc) || 0) > REVIEW_MARK.until) videos.fresh++;
     }
-    return { bytes, count, videos, keys: Object.keys(all).filter(k => /^ytcache|^ctxterms_/.test(k)) };
+    return { bytes, count, videos, keys: Object.keys(all).filter(k => /^ytcache|^cscache|^ctxterms_/.test(k)) };
 }
 
 async function handleCacheStats() {
@@ -1659,7 +1746,7 @@ async function handleTestKey(req) {
 // part of short caption pieces still wrote 10,799 and 16,368 tokens; dub-planner joins such pieces
 // into sentences), a rule against a turn back to the same speaker (367 alternating turns instead)
 // ============================================================
-const SPEAKER_PROMPT_VERSION = 2;
+const SPEAKER_PROMPT_VERSION = 3;
 const SPEAKER_MAX_LINES = 900;
 const SPEAKER_TEMPERATURE = 0;
 const SPEAKER_SYSTEM_PROMPT = [
@@ -1668,10 +1755,12 @@ const SPEAKER_SYSTEM_PROMPT = [
     "How turns look:",
     "- Interview, panel, talk show, podcast: the host asks, the guests answer. A question or remark addressed to someone by name (\"So David, what does it signal...\", \"Kimberly, everything that...\", \"Thank you both.\") is said by someone else, usually the host, and the person addressed answers next. Short replies (\"Thank you.\", \"Good to be here.\", \"Right.\", \"Yes.\") are turns too.",
     "- News report or documentary: the reporter narrates; interviewees speak in short clips, often introduced (\"says Jane Doe, a nurse\"); each clip is a turn of that person, then back to the reporter.",
+    "- Film, drama, game cutscene: many characters. Follow the scene: who questions, orders or threatens and who answers, begs or reports (an officer and the people he interrogates, soldiers reporting back). A line answering the line before is usually another character; an order and its \"Yes, sir.\" are two.",
     "- One person talking (a vlog, a lecture, a monologue), however lively: one speaker, one turn at the first line. Quoted or reported speech (\"and she said, no way\"), rhetorical questions, reading a comment aloud, imitating someone, singing: NOT a turn.",
     "- \">>\" usually marks a new speaker but also stands around music and noises: a hint. \"Name:\" labels may mark only some of the turns.",
+    "- The lines may be in any language, machine-heard, with words misheard: read them for meaning in that language.",
     "- A turn that starts inside a line: \"at\" holds the new speaker's first words exactly as written in that line.",
-    "Speakers: number them 1, 2, 3 in order of first appearance and reuse the number every time the same person talks again (a host comes back many times). Label each with the name the transcript gives (introductions, people addressed by name), else a role (host, guest, reporter, interviewee). Gender only when the transcript makes it clear (a name, he/she, sir/ma'am), else \"unknown\".",
+    "Speakers: number them 1, 2, 3 in order of first appearance and reuse the number every time the same person talks again (a host comes back many times). Label each with the name the transcript gives (introductions, people addressed by name), else a role (host, guest, reporter, interviewee, officer, soldier, girl, mother, villager); never \"unknown\" as a label. Gender when the transcript makes it clear: a name, he/she, sir/ma'am, a role that has one (mother, father, daughter, son, girl, boy, wife, husband), how the others address them (a child calls a man \"father\" or \"sir\"); else \"unknown\".",
     "confidence: \"high\" when clearly a dialogue or clearly one person, \"medium\" when mostly clear, \"low\" when guessing."
 ].join("\n");
 const SPEAKER_SCHEMA = {
@@ -1863,6 +1952,81 @@ async function askSpeakers(model, apiKey, user, n, meta, promptChars, system = S
     return { ok: false, reason: "bad_output" };
 }
 
+// ============================================================
+// ON-SCREEN SUBTITLES (readScreenText, 2.6.4; screen-text.js)
+// One cropped strip of a video frame -> the caption burned into it, read and translated in one
+// call. Used when every caption track transcribes an AI dub (youtube.js ytBatDauDocChuTrenHinh).
+// ============================================================
+const SCREEN_SYSTEM_PROMPT = [
+    "The image is the bottom strip of one video frame. Read the subtitle burned into it and translate it into Vietnamese.",
+    "text: the subtitle exactly as written, with a speaker label before a colon if there is one. Only captions of what is said or heard count. Ignore game HUD, menus, button prompts, logos, watermarks, channel names, counters and signs in the scene. No caption: text is \"\".",
+    "speaker: the speaker label alone (\"Defector's Daughter\"), else \"\".",
+    "vi: natural spoken Vietnamese for the caption, without the speaker label and without surrounding brackets. Translate everything it says; never shorten or summarise. Keep personal names, call signs and brand names as written. Use the earlier captions for pronouns and terms."
+].join("\n");
+const SCREEN_SCHEMA = {
+    type: "OBJECT",
+    properties: { text: { type: "STRING" }, speaker: { type: "STRING" }, vi: { type: "STRING" } },
+    required: ["text", "speaker", "vi"]
+};
+const SCREEN_IMAGE_TOKENS = 520;   // a 960 px wide strip is two 768 px tiles at 258 tokens each
+
+function readScreenAnswer(data) {
+    const raw = responseText(data).trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
+    let a;
+    try { a = JSON.parse(raw); } catch (e) { throw new GeminiError("bad_output", "Gemini không trả JSON hợp lệ"); }
+    const clean = s => String(s || "").replace(/\s+/g, " ").trim().slice(0, 400);
+    const text = clean(a && a.text);
+    return { text, speaker: text ? clean(a.speaker).slice(0, 60) : "", vi: text ? clean(a.vi) : "" };
+}
+
+async function handleReadScreenText(req) {
+    const m = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(req.image || ""));
+    if (!m || m[2].length > 600000) return { ok: false, reason: "bad_image" };
+    const cfg = await modelsFromCfg();
+    if (!cfg.useAi || !cfg.geminiApiKey) return { ok: false, reason: "no_key" };
+    const before = (Array.isArray(req.before) ? req.before : []).slice(-4)
+        .map(b => `${String((b && b.text) || "").slice(0, 200)} => ${String((b && b.vi) || "").slice(0, 200)}`);
+    const user = [
+        req.videoTitle ? `Video title: ${String(req.videoTitle).slice(0, 120)}` : "",
+        before.length ? `Earlier captions and their Vietnamese:\n${before.join("\n")}` : "",
+        "Read and translate the caption in this image."
+    ].filter(Boolean).join("\n");
+    const meta = metaOf(req);
+    const promptChars = SCREEN_SYSTEM_PROMPT.length + user.length;
+    const tried = new Set();
+    let last = { ok: false, reason: "no_model" };
+    for (let guard = 0; guard < 4; guard++) {
+        const unavailable = await isUnavailableFn(cfg.geminiApiKey);
+        const model = COST.modelChain("cheap", cfg, cfg.costMode, unavailable).find(x => !tried.has(x));
+        if (!model) break;
+        tried.add(model);
+        const budget = await budgetState(meta, COST.estimateTextCost(model, Math.ceil(promptChars / 3.5) + SCREEN_IMAGE_TOKENS, 120));
+        if (!budget.allowed || budget.runaway) return { ok: false, reason: "budget" };
+        const onBilled = d => {
+            const u = usageOf(d, promptChars, 0);
+            if (!d) { u.in += SCREEN_IMAGE_TOKENS; u.out = Math.max(u.out, 120); }
+            trackText(meta, model, u);
+        };
+        const generationConfig = { temperature: 0, maxOutputTokens: 1024, responseMimeType: "application/json", responseSchema: SCREEN_SCHEMA };
+        const thinking = thinkingConfigFor(model);
+        if (thinking) generationConfig.thinkingConfig = thinking;
+        const body = {
+            system_instruction: { parts: [{ text: SCREEN_SYSTEM_PROMPT }] },
+            contents: [{ parts: [{ inline_data: { mime_type: "image/" + m[1], data: m[2] } }, { text: user }] }],
+            generationConfig
+        };
+        try {
+            const data = await geminiCall(model, cfg.geminiApiKey, body, { timeoutMs: 12000, retries: 1, onBilled });
+            return { ok: true, model, ...readScreenAnswer(data) };
+        } catch (e) {
+            if (e.type === "invalid" && /thinking/i.test(e.message) && thinking) { noThinkingCfg.add(model); tried.delete(model); continue; }
+            last = { ok: false, reason: e.type || "error", error: e.message };
+            if (last.reason !== "not_found" && last.reason !== "unavailable_for_key") break;
+        }
+    }
+    return last;
+}
+
 // ---- Mở trang Cài đặt từ content script (trang YouTube/Coursera không được tự mở
 // chrome-extension://.../options.html: Chrome chặn với ERR_BLOCKED_BY_CLIENT) ----
 async function handleOpenOptions() {
@@ -1958,10 +2122,10 @@ async function reinjectOpenTabs() {
 try {
     chrome.runtime.onInstalled.addListener(details => {
         if (details && (details.reason === "update" || details.reason === "install")) reinjectOpenTabs().catch(() => {});
-        // A first install (Load unpacked, in any Chromium browser) opens the settings on a welcome
-        // card, as a store extension would: the Gemini key, the voice server, the first video
+        // A first install (Load unpacked, in any Chromium browser) opens the onboarding page:
+        // the Gemini key, the voice server, the first video
         if (details && details.reason === "install" && chrome.tabs && chrome.tabs.create) {
-            Promise.resolve(chrome.tabs.create({ url: chrome.runtime.getURL("options.html#welcome") })).catch(() => {});
+            Promise.resolve(chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") })).catch(() => {});
         }
     });
 } catch (e) { /* chạy ngoài extension */ }
@@ -2049,6 +2213,7 @@ const ROUTES = {
     modelStatus: handleModelStatus,
     testKey: handleTestKey,
     analyzeSpeakers: handleAnalyzeSpeakers,
+    readScreenText: handleReadScreenText,
     openOptions: handleOpenOptions,
     costStats: handleCostStats,
     localTtsStatus: handleLocalTtsStatus,
@@ -2057,11 +2222,13 @@ const ROUTES = {
 };
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (!request || typeof request !== "object") return false;
     if (request.action === "ttsAbort") {
         sendResponse(handleTtsAbort(request));
         return false;
     }
-    const route = ROUTES[request.action];
+    // Own keys only: "constructor" or "__proto__" must not resolve to an Object.prototype member.
+    const route = Object.prototype.hasOwnProperty.call(ROUTES, request.action) ? ROUTES[request.action] : null;
     if (!route) return false;
     route(request, sender).then(sendResponse).catch(err => sendResponse({ ok: false, errorType: err.type || "unknown", error: err.message }));
     return true;

@@ -77,6 +77,11 @@
         fitSlack: 0.25,           // được nói quá mốc cuối phụ đề của câu tối đa bấy nhiêu giây
         catchUpMax: 0.08,         // đang trễ so với phụ đề: nhanh thêm tối đa 8% để bắt kịp dần
         rateStepUp: 0.1,          // câu sau được nhanh hơn câu trước tối đa 0,1 (câu tràn khung: đuổi kịp, không dồn trễ)
+        rateStepUpOverrun: 0.2,   // (2.7.0) ... 0.2 for a line that, read at +0.1, would overrun its slot by more
+        overrunStepAt: 0.4,       // than this many seconds (that lag passes to every line after it). 70 saved videos:
+                                  // starts > 0.5 s late 1657 -> 1419, > 1 s 900 -> 766, lag 2506 -> 2197 s; line pairs
+                                  // changing rate > 15% 5 -> 77 of ~5900, all at a new sentence (rateStepInSentence holds
+                                  // inside one). 0.15: 1502 late, 50 jumps; 0.3: 1380, 102; threshold 0.8: 1557, 56
         // ... and slows down gently, at most this much per line. 0.06 until 2.5.1: a fast talk climbed
         // 0.1, fell 0.06 and climbed again. With lookAhead 5 on the user's 45 saved videos (simulator):
         // late starts 1802 -> 1658, heard-pace jumps over 15% 585 -> 486 (DUBBING.md "Smoother pace")
@@ -103,11 +108,22 @@
         // 0.28 s. This keeps the join as long as a comma after a long clause.
         joinGapClause: 0.15,
         joinGapValue: 0.3,        // ... also after a cut at a clause boundary this strong (dub-prosody value)
-        chainLead: 0.8,           // câu CHƯA HẾT (đoạn trước không kết thúc bằng dấu chấm): đoạn sau được
-                                  // nói sớm tối đa bấy nhiêu giây ngay sau đoạn trước, không đứng im chờ phụ đề.
-                                  // Trước 1.3.2 là 2,0 giây: phụ đề người dịch (TED) ngắn hơn lời gốc, độ sớm
-                                  // CỘNG DỒN qua chuỗi đoạn -> đo thật giọng đi trước phụ đề tới 2,0 giây
-        rateMemory: 4,            // câu trước kết thúc cách đây quá bấy nhiêu giây thì không cần nối nhịp
+        chainLead: 0.3,           // a sentence still running (the last part did not end on a full stop): the
+                                  // next part may start up to this many seconds before its subtitle, right after
+                                  // the last one, instead of standing silent mid-sentence. 2.0 until 1.3.2 (the
+                                  // lead added up along a chain of parts), 0.8 until 2.6.9: nearly every chained
+                                  // part then sat at the full 0.8 s ahead of the speaker, 1371 of 8989 lines on
+                                  // 70 saved videos started > 0.3 s early ("lồng tiếng trước khi người thật
+                                  // nói"). At 0.3: 0 such lines, mid-sentence silences > 0.4 s 114 -> 177
+                                  // (183 -> 276 s), late starts 1649 -> 1657, no word lost
+        // The last line ended more than this many seconds ago: a fresh pace, no smoothing from it.
+        // 4 until 2.8.5: a fast line held the next one fast across a 1-4 s pause, so a short line
+        // was rushed and then fell silent while the speaker still talked (BACKLOG 48). After a pause
+        // a person starts a new sentence at a new pace. 100 saved videos (simulator, 8977 lines):
+        // starts > 0.5 s late 751 -> 716, lag 1159 -> 1105 s, pace jumps > 15% between lines under
+        // 1 s apart 55 -> 46, rushed (>= 1.15x) lines followed by a silence >= 1 s 916 -> 687,
+        // silences >= 1.5 s while the source talks 1193 -> 1068. 0.8: jumps 99; 0.6: 169; 2: rushed 797
+        rateMemory: 1,
         maxQueueLag: 4.5,
         // ... but a line whose audio is ready is read anyway, up to maxQueueLagHard late (readsLate,
         // 2.4.5). Dropping it did not buy the sync back: on the user's 40 saved videos (745 min,
@@ -160,6 +176,18 @@
         thinBuffer: 1.5,          // audio sẵn phía trước < (độ trễ TTS x hệ số này) -> cho chạy 2 lượt để bắt kịp
         keepIfDone: 0.6,          // lượt cũ đã chạy >= 60% thời gian thường lệ: để chạy nốt (audio đã gần như chắc chắn bị tính tiền)
         denseRatio: 1.15,         // câu phải đọc nhanh hơn 1,15x mới vừa khung: rút khoảng nghỉ trong câu (không bỏ chữ)
+        // (BACKLOG 48) The opposite case: a line that, read at the floor pace, would end slackFrom s or
+        // more before its slot does asks its take for longer punctuation pauses (looseSlack), leaving
+        // slackKeep s of that spare as a gap, in steps of slackStep s (part of the store key), at most
+        // slackMax s of take time. Never a word dropped or added. slackMax 0 turns it off.
+        // slackFreesPace: the line after a loose one picks its own pace, as after a pause of
+        // rateMemory (the loose line used to end that far ahead; held to its floor pace, the next
+        // dense line climbed too slowly and started late). 101 saved videos, docs/DUBBING.md.
+        slackFrom: 1.0,
+        slackKeep: 0.5,
+        slackStep: 0.25,
+        slackMax: 1.5,
+        slackFreesPace: true,
         lagMaxSpeechRate: 1.4,    // đang trễ > lagBoostAt giây: được đọc nhanh tới 1,4x (Mỹ Duyên ~5 âm tiết/giây,
         lagBoostAt: 1.0,          // ngang tốc độ đọc tin tức) để bắt kịp, KHÔNG bỏ chữ
         // Adapt to how fast the video speaks (1.6.1). A slow voice (Kim Thanh, 3.8 syllables/s) on a
@@ -468,7 +496,8 @@
                     provider.voices[plan.speaker] || provider.voices.S1, CACHE.normalizeText(speakScript(plan)).toLowerCase(),
                     PROSODY && PROSODY.signature ? PROSODY.signature(plain) : ""];
                 // Câu dày chữ tạo với khoảng nghỉ ngắn hơn: khóa kho riêng (không dùng lẫn audio thường)
-                return CACHE.hashKey(plan.tightPauses ? [...base, "tight"] : base);
+                // (BACKLOG 48) a loose line's take with longer punctuation pauses: a key per slack step
+                return CACHE.hashKey(plan.tightPauses ? [...base, "tight"] : plan.slackPauses > 0 ? [...base, "slack" + plan.slackPauses] : base);
             },
             abort(jobId) { env.sendMessage({ action: "ttsAbort", jobId }); },
             async render(plans, ctx = {}) {
@@ -479,7 +508,8 @@
                         action: "synthesizeSpeech", engine: L.id,
                         text: plainScript(p), speak: speakScript(p), voice: provider.voices[p.speaker] || provider.voices.S1,
                         jobId: ctx.jobId, parts: [{ key, weight: p.phrases.reduce((a, ph) => a + ph.syl, 0) }],
-                        maxPause: p.tightPauses ? L.tightPause : undefined, breath: breathAt(p)
+                        maxPause: p.tightPauses ? L.tightPause : undefined, breath: breathAt(p),
+                        slack: !p.tightPauses && p.slackPauses > 0 ? p.slackPauses : undefined
                     });
                     if (res && (res.aborted || res.errorType === "aborted")) { const err = new Error("Đã hủy"); err.aborted = true; throw err; }
                     if (!res || !res.ok || !Array.isArray(res.parts) || !res.parts[0] || typeof res.parts[0].wav !== "string") {
@@ -783,7 +813,8 @@
             const spoken = s0 == null ? null : { start: s0, end: passed ? passed.end : s0 };
             const script = this.oneVoice(PLAN.buildDubScript(groups, { headAt: free ? this.headAt : null, speakerTurns, spoken, ...(free ? FREE_SEGMENTS : {}) }));
             const opts = { voiceModel: this.provider.voiceModel };
-            this.plans = PLAN.planAll(script, opts);
+            const before = this.plans || [];
+            this.plans = this.keepMadeTakes(before, PLAN.planAll(script, opts), t);
             this.planById = new Map(this.plans.map(p => [p.id, p]));
             // who reads each line: a take made in another voice (a speaker found later, a new cast)
             // is made again, as one made for other words is. By the voice, not the speaker: two
@@ -802,6 +833,28 @@
                 }
             }
             return true;
+        }
+
+        // (2.7.6) A line whose voice is made (or being made) and that a new plan only cuts in other
+        // places, same words over the same span, keeps its plan and its take. The planner's cut follows
+        // the voice calibration, which the first takes move: a rebuild then split the video's first
+        // line (10 s of speech) right before its turn, the take was thrown away, the first part came
+        // due with no audio and was dropped (playback-sim on 100 saved videos: 2 first lines, 23
+        // words). Other words (a refine, a new translation) are made again, as before.
+        keepMadeTakes(before, plans, t) {
+            const norm = x => String(x || "").replace(/\s+/g, " ").trim();
+            let out = plans;
+            for (const o of before) {
+                if (o.end <= t || !(this.rendered.has(o.id) || this.pending.has(o.id))) continue;
+                const inside = out.filter(p => p.start >= o.start - 1e-6 && p.start < o.end - 1e-6);
+                if (!inside.length || Math.abs(inside[0].start - o.start) > 1e-6 || Math.abs(inside[inside.length - 1].end - o.end) > 1e-6) continue;
+                if (inside.length === 1 && inside[0].text === o.text) continue;
+                if (norm(inside.map(p => p.text).join(" ")) !== norm(o.text)) continue;
+                if (inside.some(p => p.speaker !== o.speaker)) continue;
+                out = out.filter(p => !inside.includes(p));
+                out.push(o);
+            }
+            return out === plans ? plans : out.sort((a, b) => a.start - b.start);
         }
 
         // The voice a speaker is read in, by name (a system voice is an object)
@@ -1341,7 +1394,7 @@
             // own pace, kept within paceComp of the last rate. Short takes keep the plain last rate.
             const recent = !!(this.lastRate && t - this.lastRateEnd < SYNC.rateMemory);
             const syl = p.phrases.reduce((a, ph) => a + ph.syl, 0);
-            const native = syl / Math.max(0.3, r.duration);
+            const native = syl / Math.max(0.3, r.duration - (r.slack || 0));
             let last = this.lastRate;
             if (recent && SYNC.paceComp > 0 && this.lastHeard && syl >= SYNC.paceCompMinSyl && this.lastHeardSyl >= SYNC.paceCompMinSyl) {
                 last = Math.max(this.lastRate * (1 - SYNC.paceComp), Math.min(this.lastRate * (1 + SYNC.paceComp), this.lastHeard / native));
@@ -1375,7 +1428,12 @@
                 const earliest = (r.duration - offset) / Math.max(0.5, win - SYNC.lookAheadEarly);
                 want = Math.max(want, Math.min(ahead, earliest));
             }
-            if (recent) want = Math.max(last - stepDown, Math.min(last + SYNC.rateStepUp, want));
+            // A line that, read at the gentle step up, would overrun its slot by more than
+            // overrunStepAt pushes that lag onto every line after it: it may climb faster
+            const fit = (r.duration - offset) / win;
+            const stepUp = recent && fit > last + SYNC.rateStepUp && (r.duration - offset) / (last + SYNC.rateStepUp) - win > SYNC.overrunStepAt
+                ? SYNC.rateStepUpOverrun : SYNC.rateStepUp;
+            if (recent) want = Math.max(last - stepDown, Math.min(last + stepUp, want));
             let ceiling = lag > SYNC.lagBoostAt ? lim.lagCeiling : lim.ceiling;
             // Vừa bắt kịp (trần trở về 1,3x): hạ tốc độ từ từ, không tụt 0,1 trong một câu
             // (from the rate really played, not the heard-pace reference)
@@ -1383,7 +1441,7 @@
             if (lag > SYNC.lagBoostAt) want = Math.max(want, (r.duration - offset) / win * (1 + Math.min(0.12, lag * 0.06)));
             let rate = Math.max(floor, Math.min(ceiling, want));
             // Tốc độ sàn vừa được hiệu chỉnh lại (đo giọng thật) không được làm nhịp nhảy quá bước cho phép
-            if (recent) rate = Math.min(rate, last + SYNC.rateStepUp);
+            if (recent) rate = Math.min(rate, last + stepUp);
             // Close to natural speed and not behind: play at exactly 1.0. Any other rate goes through
             // Chrome's time-stretch, which roughens the voice (1.6.7 measurements); finishing up to 5%
             // early leaves a natural gap, and 5% late stays inside fitSlack.
@@ -1411,6 +1469,7 @@
             if (cap) rate = Math.min(rate, cap);          // above even a slow voice's floor rate
             this.lastRate = rate;
             this.lastRateEnd = t + (r.duration - offset) / rate;
+            if (SYNC.slackFreesPace && r.slack > 0) this.lastRateEnd = -Infinity;
             this.lastHeard = rate * native;
             this.lastHeardSyl = syl;
             return rate;
@@ -1908,6 +1967,7 @@
             // KHÔNG rút gọn lời thoại (giữ đủ nội dung người nói truyền đạt).
             if (this.provider.caps && this.provider.caps.free) {
                 for (const p of todo) if (p.tightPauses == null) p.tightPauses = this.denseRatio(p) > SYNC.denseRatio;
+                for (const p of todo) if (p.slackPauses == null) p.slackPauses = p.tightPauses ? 0 : this.looseSlack(p);
             }
 
             // 1. KHO AUDIO (RAM -> IndexedDB): đoạn đã từng tạo thì không gọi TTS nữa.
@@ -2012,6 +2072,44 @@
             return end - t;
         }
 
+        // (BACKLOG 48) Seconds of pause a loose line asks its take for. Read at the floor pace (the
+        // voice's measured rate), the line would end slackFrom s or more before its slot does (the
+        // same end chooseRate aims at): the spare above slackKeep, in take time, goes to its
+        // punctuation pauses (dub-prosody pauseSlack), in steps of slackStep, at most slackMax and what
+        // its marks can take. 0 = none, and for a line with no mark.
+        // The first answer for the same words sticks for the engine's life: the measured pace moves,
+        // and a rewind (or the same sentence said again later) that asked again under another step
+        // missed the stored take and made it anew.
+        looseSlack(p) {
+            if (!(SYNC.slackMax > 0) || !PROSODY || !PROSODY.pauseSlack) return 0;
+            const memo = this.slackMemo || (this.slackMemo = new Map());
+            const id = p.speaker + "|" + p.text;
+            if (!memo.has(id)) { if (memo.size > 4000) memo.clear(); memo.set(id, this.looseSlackNow(p)); }
+            return memo.get(id);
+        }
+
+        looseSlackNow(p) {
+            const syl = p.phrases.reduce((a, ph) => a + ph.syl, 0);
+            const sps = this.voiceSps.get(p.speaker) || (this.provider.naturalSps ? this.provider.naturalSps(p.speaker) : 4);
+            const i = this.plans.indexOf(p);
+            const next = i >= 0 ? this.plans[i + 1] : null;
+            const joined = !!(p.continuesNext && next);
+            let end = joined ? next.start - gapAfter(p, next) : p.start + (p.targetDuration || 0) + SYNC.fitSlack;
+            if (next && !joined) end = Math.min(end, next.start - 0.12);
+            const floor = this.floorRate(p);
+            const spare = end - p.start - syl / Math.max(1, sps) / floor;
+            if (spare < SYNC.slackFrom) return 0;
+            const room = PROSODY.pauseSlack(plainScript(p), 0).room;
+            const want = Math.min(SYNC.slackMax, room, (spare - SYNC.slackKeep) * floor);
+            return Math.max(0, Math.floor(want / SYNC.slackStep + 1e-9) * SYNC.slackStep);
+        }
+
+        // The take seconds a loose line's pauses were given (looseSlack), as the shaping adds them
+        slackTotal(p) {
+            if (!p || !(p.slackPauses > 0) || p.tightPauses || !PROSODY || !PROSODY.pauseSlack) return 0;
+            return PROSODY.pauseSlack(plainScript(p), p.slackPauses).total;
+        }
+
         // Tỉ lệ (audio ước theo tốc độ ĐO THẬT của giọng) / khung của câu: > 1 là phải đọc nhanh hơn 1x.
         // Đo thật (1.2.9): ước theo tốc độ mục tiêu thấy "vừa khung" trong khi audio thật dài gấp 1,3.
         denseRatio(p) {
@@ -2110,7 +2208,7 @@
             // được chọn lúc bắt đầu nói (chooseRate) để nhịp đều giữa các câu
             const stretch = this.baseTempo(p);
             const url = this.d.createObjectURL(wav);
-            this.rendered.set(p.id, { url, duration, stretch, fit: duration / slot, overflow: duration / stretch - slot, text: p.text, voiceTag: p.voiceTag, stops: this.findStops(wav, duration) });
+            this.rendered.set(p.id, { url, duration, stretch, fit: duration / slot, overflow: duration / stretch - slot, text: p.text, voiceTag: p.voiceTag, stops: this.findStops(wav, duration), slack: this.slackTotal(p) });
         }
 
         // Where the voice resumes after each stop inside the take (seconds), for entryPoint. ~0.5 ms
@@ -2250,6 +2348,8 @@
 
         // Tốc độ nói thật của từng người nói (âm tiết/giây) từ audio đã tạo -> nhịp nền chính xác
         measureVoice(p, duration) {
+            // the pauses a loose line's take was given are not the voice's pace (BACKLOG 48)
+            duration -= this.slackTotal(p);
             if (!this.provider.tempo || duration < 1.2) return;
             const syl = p.phrases.reduce((a, ph) => a + ph.syl, 0);
             const sps = syl / duration;
@@ -2385,6 +2485,7 @@
                 if (p.audioKey) keys.add(p.audioKey);
                 for (const speaker of new Set([p.speaker || "S1", ...speakers])) {
                     for (const tight of [false, true]) keys.add(await this.provider.audioKey({ ...p, speaker, tightPauses: tight }));
+                    for (let k = 1; k * SYNC.slackStep <= SYNC.slackMax + 1e-9; k++) keys.add(await this.provider.audioKey({ ...p, speaker, tightPauses: false, slackPauses: k * SYNC.slackStep }));
                 }
             }
             return [...keys];
@@ -2449,6 +2550,7 @@
             const look = want.filter(q => !this.cacheChecked.has(q.id) && !this.rendered.has(q.id));
             if (look.length) {
                 if (free) for (const q of look) if (q.tightPauses == null) q.tightPauses = this.denseRatio(q) > SYNC.denseRatio;
+                if (free) for (const q of look) if (q.slackPauses == null) q.slackPauses = q.tightPauses ? 0 : this.looseSlack(q);
                 this.lookupCache(look);
                 return true;
             }

@@ -7,17 +7,22 @@
     --claude-card-subtle: #F6F4EE;
     --claude-card-hover: #F2EFE8;
     --claude-text: #262420;
-    --claude-text-secondary: #6B665E;
-    --claude-text-muted: #969086;
+    --claude-text-secondary: #57524A;
+    --claude-text-muted: #6D685F;
     --claude-border: #E8E4DC;
     --claude-border-hover: #DDD8CE;
     --claude-accent: #D97757;
     --claude-accent-hover: #C56646;
+    /* Fill behind white text: the brand orange gives only 3.1:1, this gives 4.8:1 (WCAG AA) */
+    --claude-accent-fill: #B4573A;
+    --claude-accent-fill-hover: #A24C31;
+    --claude-accent-fill-active: #92432A;
     --claude-accent-active: #B55839;
     --claude-accent-subtle: #FAF1EC;
     --claude-accent-border: #EED6CA;
     --claude-accent-shadow: rgba(217, 119, 87, 0.22);
     --claude-success: #2E7D32;
+    --claude-success-fill: #2E7D32;
     --claude-success-subtle: #E8F5E9;
     --claude-success-border: #C8E6C9;
     --claude-warning: #C53929;
@@ -49,7 +54,7 @@
         --claude-card-hover: #312E2A;
         --claude-text: #ECE8E1;
         --claude-text-secondary: #A8A39A;
-        --claude-text-muted: #78736B;
+        --claude-text-muted: #9E998E;
         --claude-border: #3A3732;
         --claude-border-hover: #48453F;
         --claude-accent: #D97757;
@@ -59,6 +64,7 @@
         --claude-accent-border: #52382E;
         --claude-accent-shadow: rgba(217, 119, 87, 0.35);
         --claude-success: #81C784;
+        --claude-success-fill: #2E7D32;
         --claude-success-subtle: #1B2E1D;
         --claude-success-border: #2E5A33;
         --claude-warning: #E57373;
@@ -75,7 +81,7 @@
         --claude-card-hover: #312E2A;
         --claude-text: #ECE8E1;
         --claude-text-secondary: #A8A39A;
-        --claude-text-muted: #78736B;
+        --claude-text-muted: #9E998E;
         --claude-border: #3A3732;
         --claude-border-hover: #48453F;
         --claude-accent: #D97757;
@@ -85,6 +91,7 @@
         --claude-accent-border: #52382E;
         --claude-accent-shadow: rgba(217, 119, 87, 0.35);
         --claude-success: #81C784;
+        --claude-success-fill: #2E7D32;
         --claude-success-subtle: #1B2E1D;
         --claude-success-border: #2E5A33;
         --claude-warning: #E57373;
@@ -497,7 +504,7 @@ body {
     justify-content: center;
     width: 100%;
     padding: 10px 14px;
-    background-color: var(--claude-accent);
+    background-color: var(--claude-accent-fill);
     color: #FFFFFF;
     font-family: var(--claude-font-sans);
     font-size: 13.5px;
@@ -512,14 +519,14 @@ body {
 }
 
 .button-primary:hover {
-    background-color: var(--claude-accent-hover);
+    background-color: var(--claude-accent-fill-hover);
     transform: translateY(-1.5px);
     box-shadow: 0 6px 18px var(--claude-accent-shadow);
 }
 
 .button-primary:active {
     transform: translateY(0.5px) scale(0.985);
-    background-color: var(--claude-accent-active);
+    background-color: var(--claude-accent-fill-active);
     box-shadow: 0 2px 6px var(--claude-accent-shadow);
 }
 
@@ -571,7 +578,7 @@ body {
 
 /* Dynamic Translating State */
 .button-primary.is-translating {
-    background-color: var(--claude-accent-hover);
+    background-color: var(--claude-accent-fill-hover);
     cursor: wait;
 }
 
@@ -590,7 +597,7 @@ body {
 
 /* Dynamic Success State */
 .button-primary.is-success {
-    background-color: var(--claude-success);
+    background-color: var(--claude-success-fill);
     box-shadow: 0 4px 14px rgba(46, 125, 50, 0.25);
     animation: successPulse 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -889,7 +896,7 @@ body {
     align-self: center;
     background: none;
     border: none;
-    padding: 2px 4px;
+    padding: 5px 6px;
     color: var(--claude-text-secondary);
     font-family: var(--claude-font-sans);
     font-size: 11.5px;

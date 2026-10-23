@@ -25,7 +25,8 @@
     function srtClock(seconds) {
         // whole milliseconds first: rounding the fraction alone gave "00:00:01,1000" at 1.9996 s,
         // a stamp players reject (the cue was dropped)
-        const total = Math.round(Math.max(0, seconds || 0) * 1000);
+        const secs = Number(seconds);
+        const total = Math.round(Math.max(0, Number.isFinite(secs) ? secs : 0) * 1000);
         const h = Math.floor(total / 3600000);
         const m = Math.floor((total % 3600000) / 60000);
         const sec = Math.floor((total % 60000) / 1000);

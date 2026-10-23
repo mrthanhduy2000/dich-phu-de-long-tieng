@@ -105,7 +105,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
         const phan = [];
-        if (st.busy) phan.push("Đang dịch…");
+        if (st.busy) phan.push(st.tong ? `Đang dịch ${st.xong}/${st.tong} đoạn` : "Đang dịch…");
         else if (st.active) phan.push(st.tong ? `Đã dịch ${st.xong}/${st.tong} đoạn` : "Phụ đề tiếng Việt đang bật");
         if (st.dub && st.dub.on) phan.push(st.dub.voice ? `đang đọc bằng giọng ${st.dub.voice}` : "đang lồng tiếng");
         if (!phan.length) { el.hidden = true; return; }

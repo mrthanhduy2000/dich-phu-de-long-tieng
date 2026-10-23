@@ -786,6 +786,25 @@
         return hit;
     }
 
+    // ---- 4. Slack for a loose line (BACKLOG 48) ----
+    // A line much shorter than its slot, read at the floor pace, ends early and the voice falls
+    // silent while the speaker still talks. Up to `budget` seconds of that slack go to the take's own
+    // punctuation pauses (the voice stops at nearly every mark), never to a gap the text has no mark
+    // for, and never by changing a word. Each pause grows at most SLACK of its kind (a list item or an
+    // opener's comma barely: a long stop there is heard as a hesitation), which keeps it inside a
+    // reader's range; the budget is shared out in proportion to those caps.
+    // Returns { adds: [{ gap, add }], total, room }: gap = word index the pause follows.
+    const SLACK = { sentence: 0.4, clause: 0.3, comma: 0.25, list: 0.08, lead: 0.1 };
+    function pauseSlack(text, budget) {
+        const a = analyze(text);
+        const pts = a.gaps.filter(g => g.punct).map(g => ({ gap: g.i, cap: SLACK[g.role === "list" || g.role === "lead" ? g.role : g.punct] || SLACK.comma }));
+        const room = round3(pts.reduce((s, x) => s + x.cap, 0));
+        if (!room || !(budget > 0)) return { adds: [], total: 0, room };
+        const k = Math.min(1, budget / room);
+        const adds = pts.map(x => ({ gap: x.gap, add: round3(x.cap * k) }));
+        return { adds, total: round3(adds.reduce((s, x) => s + x.add, 0)), room };
+    }
+
     // Boundary value between the end of one text and the start of the next (a segment cut)
     function boundaryValue(left, right) {
         const l = String(left || "").trim().split(/\s+/).filter(Boolean).slice(-6);
@@ -825,7 +844,7 @@
         });
     }
 
-    const api = { analyze, choose, breathGroups, breathText, breathAdded, boundaryValue, selectBoundaries, spokenWeight, syllables, runPenalty, signature, tokenMap, K };
+    const api = { analyze, choose, pauseSlack, SLACK, breathGroups, breathText, breathAdded, boundaryValue, selectBoundaries, spokenWeight, syllables, runPenalty, signature, tokenMap, K };
     if (typeof module === "object" && module.exports) module.exports = api;
     if (root) root.CST_DUB_PROSODY = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

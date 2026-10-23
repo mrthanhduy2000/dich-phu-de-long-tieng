@@ -242,22 +242,35 @@
 
     // Shorten each listed silence { start, end, keep } (seconds) to `keep`, cutting out its middle so
     // the breath and word tails on both sides survive; 8 ms fades at every cut (no clicks).
+    // (BACKLOG 48) An entry whose keep is longer than its silence grows it instead: the extra time is
+    // the silence's own quiet samples, read back and forth from its middle (no jump in the floor)
     function shrinkSilences(samples, sr, list) {
         const fadeN = Math.max(1, Math.round(sr * 0.008));
         const pieces = [];
-        let pos = 0, removed = 0;
+        let pos = 0, removed = 0, added = 0;
         for (const x of list.slice().sort((a, b) => a.start - b.start)) {
             const a = Math.round(x.start * sr), b = Math.round(x.end * sr);
             const keep = Math.round(Math.max(0, x.keep) * sr);
+            if (keep > b - a) {
+                const mid = Math.round((a + b) / 2), extra = keep - (b - a), span = Math.max(1, b - a - 1);
+                if (mid < pos || b - a < 2) continue;
+                pieces.push(samples.slice(pos, mid));
+                const fill = new Float32Array(extra);
+                for (let j = 0; j < extra; j++) { const m = j % (2 * span); fill[j] = samples[a + (m < span ? m : 2 * span - m)]; }
+                pieces.push(fill);
+                pos = mid;
+                added += extra;
+                continue;
+            }
             const cutFrom = a + Math.floor(keep / 2), cutTo = b - Math.ceil(keep / 2);
             if (cutFrom < pos || cutTo - cutFrom <= fadeN * 2) continue;
             pieces.push(samples.slice(pos, cutFrom));
             pos = cutTo;
             removed += cutTo - cutFrom;
         }
-        if (!removed) return samples;
+        if (!removed && !added) return samples;
         pieces.push(samples.slice(pos));
-        const out = new Float32Array(samples.length - removed);
+        const out = new Float32Array(samples.length - removed + added);
         let o = 0;
         pieces.forEach((pc, k) => {
             const c = Float32Array.from(pc);
@@ -271,8 +284,9 @@
 
     // Pause shaping (1.7.6). The voice model stops where the text asks for it and also where it
     // does not (mid-phrase hesitations of 0.15 to 0.4 s, and real phrase breaks the text has no
-    // comma for). Nothing is ever lengthened or inserted: only the model's own silences are
-    // shortened, so a pause exists only where the voice itself made one.
+    // comma for). Only the model's own silences are shortened, so a pause exists only where the voice
+    // itself made one; the one lengthening is opts.slack (BACKLOG 48), and only at a stop the voice
+    // made at a punctuation mark.
     //   1. alignStops: every internal stop is placed in the text by its position in voiced time.
     //      Punctuation is matched first (the voice stops at nearly every mark) and those stops then
     //      anchor the others, interpolated between them (a long sentence drifts less)
@@ -354,16 +368,23 @@
         // opts.breath: word indices of breathing commas (dub-prosody breathAdded), kept at a breath's length
         const breath = new Set(opts.breath || []);
         const dec = prosody().choose(A, sil.map(x => ({ gap: x.gap, sec: x.vt, dur: x.dur, punct: x.punct, breath: !!x.punct && breath.has(x.gap) })), voiced, { tight: maxPause < 0.2 });
+        // opts.slack (BACKLOG 48): seconds a loose line hands to its punctuation pauses
+        // (CST_DUB_PROSODY.pauseSlack), added once per mark to the stop kept there
+        const slack = new Map();
+        if (opts.slack > 0 && prosody().pauseSlack) for (const s of prosody().pauseSlack(text, opts.slack).adds) slack.set(s.gap, s.add);
         const list = [], pauses = [];
-        let joined = 0, matched = 0, soft = 0;
+        let joined = 0, matched = 0, soft = 0, grown = 0;
         sil.forEach((x, j) => {
             let { keep, kind } = dec[j];
-            if (keep > 0) { keep = Math.min(x.dur, keep, maxPause); if (kind === "soft") soft++; else matched++; }
-            else { keep = Math.min(x.dur, joinPause); if (x.dur > joinPause + 0.02) joined++; }
+            if (keep > 0) {
+                keep = Math.min(x.dur, keep, maxPause);
+                if (kind === "soft") soft++; else matched++;
+                if (slack.has(x.gap)) { keep += slack.get(x.gap); grown += slack.get(x.gap); slack.delete(x.gap); }
+            } else { keep = Math.min(x.dur, joinPause); if (x.dur > joinPause + 0.02) joined++; }
             pauses.push({ at: +(x.vt / voiced).toFixed(3), dur: +x.dur.toFixed(3), keep: +keep.toFixed(3), kind, gap: x.gap });
-            if (x.dur - keep > 0.02) list.push({ start: x.start, end: x.end, keep });
+            if (Math.abs(x.dur - keep) > 0.02) list.push({ start: x.start, end: x.end, keep });
         });
-        return { samples: shrinkSilences(samples, sr, list), matched, soft, joined, pauses };
+        return { samples: shrinkSilences(samples, sr, list), matched, soft, joined, pauses, grown: +grown.toFixed(3) };
     }
 
     // ---------------- Spectral noise reduction (1.7.0) ----------------

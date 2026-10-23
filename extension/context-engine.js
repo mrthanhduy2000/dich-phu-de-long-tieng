@@ -348,6 +348,60 @@
         terms: 18
     };
 
+    // (2.7.4) How the speaker calls themself in the translations so far. "tôi" not inside "chúng tôi";
+    // "mình" only at the head of a clause ("của mình", "chính mình" are "own", "self", not a choice of
+    // pronoun). Saved videos: 2 of 84 mixed the two for one speaker ("tôi thường..." then "mình
+    // thường..."), each window choosing again when its own words gave no lead.
+    const SELF_TOI = /(?<![\p{L}])(?<!chúng )tôi(?![\p{L}])/giu;
+    const SELF_MINH = /(?:^|[.!?,;:…]\s+|(?:và|nhưng|nên|thì|rồi|khi|vì|nếu|mà|là|giờ|nay)\s+)mình\s+(?!ơi)(?=[\p{L}])/giu;
+    const FIRST_PERSON_EN = /\bI\b|\b(?:me|my|myself|mine)\b/i;
+    // (2.8.6) The speaker saying "I" in the source's own language: the pronoun rule ([XƯNG HÔ]) was
+    // gated on English only, so it never reached a Korean, Spanish or Thai video. Words are matched
+    // whole (no letter or mark on either side); scripts without spaces match the word itself.
+    const wordsRe = list => new RegExp(`(?<![\\p{L}\\p{M}])(?:${list})(?![\\p{L}\\p{M}])`, "iu");
+    const FIRST_PERSON = {
+        en: FIRST_PERSON_EN,
+        es: wordsRe("yo|me|mi|mis|mío|mía|conmigo"),
+        pt: wordsRe("eu|me|meu|minha|meus|minhas|comigo"),
+        fr: /(?<![\p{L}])(?:j['’]|(?:je|moi|mon|ma|mes)(?![\p{L}]))/iu,
+        it: wordsRe("io|mi|me|mio|mia|miei|mie"),
+        de: wordsRe("ich|mich|mir|mein|meine|meinen|meinem|meiner"),
+        nl: wordsRe("ik|mij|me|mijn"),
+        sv: wordsRe("jag|mig|min|mitt|mina"),
+        pl: wordsRe("ja|mnie|mi|mój|moja|moje|moim|mojej"),
+        cs: wordsRe("já|mě|mně|mi|můj|moje|moji"),
+        ro: wordsRe("eu|mie|mine|meu|mea|mei|mele"),
+        hu: wordsRe("én|engem|nekem|enyém|nálam"),
+        tr: wordsRe("ben|beni|bana|benim"),
+        el: wordsRe("εγώ|μου|με|μένα"),
+        ru: wordsRe("я|меня|мне|мой|моя|моё|мои"),
+        uk: wordsRe("я|мене|мені|мій|моя|моє|мої"),
+        id: wordsRe("aku|saya|ku"),
+        ms: wordsRe("aku|saya|ku"),
+        tl: wordsRe("ako|ko|akin"),
+        hi: wordsRe("मैं|मुझे|मेरा|मेरी|मेरे|मुझको"),
+        bn: wordsRe("আমি|আমার|আমাকে"),
+        ta: wordsRe("நான்|என்|எனக்கு|என்னை"),
+        ar: wordsRe("أنا|انا|لي|عندي|نفسي"),
+        fa: wordsRe("من"),
+        ur: wordsRe("میں|مجھے|میرا|میری"),
+        he: wordsRe("אני|לי|שלי|אותי"),
+        ko: /(?<![\p{L}])(?:저|제|나|내)(?:는|가|도|를|게|한테|의|랑|만)?(?![\p{L}])/u,
+        ja: /私|僕|俺|わたし|あたし/u,
+        zh: /我(?![们們])/u,
+        th: /ผม|ฉัน|ดิฉัน|หนู/u
+    };
+    const FIRST_PERSON_LANGS = Object.values(FIRST_PERSON);
+    // lang: the source track's language (meta.lang); none = English (Coursera, older callers); a
+    // language not in the table tries every one
+    function saysI(text, lang) {
+        const base = String(lang || "en").toLowerCase().split(/[-_]/)[0];
+        const re = FIRST_PERSON[base];
+        return re ? re.test(text) : FIRST_PERSON_LANGS.some(r => r.test(text));
+    }
+    const SELF_MIN = 4;         // uses before a form counts as chosen
+    const SELF_LEAD = 3;        // ... and it leads the other form this many times over
+
     class ContextSession {
         constructor(meta = {}) {
             this.meta = {
@@ -355,12 +409,22 @@
                 channel: meta.channel || "",
                 course: meta.course || "",
                 description: meta.description || "",
-                keywords: meta.keywords || []
+                keywords: meta.keywords || [],
+                lang: meta.lang || ""
             };
             this.units = [];                 // văn bản nguồn của từng nhóm (theo thứ tự thời gian)
             this.results = new Map();        // idx -> { vi, note }
             this.terms = new Map();          // en (chữ thường) -> { en, vi, count, locked }
             this.domain = { primary: "general", secondary: null, scores: {} };
+            this.self = { "tôi": 0, "mình": 0 };
+        }
+
+        // The speaker's chosen first person, once the translations so far have settled on one
+        selfRef() {
+            const t = this.self["tôi"], m = this.self["mình"];
+            if (t >= SELF_MIN && t >= m * SELF_LEAD) return "tôi";
+            if (m >= SELF_MIN && m >= t * SELF_LEAD) return "mình";
+            return "";
         }
 
         setUnits(texts) {
@@ -469,6 +533,10 @@
             const nextSource = clip(nextIdx.map(i => this.units[i]).join(" "), BUDGET.nextSource);
 
             const hintText = sentences.join(" ");
+            const selfRef = saysI(hintText, this.meta.lang) ? this.selfRef() : "";
+            // (2.7.4) Everyday talk (no technical domain, not a course): written as Vietnamese people
+            // talk, not as a lecturer speaks (the system prompt's default, right for Coursera)
+            const talk = this.domain.primary === "general" && !this.meta.course;
             return {
                 sentences,
                 context: {
@@ -481,7 +549,9 @@
                     // Chỉ thuật ngữ có trong phần CẦN DỊCH (không tốn token cho ngữ cảnh)
                     terms: this.relevantTerms(hintText),
                     senseHints: senseHintsFor(hintText, this.domain),
-                    phraseHints: phraseHintsFor(hintText)
+                    phraseHints: phraseHintsFor(hintText),
+                    ...(selfRef ? { selfRef } : {}),
+                    ...(talk ? { register: "talk" } : {})
                 }
             };
         }
@@ -492,7 +562,11 @@
         record(idxs, result) {
             idxs.forEach((i, k) => {
                 const vi = result.translations ? result.translations[k] : "";
-                if (vi) this.results.set(i, { vi });
+                if (vi) {
+                    this.results.set(i, { vi });
+                    this.self["tôi"] += (String(vi).match(SELF_TOI) || []).length;
+                    this.self["mình"] += (String(vi).match(SELF_MINH) || []).length;
+                }
             });
             for (const t of result.terms || []) {
                 if (!t || !t.en || !t.vi) continue;
@@ -530,7 +604,7 @@
         }
     }
 
-    const api = { DOMAINS, SENSES, PHRASES, BUDGET, cleanDescription, detectDomain, domainLabel, senseHintsFor, phraseHintsFor, ContextSession };
+    const api = { DOMAINS, SENSES, PHRASES, BUDGET, cleanDescription, detectDomain, domainLabel, senseHintsFor, phraseHintsFor, saysI, ContextSession };
     if (typeof module === "object" && module.exports) module.exports = api;
     if (root) root.CST_CONTEXT = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

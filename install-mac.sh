@@ -8,7 +8,7 @@
 # Must run on macOS's own /bin/bash 3.2. Overrides, for testing only: DPD_SRC (an unpacked share
 # tree instead of the download), DPD_REF (a branch, tag or commit of the share repo to download
 # instead of main: the install test sets the commit under test), DPD_EXT_DIR, DPD_VIENEU_DIR,
-# DPD_NO_AUTOSTART=1, DPD_NO_DESKTOP=1, DPD_NO_OPEN=1.
+# DPD_NO_AUTOSTART=1, DPD_NO_DESKTOP=1, DPD_NO_OPEN=1. DPD_INTEL_VOICE=1 tries the voice on an Intel Mac.
 set -euo pipefail
 
 # The whole body is one function, called on the last line: under `curl | bash` the script is read
@@ -125,9 +125,23 @@ fi
 
 WITH_VOICE=1
 PINNED=0
-if [[ "$(uname -m)" != arm64 ]]; then
+# `uname -m` says x86_64 in a Terminal running under Rosetta, even on an Apple chip; the chip itself
+# answers hw.optional.arm64 (1 on M1 and later, absent on Intel)
+APPLE_CHIP=0
+if [[ "$(uname -m)" == arm64 || "$(sysctl -n hw.optional.arm64 2>/dev/null || true)" == 1 ]]; then APPLE_CHIP=1; fi
+if [[ $APPLE_CHIP == 1 && "$(uname -m)" != arm64 ]]; then
     WITH_VOICE=0
-    say "Máy Mac chip Intel: VieNeu chỉ chạy trên Mac chip Apple (M1 trở lên). Chỉ cài phần dịch phụ đề."
+    say "Máy Mac chip Apple nhưng Terminal đang chạy qua Rosetta (giả lập Intel), giọng sẽ chậm gấp nhiều lần. Chỉ cài phần dịch phụ đề. Muốn cài giọng: mở lại Terminal (Thông tin > bỏ chọn \"Mở bằng Rosetta\") rồi chạy lại lệnh này."
+elif [[ $APPLE_CHIP == 0 ]]; then
+    if [[ "${DPD_INTEL_VOICE:-}" == 1 ]]; then
+        # Experimental: the voice runs on the CPU only (ONNX), so it needs a CPU fast enough to render
+        # a second of speech in under a second. The extension measures that and says so when it is not
+        # (dub-hardware.js); VieNeu's own Intel Mac support is checked by .github/workflows/intel-voice.yml
+        say "Máy Mac chip Intel: cài thử giọng VieNeu (chạy bằng CPU, có thể chậm hơn thời gian thực). Nếu giọng trễ, tiện ích sẽ gợi ý tốc độ phát phù hợp."
+    else
+        WITH_VOICE=0
+        say "Máy Mac chip Intel: giọng VieNeu chưa được hỗ trợ chính thức. Chỉ cài phần dịch phụ đề. Muốn thử giọng (chạy bằng CPU, có thể chậm): chạy lại lệnh cài với DPD_INTEL_VOICE=1 đặt trước chữ bash."
+    fi
 fi
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/dpd.XXXXXX")"
@@ -192,7 +206,16 @@ if [[ $WITH_VOICE == 1 ]]; then
     cp "$SRC/vieneu/openai_speech.py" "$VN_DIR/apps/openai_speech.py"
 
     say "Đang cài thư viện cho VieNeu (lần đầu vài phút)..."
-    (cd "$VN_DIR" && "$UV" sync --quiet) || die "uv sync không thành công. Xem thông báo ở trên."
+    # onnxruntime 1.24 dropped its macOS x86_64 wheel (the intel-voice CI run: "only has wheels for ...
+    # macosx_14_0_arm64"), and uv.lock pins 1.24, so an Intel Mac leaves it out of the sync and takes
+    # the last release that still has a wheel
+    if [[ $APPLE_CHIP == 1 ]]; then
+        (cd "$VN_DIR" && "$UV" sync --quiet) || die "uv sync không thành công. Xem thông báo ở trên."
+    else
+        (cd "$VN_DIR" && "$UV" sync --quiet --no-install-package onnxruntime \
+            && "$UV" pip install --quiet --python .venv/bin/python "onnxruntime<1.24") \
+            || die "uv sync không thành công. Xem thông báo ở trên."
+    fi
     printf '%s' "$VIENEU_COMMIT" > "$VN_DIR/$MARK"
 
     # The voice model (~600 MB), pinned and checked file by file (size + sha256): from this

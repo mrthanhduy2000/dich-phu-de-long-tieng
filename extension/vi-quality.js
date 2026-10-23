@@ -17,9 +17,74 @@
     // JavaScript: \b chỉ hiểu chữ ASCII, nên "\bthứ" không bao giờ khớp.
     // Đổi mọi \b thành ranh giới hiểu chữ tiếng Việt có dấu (Unicode).
     const B = "(?:(?<=[\\p{L}\\p{N}])(?![\\p{L}\\p{N}])|(?<![\\p{L}\\p{N}])(?=[\\p{L}\\p{N}]))";
+    // A boundary next to a letter needs only one side checked: "\bfoo" is "not after a letter",
+    // "foo\b" is "not before a letter". The full B above has a lookbehind and a lookahead in an
+    // alternation that V8 tries at every start position, which made assess() (44 calque patterns per
+    // sentence) the slowest per-sentence step. Only the simple shapes below are rewritten; anything
+    // else keeps B. Same matches as B (checked against random positive/negative texts).
+    const NOT_AFTER = "(?<![\\p{L}\\p{N}])", NOT_BEFORE = "(?![\\p{L}\\p{N}])";
+    const isLN = c => /^[\p{L}\p{N}]$/u.test(c);
+    function groupEnd(s, i) {
+        let d = 0;
+        for (let j = i; j < s.length; j++) {
+            const c = s[j];
+            if (c === "\\" || c === "[") return -1;
+            if (c === "(") d++;
+            else if (c === ")" && --d === 0) return j;
+        }
+        return -1;
+    }
+    function splitAlts(s) {
+        const out = [];
+        let d = 0, st = 0;
+        for (let j = 0; j < s.length; j++) {
+            const c = s[j];
+            if (c === "\\" || c === "[") return null;
+            if (c === "(") d++;
+            else if (c === ")") d--;
+            else if (c === "|" && d === 0) { out.push(s.slice(st, j)); st = j + 1; }
+        }
+        out.push(s.slice(st));
+        return out;
+    }
+    // every match of the source `s` starts with a letter or digit
+    function startsWithLetter(s) {
+        if (!s) return false;
+        if (isLN(s[0])) return !/[?*{]/.test(s[1] || "");
+        if (!s.startsWith("(?:")) return false;
+        const e = groupEnd(s, 0);
+        if (e < 0 || /[?*+{]/.test(s[e + 1] || "")) return false;
+        const alts = splitAlts(s.slice(3, e));
+        return !!alts && alts.every(startsWithLetter);
+    }
+    // every match of the source `s` ends with a letter or digit
+    function endsWithLetter(s) {
+        if (!s) return false;
+        const c = s[s.length - 1];
+        if (isLN(c)) return s[s.length - 2] !== "\\";
+        if (c !== ")") return false;
+        let d = 0, o = -1;
+        for (let j = s.length - 1; j >= 0; j--) {
+            if (s[j] === ")") d++;
+            else if (s[j] === "(" && --d === 0) { o = j; break; }
+        }
+        if (o < 0 || !s.startsWith("(?:", o)) return false;
+        const alts = splitAlts(s.slice(o + 3, -1));
+        return !!alts && alts.every(endsWithLetter);
+    }
     function vre(re) {
         const flags = re.flags.includes("u") ? re.flags : re.flags + "u";
-        return new RegExp(re.source.split("\\b").join(B), flags);
+        const parts = re.source.split("\\b");
+        let out = parts[0], before = parts[0];
+        for (let k = 1; k < parts.length; k++) {
+            const rest = parts.slice(k).join("\\b");
+            let rep = B;
+            if ((before === "" || /(?:\(\?:|\(|\|)$/.test(before)) && startsWithLetter(rest)) rep = NOT_AFTER;
+            else if ((rest === "" || /^[|)]/.test(rest)) && endsWithLetter(before)) rep = NOT_BEFORE;
+            out += rep + parts[k];
+            before += "\\b" + parts[k];
+        }
+        return new RegExp(out, flags);
     }
 
     // [mẫu, mức độ, mô tả, gợi ý]
@@ -70,6 +135,9 @@
         [/\bnó (?:là )?đáng (?:để )?(?:lưu ý|chú ý|nói|nhắc)\b/i, 3, "'it's worth noting' thêm 'nó' thừa", "dùng 'Cần lưu ý'"],
         [/\bmô hình (?:của|trong) kinh doanh\b/i, 1, "'business model' đảo trật tự", "dùng 'mô hình kinh doanh'"]
     ];
+    // Built once: assess() runs per sentence and used to recompile these four every call
+    const RE_CUA_NO = vre(/\bcủa nó\b/gi), RE_MOT_CACH = vre(/\bmột cách\b/gi);
+    const RE_PASSIVE = vre(/\b(?:được|bị)\b/gi), RE_SENTENCE_NO = vre(/(?:^|[.!?]\s+)Nó\b/);
     const CALQUES = CALQUES_RAW.map(([re, sev, d, f]) => [vre(re), sev, d, f]);
 
     // A word said twice in a row is a slip only for grammar words, which Vietnamese never doubles, and
@@ -112,21 +180,30 @@
     // motors ... longer than" read as "than" left in English twice (2.4.5). Not one of them in the
     // translation is evidence of English left in; an untranslated English phrase has other words.
     const VI_PLAIN = new Set(["than", "can", "tin", "ban", "bang", "hang", "long", "sang", "song", "hay", "may", "con",
-        "tan", "son", "man", "cam", "pin", "ham", "lam", "rang", "tim", "chi", "lan", "nam", "bao", "sau", "mai", "nay", "tao"]);
+        "tan", "son", "man", "cam", "pin", "ham", "lam", "rang", "tim", "chi", "lan", "nam", "bao", "sau", "mai", "nay", "tao", "axit"]);
     // A web address, an e-mail or a handle is copied, never translated ("betterhelp.com/malamalife"
     // made "betterhelp" and "com" two leftovers of a sponsor line and paid for a refine, 2.3.2)
-    const ADDRESS_RE = /(?:https?:\/\/)?(?:[\w-]+\.)+[a-z]{2,}(?:\/\S*)?|[\w.-]+@[\w-]+(?:\.[\w-]+)+|@[\w.]+/gi;
+    // labels and their count capped (DNS limits): unbounded runs made one 30,000-letter word cost 1.2 s (quadratic backtracking)
+    const ADDRESS_RE = /(?:https?:\/\/)?(?:[\w-]{1,63}\.){1,12}[a-z]{2,63}(?:\/\S*)?|[\w.-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,12}|@[\w.]+/gi;
 
+    // (2.7.4) A substance is named, not translated: "retinol", "tretinoin", "niacinamide", "axit
+    // hyaluronic", "lactic acid". Listing them one batch at a time (LOANWORDS) never ends, so they are
+    // told by their chemical endings, and "X acid" goes as a pair. In 100 saved videos these were 71
+    // of 320 leftover words (a skincare batch of 4 videos alone: 60), each line a refine request in
+    // Balanced mode that asked the model to translate a drug name; none of the endings below matched
+    // an English word left in by mistake ("examine", "release" end in -ine, -ase: not listed).
+    const SUBSTANCE = /(?:inol|inoids?|inoin|amide|alene|peptides?|uronic|olic|ylic|oic|statin|mycin|cillin|azole|olol|sartan)$/i;
+    const ACID_NAME = /(?<![\p{L}])[a-z]+ acids?(?![\p{L}])/giu;
     function englishLeftovers(vi, allow) {
         // Unicode word edges: with ASCII \b, "thuật" gave "thu" and "thảo" gave "tha"
-        const words = String(vi).replace(ADDRESS_RE, " ").match(/(?<![\p{L}\p{N}])[A-Za-z][A-Za-z'-]{2,}(?![\p{L}\p{N}])/gu) || [];
+        const words = String(vi).replace(ADDRESS_RE, " ").replace(ACID_NAME, " ").match(/(?<![\p{L}\p{N}])[A-Za-z][A-Za-z'-]{2,}(?![\p{L}\p{N}])/gu) || [];
         const allowSet = allow || new Set();
         return words.filter(w => {
             if (/^[A-Z0-9]{2,}$/.test(w)) return false;          // viết tắt: GPU, API
             if (/[A-Z].*[A-Z]/.test(w.slice(1))) return false;   // camelCase, PyTorch
             if (/^[A-Z]/.test(w)) return false;                  // tên riêng
             if (/^[a-z]+[A-Z]/.test(w)) return false;            // a brand with an inner capital: iPad, eBay, eGFR
-            if (LOANWORDS.has(w.toLowerCase()) || VI_PLAIN.has(w)) return false;
+            if (LOANWORDS.has(w.toLowerCase()) || VI_PLAIN.has(w) || SUBSTANCE.test(w)) return false;
             if (allowSet.has(w.toLowerCase())) return false;
             return true;
         });
@@ -164,10 +241,10 @@
         }
 
         const words = v.split(" ");
-        if (countMatches(v, vre(/\bcủa nó\b/gi)) >= 2) add("calque", 2, "lạm dụng 'của nó' (sao chép 'its')", "bỏ bớt, dùng 'này' hoặc lược");
-        if (countMatches(v, vre(/\bmột cách\b/gi)) >= 2) add("calque", 2, "lạm dụng 'một cách' (sao chép trạng từ -ly)", "dùng tính từ/trạng từ trực tiếp");
-        if (countMatches(v, vre(/\b(?:được|bị)\b/gi)) >= 3 && words.length < 30) add("passive", 2, "câu bị động dày đặc", "chuyển sang chủ động");
-        if (vre(/(?:^|[.!?]\s+)Nó\b/).test(v) && /(?:^|[.!?]\s+)(?:It|This)\b/.test(s)) {
+        if (countMatches(v, RE_CUA_NO) >= 2) add("calque", 2, "lạm dụng 'của nó' (sao chép 'its')", "bỏ bớt, dùng 'này' hoặc lược");
+        if (countMatches(v, RE_MOT_CACH) >= 2) add("calque", 2, "lạm dụng 'một cách' (sao chép trạng từ -ly)", "dùng tính từ/trạng từ trực tiếp");
+        if (countMatches(v, RE_PASSIVE) >= 3 && words.length < 30) add("passive", 2, "câu bị động dày đặc", "chuyển sang chủ động");
+        if (RE_SENTENCE_NO.test(v) && /(?:^|[.!?]\s+)(?:It|This)\b/.test(s)) {
             add("pronoun", 1, "'It/This' dịch máy móc thành 'Nó'", "nêu rõ đối tượng (mô hình, hàm...) nếu ngữ cảnh cho phép");
         }
         for (let i = 1; i < words.length; i++) {
@@ -193,7 +270,7 @@
         // Sót tiếng Anh (không tính tên riêng, viết tắt, thuật ngữ được giữ)
         const keep = new Set([...(opts.keep || [])].map(x => String(x).toLowerCase()));
         (opts.terms || []).forEach(t => String(t.vi || "").split(/\s+/).forEach(w => keep.add(w.toLowerCase())));
-        const leftovers = englishLeftovers(v, keep).filter(w => new RegExp(`\\b${w}\\b`, "i").test(s));
+        const leftovers = englishLeftovers(v, keep).filter(w => (w.length > 60 ? s.toLowerCase().includes(w.toLowerCase()) : new RegExp(`\\b${w}\\b`, "i").test(s)));
         const srcWords = (s.match(/[A-Za-z]+/g) || []).length || 1;
         if (leftovers.length >= 3 || (leftovers.length >= 2 && leftovers.length / srcWords > 0.2)) {
             add("untranslated", leftovers.length >= 3 ? 3 : 2, `còn từ tiếng Anh chưa dịch: ${leftovers.slice(0, 5).join(", ")}`, "dịch hoặc giữ có chủ ý");
@@ -556,12 +633,13 @@
     // request), and a known note inside speech gets its square brackets back. Square brackets are
     // always a note; round ones only around a word of this list.
     const SOUND_WORDS = {
-        "Âm nhạc": ["music", "musik", "musique", "música", "musica", "muziek", "muzyka", "musika", "muzik", "müzik", "музыка", "موسيقى", "音楽", "音乐", "音樂", "음악", "संगीत", "เพลง", "ดนตรี", "âm nhạc", "nhạc"],
-        "Vỗ tay": ["applause", "applaus", "applaudissements", "aplausos", "applausi", "oklaski", "palakpakan", "alkış", "аплодисменты", "تصفيق", "拍手", "掌声", "掌聲", "박수", "तालियाँ", "เสียงปรบมือ", "tepuk tangan", "vỗ tay"],
-        "Tiếng cười": ["laughter", "laughs", "laughing", "laugh", "gelächter", "lachen", "rires", "risas", "risos", "risate", "śmiech", "смех", "ضحك", "笑い", "笑", "笑声", "笑聲", "웃음", "हंसी", "เสียงหัวเราะ", "tertawa", "tiếng cười", "cười"],
+        "Âm nhạc": ["music", "musik", "musique", "música", "musica", "muziek", "muzyka", "musika", "muzik", "müzik", "музыка", "موسيقى", "音楽", "音乐", "音樂", "음악", "संगीत", "เพลง", "ดนตรี", "موسیقی", "muzică", "muzica", "μουσική", "מוזיקה", "hudba", "zene", "музика", "সঙ্গীত", "মিউজিক", "இசை", "âm nhạc", "nhạc"],
+        "Vỗ tay": ["applause", "applaus", "applaudissements", "aplausos", "applausi", "oklaski", "palakpakan", "alkış", "аплодисменты", "تصفيق", "拍手", "掌声", "掌聲", "박수", "तालियाँ", "เสียงปรบมือ", "tepuk tangan", "تشویق", "aplauze", "χειροκρότημα", "χειροκροτήματα", "מחיאות כפיים", "potlesk", "taps", "оплески", "applåder", "হাততালি", "கைதட்டல்", "تالیاں", "vỗ tay"],
+        "Tiếng cười": ["laughter", "laughs", "laughing", "laugh", "gelächter", "lachen", "rires", "risas", "risos", "risate", "śmiech", "смех", "ضحك", "笑い", "笑", "笑声", "笑聲", "웃음", "हंसी", "เสียงหัวเราะ", "tertawa", "خنده", "râsete", "γέλια", "γέλιο", "צחוק", "smích", "nevetés", "сміх", "skratt", "হাসি", "சிரிப்பு", "ہنسی", "tiếng cười", "cười"],
         "Reo hò": ["cheering", "cheers", "reo hò", "hò reo"],
         "Âm thanh": ["sound"],
-        "Im lặng": ["silence", "blank audio", "im lặng"]
+        "Im lặng": ["silence", "blank audio", "im lặng"],
+        "Tiếng nước ngoài": ["foreign", "foreign language", "speaking foreign language", "tiếng nước ngoài"]
     };
     // How the model writes each of them inside a Vietnamese line
     const SOUND_VI = {
@@ -570,7 +648,8 @@
         "Tiếng cười": "(?:tiếng\\s+)?cười(?:\\s+lớn)?",
         "Reo hò": "(?:tiếng\\s+)?(?:reo\\s+hò|hò\\s+reo)",
         "Âm thanh": "(?:tiếng\\s+)?âm\\s+thanh",
-        "Im lặng": "(?:sự\\s+)?im\\s+lặng"
+        "Im lặng": "(?:sự\\s+)?im\\s+lặng",
+        "Tiếng nước ngoài": "tiếng\\s+nước\\s+ngoài"
     };
     const soundKey = s => String(s || "").normalize("NFC").toLowerCase().replace(/[\s_]+/g, " ").replace(/^[\s.…,;:!?-]+|[\s.…,;:!?-]+$/g, "");
     const SOUND_OF = new Map(Object.entries(SOUND_WORDS).flatMap(([vi, list]) => list.map(w => [soundKey(w), vi])));
@@ -580,8 +659,16 @@
 
     // A line that holds sound notes only: { vi } with the list's words, or vi "" when a note is not in
     // the list (the model translates it, fixSoundNotes brackets its answer). null for a line of speech.
+    // (2.7.4) YouTube's automatic captions write a bare "foreign" where the speech is in another
+    // language ("foreign [Music]", "[Music] foreign"). On a line of nothing else it is a note: the
+    // model left it empty, like ">> [music]", and the empty item sent the window to Google every time
+    // (cstFallbackLog: one video of a 13-video run, its fallback never healed, never saved)
+    const BARE_FOREIGN = /(?<![\p{L}\p{M}\p{N}\[(])foreign(?![\p{L}\p{M}\p{N}\])])/giu;
     function soundNoteLine(src) {
-        const s = String(src || "").replace(/¦/g, " ").trim();
+        let s = String(src || "").replace(/¦/g, " ").trim();
+        const speech = s.replace(NOTE_RE, " ");
+        const rest = speech.replace(BARE_FOREIGN, " ");
+        if (rest !== speech && !/[\p{L}\p{N}]/u.test(rest)) s = s.replace(BARE_FOREIGN, "[foreign]");
         const notes = s.match(NOTE_RE);
         if (!notes || /[\p{L}\p{N}]/u.test(s.replace(NOTE_RE, " "))) return null;
         let known = true;

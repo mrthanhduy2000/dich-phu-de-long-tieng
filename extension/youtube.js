@@ -45,7 +45,8 @@ const yt = {
     tongSoNhom: 0,
     vfcId: null,
     daGanSuKien: false,
-    panelOpen: false      // bản chép lời đang mở: phụ đề nhường chỗ
+    panelOpen: false,     // bản chép lời đang mở: phụ đề nhường chỗ
+    screen: null          // on-screen subtitle reader (ytBatDauDocChuTrenHinh) while it runs
 };
 
 // ============================================================
@@ -152,6 +153,7 @@ async function ytGhiCache(videoId) {
     if (!videoId || yt.viCues.length === 0) return;
     if (yt.groups.some(g => g.fallback)) {
         console.log("[AI Subtitle] Có đoạn dịch tạm bằng Google: không lưu bản dịch video này, lần sau dịch lại bằng Gemini");
+        ytNoteSaveSkip(videoId, "fallback", yt.groups.filter(g => g.fallback).length);
         return;
     }
     try {
@@ -160,6 +162,7 @@ async function ytGhiCache(videoId) {
         await chrome.storage.local.set({
             [key]: {
                 luc: Date.now(),
+                src: yt.srcTrack || "",     // the track translated (2.6.4): another choice later retranslates
                 cues: yt.cues.map(c => [r(c.start), r(c.end), c.text]),
                 vi: yt.viCues.map(c => [r(c.start), r(c.baseEnd != null ? c.baseEnd : c.end), c.lines.join("\n")]),
                 // Nhóm câu + bản dịch có ngữ cảnh: lồng tiếng xem lại không phải dịch lại
@@ -178,7 +181,17 @@ async function ytGhiCache(videoId) {
         }
     } catch (e) {
         console.warn("Khong ghi duoc bo nho dem:", e.message);
+        ytNoteSaveSkip(videoId, "error: " + e.message, 0);
     }
+}
+
+// (2.7.3) A video not saved says why, on the device (last 20): read with tools/ext-storage.js
+function ytNoteSaveSkip(videoId, why, n) {
+    chrome.storage.local.get("ytSaveSkip").then(r => {
+        const log = Array.isArray(r.ytSaveSkip) ? r.ytSaveSkip : [];
+        log.push({ at: Date.now(), videoId, why, n, groups: yt.groups.length });
+        return chrome.storage.local.set({ ytSaveSkip: log.slice(-20) });
+    }).catch(() => {});
 }
 
 // Giu lai cac video gan day nhat, xoa bot cai cu va toan bo cache phien ban cu
@@ -264,6 +277,14 @@ function ytHoiDanhSachPhuDe(timeoutMs = 4500) {
     });
 }
 
+// A track's identity in a saved copy: language, kind, whether it transcribes a dub, and the
+// fetch generation. "|2" (2.6.7): copies saved by 2.6.5-2.6.6 may come from the player's display
+// body (two-row blocks, no word times, lines 4-5 s early) and are retranslated once
+function ytMaTrack(t) {
+    if (!t) return "";
+    return `${t.languageCode}|${t.kind || ""}${/[?&]variant=/.test(t.baseUrl || "") ? "|dub" : ""}|2`;
+}
+
 // ---------- Chon ban chep loi phu hop ----------
 // ctx.spoken: the language spoken (ytNgonNguNoi); ctx.audio: the player's audio tracks. An ASR
 // track in the language of an AI-dubbed audio track transcribes the dub, never the speaker: it is
@@ -271,9 +292,9 @@ function ytHoiDanhSachPhuDe(timeoutMs = 4500) {
 function ytChonTrack(tracks, skipSameLang = true, ctx = {}) {
     if (!tracks || tracks.length === 0) return null;
     const norm = c => String(c || "").toLowerCase().split(/[-_]/)[0];
-    const dubbed = new Set(((ctx.audio && ctx.audio.tracks) || []).filter(t => t.isAutoDubbed).map(t => norm(t.lang)));
-    if (dubbed.size) {
-        const real = tracks.filter(t => !(t.kind === "asr" && dubbed.has(norm(t.languageCode))));
+    const dubs = window.CST_LANG && window.CST_LANG.dubTranscripts ? window.CST_LANG.dubTranscripts(tracks, ctx.audio) : new Set();
+    if (dubs.size) {
+        const real = tracks.filter(t => !dubs.has(t));
         if (real.length) tracks = real;
     }
 
@@ -300,6 +321,31 @@ function ytChonTrack(tracks, skipSameLang = true, ctx = {}) {
             tracks[0],
         daCoTiengViet: false
     };
+}
+
+// (2.7.9, 2.8.8, 2.9.3) A first-choice track that is blank (cues.blank), or a machine transcript that
+// heard nothing usable (ctx.broken), gives way to the other tracks, tried one by one in ytChonTrack's
+// order. Before 2.9.3 only the next one was tried: when it was blank or broken too, a usable third
+// track was never reached. Returns { track, cues } to switch to, or null to keep the first choice.
+// An alternative that is itself broken is taken only when the first choice had no text at all
+const YT_ALT_TRACK_TRIES = 4;
+async function ytFindUsableTrack(first, firstCues, tracks, ctx) {
+    const unusable = (t, c) => !!c.blank || (t.kind === "asr" && c.length > 0 && ctx.broken(t, c));
+    if (!unusable(first, firstCues)) return null;
+    let rest = tracks.filter(t => t !== first);
+    let fallback = null;
+    for (let tries = 0; rest.length && tries < YT_ALT_TRACK_TRIES; tries++) {
+        const pick = ytChonTrack(rest, false, { audio: ctx.audio });
+        const alt = pick && pick.track;
+        if (!alt) break;
+        rest = rest.filter(t => t !== alt);
+        const altCues = await ctx.load(alt).catch(() => []);
+        if (ctx.stale()) return null;
+        if (!altCues.length) continue;
+        if (!unusable(alt, altCues)) return { track: alt, cues: altCues };
+        if (!fallback) fallback = { track: alt, cues: altCues };
+    }
+    return firstCues.length ? null : fallback;
 }
 
 // ---------- Tai va doc ban chep loi ----------
@@ -346,31 +392,39 @@ async function ytTaiBanChepLoi(baseUrl) {
 function ytDocNoiDungPhuDe(rawText) {
     const cues = [];
     if (!rawText) return cues;
+    let parsedEvents = 0;
 
     // Cách 1: Thử parse dạng JSON3
     try {
         const data = JSON.parse(rawText);
-        const events = data.events || [];
+        const events = Array.isArray(data && data.events) ? data.events : [];
+        parsedEvents = events.length;
         for (const ev of events) {
-            if (!ev.segs) continue;
+            if (!ev || !Array.isArray(ev.segs)) continue;
+            ev.segs = ev.segs.filter(sg => sg && typeof sg === "object").map(sg => ({ utf8: sg.utf8 == null ? "" : String(sg.utf8), tOffsetMs: sg.tOffsetMs }));
             const text = ev.segs
-                .map(s => s.utf8 || "")
+                .map(s => s.utf8)
                 .join("")
                 .replace(/\s+/g, " ")
                 .trim();
             if (!text || text === "\n") continue;
 
-            const start = (ev.tStartMs || 0) / 1000;
-            const dur = (ev.dDurationMs || 0) / 1000;
+            // a time that is not a finite number (hostile or truncated JSON) counts as 0
+            const ms = v => (Number.isFinite(Number(v)) ? Number(v) : 0);
+            const start = ms(ev.tStartMs) / 1000;
+            const dur = ms(ev.dDurationMs) / 1000;
             // Phu de tu dong co thoi gian TUNG TU (tOffsetMs): bo phan doan dung
             // de dat diem cat tieng Viet dung nhip noi thay vi noi suy tuyen tinh
             const words = [];
             for (const sg of ev.segs) {
                 const w = (sg.utf8 || "").trim();
                 if (!w) continue;
-                words.push({ text: w, t: start + (sg.tOffsetMs || 0) / 1000 });
+                words.push({ text: w, t: start + ms(sg.tOffsetMs) / 1000 });
             }
-            cues.push({ start, end: start + dur, text, words: words.length > 1 ? words : undefined });
+            // A block of several rows with no word times (the display form of a track, 2.6.7):
+            // its rows are said one after another, so each gets its own cue below
+            const rows = words.length > 1 ? [] : ev.segs.map(sg => sg.utf8 || "").join("").split("\n").map(r => r.replace(/\s+/g, " ").trim()).filter(Boolean);
+            cues.push({ start, end: start + dur, text, words: words.length > 1 ? words : undefined, rows: rows.length > 1 ? rows : undefined });
         }
     } catch (parseErr) {
         // Cách 2: Parse XML dự phòng nếu YouTube trả về định dạng XML
@@ -378,6 +432,10 @@ function ytDocNoiDungPhuDe(rawText) {
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(rawText, "text/xml");
             const nodes = xmlDoc.querySelectorAll("p, text");
+            // (2.9.3) only a real caption document (srv3 <timedtext>, srv1 <transcript>) can be a blank
+            // track: an error page parsed as XML has no such root
+            const root = xmlDoc.documentElement ? String(xmlDoc.documentElement.nodeName).toLowerCase() : "";
+            if (root === "timedtext" || root === "transcript") parsedEvents = nodes.length;
             for (const node of nodes) {
                 const start = parseFloat(node.getAttribute("t") || node.getAttribute("start") || "0") / (node.getAttribute("t") ? 1000 : 1);
                 const dur = parseFloat(node.getAttribute("d") || node.getAttribute("dur") || "0") / (node.getAttribute("d") ? 1000 : 1);
@@ -391,11 +449,38 @@ function ytDocNoiDungPhuDe(rawText) {
         }
     }
 
+    // Rows of a block share its time by their characters, up to where the next block starts: a
+    // block shown whole from its start put its later rows on screen and in the voice 4-5 s early
+    // (2.6.7, a display-form Korean ASR track: second row at 98.4 s, said at 103.0 s; by share 102.2 s).
+    // Only the fallback meets this: the bridge fetches json3 with word times first
+    for (let i = cues.length - 1; i >= 0; i--) {
+        const c = cues[i];
+        if (!c.rows) continue;
+        // only the display form: a block still on screen when the next one starts. An uploaded
+        // track's two-row cue that ends before the next is left whole
+        const next = cues[i + 1];
+        if (!next || c.end <= next.start + 0.5) { delete c.rows; continue; }
+        const stop = Math.max(c.start, next.start);
+        const total = c.rows.reduce((n, r) => n + r.length, 0);
+        let at = c.start;
+        const parts = c.rows.map(r => {
+            const piece = { start: at, end: at + (stop - c.start) * r.length / total, text: r };
+            at = piece.end;
+            return piece;
+        });
+        parts[parts.length - 1].end = Math.max(parts[parts.length - 1].end, c.end);
+        cues.splice(i, 1, ...parts);
+    }
+
     // Phu de tu dong hay bi chong thoi gian, cat lai cho gon
     for (let i = 0; i < cues.length - 1; i++) {
         if (cues[i].end > cues[i + 1].start) cues[i].end = cues[i + 1].start;
     }
 
+    // (2.8.8) The body came and holds events, but not a word: the track itself is blank (an uploaded
+    // "en" track of one " " event on two Bengali vlogs). Not the missing pot of an empty body.
+    // 2.9.3: an XML body counts too; before, a blank one was told as a missing pot and retried
+    if (!cues.length && parsedEvents > 0) cues.blank = true;
     return cues;
 }
 
@@ -447,7 +532,7 @@ function ytTaoLopPhuDe() {
         pointer-events: none;
         z-index: 60;
         opacity: 0;
-        transition: opacity 0.12s ease-out, bottom 0.18s ease-out, top 0.18s ease-out, transform 0.24s cubic-bezier(.16,1,.3,1), max-width 0.24s cubic-bezier(.16,1,.3,1);
+        transition: ${window.CST_STYLE.overlayTransition(window.CST_STYLE.prefersReducedMotion())};
     `;
     ytApDungKieuPhuDe(overlay);
     player.appendChild(overlay);
@@ -464,9 +549,8 @@ function ytTaoLopPhuDe() {
 function ytCapNhatKichThuoc(player, overlay) {
     if (!player || !overlay) return;
     const rong = player.clientWidth || 640;
-    const baseCo = Math.max(14, Math.min(rong * 0.026, 40));
-    const scale = window.CST_STYLE ? window.CST_STYLE.sizeFactor(ytSubStyle.fontSize) : 0.7;
-    overlay.style.fontSize = `${(baseCo * scale).toFixed(1)}px`;
+    const co = window.CST_STYLE ? window.CST_STYLE.overlayFontPx(rong, ytSubStyle.fontSize) : Math.max(14, Math.min(rong * 0.026, 40)) * 0.7;
+    overlay.style.fontSize = `${co.toFixed(1)}px`;
     yt.renderKey = "";
 }
 
@@ -725,11 +809,13 @@ function ytWaitForWindowBefore(groups, gIdx, curTime) {
 }
 
 // The untranslated groups of gIdx's window, or [] while any of them is being translated
-function ytChonCuaSo(gIdx) {
+// heal: the window's Google-fallback groups are sent again too (ytFallbackToHeal)
+function ytChonCuaSo(gIdx, heal = false) {
     const groups = yt.groups;
-    if (!groups[gIdx] || groups[gIdx].translated || yt.inFlightGroups.has(gIdx)) return [];
+    const open = i => !groups[i].translated || (heal && groups[i].fallback);
+    if (!groups[gIdx] || !open(gIdx) || yt.inFlightGroups.has(gIdx)) return [];
     const w = ytWindows(groups);
-    const idxs = w.wins[w.of[gIdx]].filter(i => !groups[i].translated);
+    const idxs = w.wins[w.of[gIdx]].filter(open);
     return idxs.some(i => yt.inFlightGroups.has(i)) ? [] : idxs;
 }
 
@@ -847,6 +933,13 @@ function ytGanBanDich(groups, idxs, translations, engine) {
     ytTrimLeaks(groups, idxs);
     ytGhepViCues();
     yt.renderKey = "";
+    // (2.7.2) Saved the moment the last group lands, not when the prefetch loop next wakes (it
+    // sleeps 1 s between looks, longer in a hidden tab): a viewer who moves on to the next video
+    // right at the end (autoplay) turned the run off first, and the whole video was never saved
+    if (groups === yt.groups && !yt.daDichXong && !yt.huyDich && groups.every(g => g.translated)) {
+        yt.daDichXong = true;
+        ytGhiCache(yt.currentVideoId);
+    }
 }
 
 // A refine landing after the video was translated and saved (ytGhiCache) used to stay out of the
@@ -862,11 +955,11 @@ function ytSaveAfterRefine(groups) {
     }, 500);
 }
 
-async function ytDichNhom(gIdx) {
+async function ytDichNhom(gIdx, heal = false) {
     const groups = yt.groups;
     const session = yt.session;
     if (!session) return false;
-    const idxs = ytChonCuaSo(gIdx);
+    const idxs = ytChonCuaSo(gIdx, heal);
     if (!idxs.length) return false;
 
     idxs.forEach(i => yt.inFlightGroups.add(i));
@@ -1029,6 +1122,25 @@ function ytDungDongBo() {
 // 2 luồng là đủ theo kịp tốc độ xem; luồng thứ 3 chủ yếu dịch xa phía trước (lãng phí nếu người dùng tua)
 const NUM_CONCURRENT_WORKERS = 2;
 
+// A fallback group is asked of Gemini again up to YT_HEAL.max times, YT_HEAL.gapMs apart and more
+// each time (a model rests 15 s after a slow answer). Only one that has played or is not about to:
+// the line on screen, and the voice already made for it, are not swapped under the viewer.
+const YT_HEAL = { max: 3, gapMs: 20000, leadS: 15 };
+const ytHealPending = g => g.fallback && (g.heals || 0) < YT_HEAL.max;
+function ytFallbackToHeal(groups, curTime, horizon) {
+    const now = Date.now();
+    for (let i = 0; i < groups.length; i++) {
+        const g = groups[i];
+        if (!ytHealPending(g) || yt.inFlightGroups.has(i)) continue;
+        if (!g.healAt) { g.healAt = now + YT_HEAL.gapMs; continue; }
+        if (g.healAt > now) continue;
+        if (g.start > horizon) continue;
+        if (g.end >= curTime && g.start - curTime < YT_HEAL.leadS) continue;
+        return i;
+    }
+    return -1;
+}
+
 async function ytChayTienTrinhPrefetch(groups) {
     yt.tongSoNhom = groups.length;
     yt.soNhomDaDich = groups.filter(g => g.translated).length;
@@ -1077,7 +1189,22 @@ async function ytChayTienTrinhPrefetch(groups) {
             }
 
             if (bestGroupIdx === -1) {
-                if (groups.every(g => g.translated)) break;
+                // (2.7.4) Nothing new to send: a window Google translated while Gemini failed is asked
+                // of Gemini again, so the video can still be saved (ytGhiCache keeps no fallback)
+                const heal = ytFallbackToHeal(groups, curTime, horizon);
+                if (heal !== -1) {
+                    const win = ytWindows(groups).wins[ytWindows(groups).of[heal]];
+                    for (const k of win) {
+                        const g = groups[k];
+                        if (!g.fallback) continue;
+                        g.heals = (g.heals || 0) + 1;
+                        g.healAt = Date.now() + YT_HEAL.gapMs * g.heals;
+                    }
+                    await ytDichNhom(heal, true);
+                    if (groups.every(x => x.translated && !x.fallback)) ytSaveAfterRefine(groups);
+                    continue;
+                }
+                if (groups.every(g => g.translated) && !groups.some(ytHealPending)) break;
                 // Chưa tới vùng cần dịch (hoặc worker khác đang dịch): chờ người xem tiến lên
                 await new Promise(r => setTimeout(r, yt.inFlightGroups.size > 0 ? 150 : 1000));
                 continue;
@@ -1119,8 +1246,10 @@ async function ytChayTienTrinhPrefetch(groups) {
     await Promise.all(workers);
 
     if (yt.groups !== groups || yt.huyDich) return;
-    yt.daDichXong = groups.every(g => g.translated);
-    if (yt.daDichXong) ytGhiCache(yt.currentVideoId);
+    if (!yt.daDichXong && groups.every(g => g.translated)) {     // else saved when the last group landed
+        yt.daDichXong = true;
+        ytGhiCache(yt.currentVideoId);
+    }
 }
 
 function ytKichHoatHienThi() {
@@ -1146,7 +1275,7 @@ function ytHienThiNguyenTiengViet(viCues) {
         lines: seg ? seg.breakLines(c.text) : [c.text]
     }));
     if (window.CST_STYLE && window.CST_STYLE.lingerCues) window.CST_STYLE.lingerCues(yt.viCues);
-    yt.dubGroups = viCues.map(c => ({ start: c.start, end: c.end, viText: c.text, srcCues: [{ start: c.start, end: c.end, text: c.text }], viCues: [{ start: c.start, end: c.end, text: c.text }] }));
+    yt.dubGroups = window.CST_DUB_PLAN.groupsFromViCues(viCues);
     yt.daDichXong = true;
     ytKichHoatHienThi();
 }
@@ -1277,10 +1406,40 @@ async function ytTuDongDichSau(ma) {
     yt.langDecision = q;
     console.log(`[AI Subtitle] Ngôn ngữ video: ${q.lang} (${Math.round(q.confidence * 100)}%, theo ${q.source}) -> ${q.action === "translate" ? "tự động dịch" : q.action === "skip" ? "đã là tiếng Việt, không dịch" : "chưa chắc chắn, không tự dịch"}`);
     if (q.action !== "translate") return q;
+    yt.emptyCaptionsFor = null;
     const ok = await ytBatDauDich({ auto: true });
     ytDatTrangThaiNut(ok ? "on" : "idle");
     if (ok && ytLayMaVideo() === ma) await ytTuBatLongTieng();
+    else if (!ok && yt.emptyCaptionsFor === ma) ytRetryEmptyCaptions(ma, 0);
     return q;
+}
+
+// (2.7.2) An auto start whose caption body came back empty (the player's pot not seen yet: a video
+// opened in a background or covered tab) used to stay untranslated with no word to the viewer, since
+// autoTried keeps it from starting again. 3 of 23 new videos run in a covered window on 2026-10-22;
+// asked again a few seconds later the same track came back whole. Tried again when the tab is shown
+// and after 4, 12 and 30 s; an empty answer costs no Gemini call.
+const YT_EMPTY_RETRY_MS = [4000, 12000, 30000];
+function ytRetryEmptyCaptions(ma, attempt) {
+    if (attempt >= YT_EMPTY_RETRY_MS.length) return;
+    const seq = yt.offSeq || 0;             // turned off by hand or another video since: no retry
+    let done = false;
+    const go = async () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        document.removeEventListener("visibilitychange", onShow);
+        if (yt.dead || yt.active || ytLayMaVideo() !== ma || (yt.offSeq || 0) !== seq) return;
+        if (yt.busy) { ytRetryEmptyCaptions(ma, attempt); return; }
+        yt.emptyCaptionsFor = null;
+        const ok = await ytBatDauDich({ auto: true });
+        ytDatTrangThaiNut(ok ? "on" : "idle");
+        if (ok && ytLayMaVideo() === ma) await ytTuBatLongTieng();
+        else if (!ok && yt.emptyCaptionsFor === ma) ytRetryEmptyCaptions(ma, attempt + 1);
+    };
+    const onShow = () => { if (!document.hidden) go(); };
+    const timer = setTimeout(go, YT_EMPTY_RETRY_MS[attempt]);
+    document.addEventListener("visibilitychange", onShow);
 }
 
 // Lồng tiếng đang được bật (nút trên trình phát hoặc ô trong popup): tự bật lại sau khi dịch,
@@ -1356,9 +1515,27 @@ async function ytBatDauDich(opts = {}) {
             }
         }
 
+        // Every track transcribes one of YouTube's AI dubs, none the original speech: what they say
+        // is what the dubbing made of the video. Read the captions burned into the picture instead
+        // (screen-text.js, 2.6.4). Checked before the saved copy: one saved from a dub transcript
+        // must not come back
+        const SCREEN = window.CST_SCREEN;
+        if (!opts.noScreen && !chon.daCoTiengViet && SCREEN && SCREEN.onlyDubTranscripts(info.tracks, info.audio, chon.track)) {
+            console.log("[AI Subtitle] Mọi phụ đề đều chép từ bản lồng tiếng AI: đọc chữ trên hình");
+            return ytBatDauDocChuTrenHinh(!opts.auto);
+        }
+
         // Xem lai video da dich thi lay ngay tu bo nho dem
-        const cache = await ytDocCache(yt.currentVideoId);
+        let cache = await ytDocCache(yt.currentVideoId);
         if (stale()) return false;
+        // A copy made from another track than the one chosen now is dropped: before 2.6.4 a video
+        // whose tracks are mostly dub transcripts was translated from one of those (no `src` then)
+        yt.srcTrack = ytMaTrack(chon.track);
+        const hasDubs = !!(window.CST_LANG && window.CST_LANG.dubTranscripts && window.CST_LANG.dubTranscripts(info.tracks, info.audio).size);
+        if (cache && (cache.src ? cache.src !== yt.srcTrack : hasDubs)) {
+            console.log("[AI Subtitle] Bản dịch đã lưu làm từ phụ đề khác, dịch lại");
+            cache = null;
+        }
         if (cache) {
             yt.cues = cache.cues.map(c => ({ start: c[0], end: c[1], text: c[2] }));
             yt.groups = [];
@@ -1380,15 +1557,38 @@ async function ytBatDauDich(opts = {}) {
             return true;
         }
 
-        const track = chon.track;
+        let track = chon.track;
         // Which track we ended up on decides how good the translation can be: machine-heard captions
         // are the usual reason a line comes out wrong, so the menu says which one is in use
         yt.trackInfo = { languageCode: track.languageCode, kind: track.kind || "", viSan: !!chon.daCoTiengViet };
         console.log(`Dung ban chep loi: ${track.languageCode}${track.kind === "asr" ? " (tu dong)" : ""}`);
 
-        const cues = await ytTaiBanChepLoi(track.baseUrl);
+        let cues = await ytTaiBanChepLoi(track.baseUrl);
         if (stale()) return false;
+        // (2.7.9) A machine transcript that heard nothing usable (CST_LANG.brokenTranscript: mostly dots,
+        // or not in its own language's script) gives way to the best other track. yt.srcTrack stays the
+        // first choice's, so the saved copy is found again on the next visit, which chooses the same way
+        const LD = window.CST_LANG;
+        const better = await ytFindUsableTrack(track, cues, info.tracks, {
+            audio: info.audio,
+            load: t => ytTaiBanChepLoi(t.baseUrl),
+            broken: (t, c) => !!(LD && LD.brokenTranscript && LD.brokenTranscript(t.languageCode, c.slice(0, 120).map(x => x.text).join(" ")).broken),
+            stale
+        });
+        if (stale()) return false;
+        if (better) {
+            console.log(`Ban chep loi ${track.languageCode}${track.kind === "asr" ? " (tu dong)" : ""} khong doc duoc, dung ${better.track.languageCode}${better.track.kind === "asr" ? " (tu dong)" : ""}`);
+            track = better.track;
+            cues = better.cues;
+            yt.trackInfo = { languageCode: track.languageCode, kind: track.kind || "", viSan: false };
+        }
+        if (cues.length === 0 && cues.blank) {
+            // nothing to wait for: playing, reloading or trying again gives the same blank track
+            baoLoi("Phụ đề của video này trống (người đăng tải lên một bản không có chữ), không có gì để dịch.");
+            return false;
+        }
         if (cues.length === 0) {
+            yt.emptyCaptionsFor = ma0;      // an auto start tries again (ytRetryEmptyCaptions)
             baoLoi("YouTube chưa trả nội dung phụ đề. Hãy phát video vài giây rồi bấm dịch lại; nếu vẫn lỗi, tải lại trang (F5).");
             return false;
         }
@@ -1419,7 +1619,8 @@ async function ytBatDauDich(opts = {}) {
             title: info.title || "",
             channel: info.author || "",
             description: info.description || "",
-            keywords: info.keywords || []
+            keywords: info.keywords || [],
+            lang: track.languageCode || ""          // the source's own "I" (ContextSession saysI)
         }, info.channelId ? `yt_${info.channelId}` : (info.author ? `yt_${info.author}` : ""));
         if (yt.session) yt.session.setUnits(groups.map(g => g.text));
         if (yt.groups !== groups || stale()) return false;
@@ -1439,7 +1640,8 @@ async function ytBatDauDich(opts = {}) {
         return true;
     } catch (err) {
         console.error("Dich YouTube that bai:", err);
-        baoLoi(`Không dịch được: ${err.message}`);
+        if (opts.auto || !window.CST_UI || !window.CST_UI.explainError) baoLoi(`Không dịch được: ${err.message}`);
+        else { const why = window.CST_UI.explainError(err); ytBao(why.text, { warn: true, actionLabel: why.actionLabel, onAction: why.onAction }); }
         return false;
     } finally {
         yt.busy = false;
@@ -1449,6 +1651,8 @@ async function ytBatDauDich(opts = {}) {
 function ytTatDich() {
     yt.active = false;
     yt.huyDich = true;
+    yt.offSeq = (yt.offSeq || 0) + 1;      // a pending ytRetryEmptyCaptions gives up
+    ytDungDocChuTrenHinh();
     clearTimeout(yt.refineSaveTimer);
     yt.refineSaveTimer = null;
     ytDungDongBo();
@@ -1469,6 +1673,98 @@ function ytTatDich() {
     }
     yt.dubGroups = null;
     ytDatTrangThaiNut("idle");
+}
+
+// ---------- On-screen subtitles (2.6.4) ----------
+// The captions burned into the picture, read one at a time as they appear (screen-text.js samples
+// the frame, the service worker's readScreenText reads and translates). There is no transcript
+// ahead of time: a caption shows about a second after it appears, there is no voice and no saved
+// copy. Nothing found in YT_SCREEN_GIVE_UP_SEC of play: the picture has no captions, and the dub
+// transcript is translated as before (ytBatDauDich noScreen).
+const YT_SCREEN_GIVE_UP_SEC = 45;
+
+function ytBatDauDocChuTrenHinh(byHand) {
+    const SCREEN = window.CST_SCREEN;
+    const video = yt.videoEl;
+    if (!SCREEN || !video) return false;
+    ytDungDocChuTrenHinh();
+    yt.trackInfo = { languageCode: "", kind: "screen", viSan: false };
+    yt.cues = [];
+    yt.groups = [];
+    yt.viCues = [];
+    yt.dubGroups = null;
+    yt.overlay = ytTaoLopPhuDe();
+    ytAnPhuDeGoc(true);
+    yt.active = true;
+    ytCapNhatTrangThaiNutThanhDieuKhien();
+    ytDatTrangThaiNut("on");
+    ytBao("Video này không có phụ đề gốc (YouTube chỉ có phụ đề của bản lồng tiếng AI), nên tiện ích đọc chữ in trên hình để dịch. Phụ đề hiện chậm khoảng 1 giây và không có lồng tiếng.");
+
+    const ma = ytLayMaVideo();
+    const before = [];
+    const seen = { found: 0, played: 0, lastT: video.currentTime, warned: false };
+    const read = async image => {
+        let r;
+        try {
+            r = await chrome.runtime.sendMessage({
+                action: "readScreenText", image, before: before.slice(-4),
+                videoKey: ma, videoSec: Math.round(video.currentTime), videoTitle: yt.videoTitle
+            });
+        } catch (e) { return null; } // dead context or asleep worker: skip this frame, the next one retries
+        if (!r || !r.ok) {
+            if (r && (r.reason === "no_key" || r.reason === "budget") && !seen.warned) {
+                seen.warned = true;
+                ytBao(r.reason === "no_key"
+                    ? "Đọc chữ trên hình cần khóa Gemini API. Hãy nhập khóa trong Cài đặt."
+                    : "Đã chạm hạn mức chi phí Gemini, tạm dừng đọc chữ trên hình.", { warn: true });
+            }
+            return null;
+        }
+        if (r.text) {
+            seen.found++;
+            before.push({ text: r.text, vi: r.vi });
+            if (before.length > 8) before.shift();
+        }
+        return r;
+    };
+    const show = r => {
+        if (!yt.active || !yt.overlay) return;
+        if (!r || !r.vi) { ytVePhuDe(yt.overlay, null, ""); return; }
+        const seg = window.CST_VI_SEG;
+        const viCue = { text: r.vi, lines: seg ? seg.breakLines(r.vi) : [r.vi] };
+        const isDual = ytSubStyle.mode === "dual" || state.dualMode;
+        ytVePhuDe(yt.overlay, viCue, isDual ? r.text : "");
+    };
+    const fallBack = why => {
+        console.log(`[AI Subtitle] Thôi đọc chữ trên hình (${why}), dịch phụ đề của bản lồng tiếng`);
+        setTimeout(() => {
+            if (ytLayMaVideo() !== ma) return;
+            ytTatDich();
+            ytBatDauDich({ noScreen: true, auto: !byHand }).then(ok => ytDatTrangThaiNut(ok ? "on" : "idle"));
+        }, 0);
+    };
+    const skip = () => {
+        if (ytAdShowing()) return true;
+        const t = video.currentTime;
+        const dt = t - seen.lastT;
+        seen.lastT = t;
+        if (!video.paused && dt > 0 && dt < 2) seen.played += dt;
+        if (!seen.found && seen.played >= YT_SCREEN_GIVE_UP_SEC) { ytDungDocChuTrenHinh(); fallBack("không thấy chữ"); return true; }
+        return false;
+    };
+    const reader = SCREEN.createReader({ video, read, show, skip, onFrameError: () => fallBack("không đọc được khung hình") });
+    const onSeeked = () => reader.reset();
+    video.addEventListener("seeked", onSeeked);
+    yt.screen = { reader, video, onSeeked };
+    return true;
+}
+
+function ytDungDocChuTrenHinh() {
+    const s = yt.screen;
+    if (!s) return;
+    yt.screen = null;
+    s.reader.stop();
+    s.video.removeEventListener("seeked", s.onSeeked);
 }
 
 // ---------- Nút bấm & Menu điều khiển YouTube ----------
@@ -1731,7 +2027,7 @@ function ytMoMenuNhanh(player, btn) {
         rowSub.setAttribute("aria-checked", String(!!yt.active));
         const nguon = ytNguonPhuDe();
         const hauTo = yt.active && nguon ? ` · ${nguon.nhan.toLowerCase()}` : "";
-        rowSub.cstSub.textContent = (yt.busy ? "Đang dịch…"
+        rowSub.cstSub.textContent = (yt.busy ? (tienDo ? `Đang dịch ${tienDo.xong}/${tienDo.tong} đoạn` : "Đang dịch…")
             : yt.active && tienDo ? `Đã dịch ${tienDo.xong}/${tienDo.tong} đoạn`
                 : yt.active ? "Đang bật" : "Đang tắt") + hauTo;
         rowSub.cstSub.style.color = yt.active && nguon && nguon.canhBao ? "var(--cst-warn)" : "";
@@ -1853,6 +2149,7 @@ function ytTranscriptAdapter() {
 function ytNguonPhuDe() {
     const info = yt.trackInfo;
     if (!info) return null;
+    if (info.kind === "screen") return { nhan: "Chữ in trên hình (Gemini đọc)", canhBao: false };
     if (info.kind === "asr") return { nhan: "Phụ đề máy nghe tự động", canhBao: true };
     return { nhan: info.viSan ? "Phụ đề tiếng Việt có sẵn" : "Phụ đề tác giả tải lên", canhBao: false };
 }

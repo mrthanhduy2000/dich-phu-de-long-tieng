@@ -22,8 +22,11 @@ const state = {
     glossaryEnabled: true,
     glossaryMisses: 0,
     glossaryTranslateAs: new Map(),
+    glossaryCanon: new Map(),    // lower-case form -> canonical spelling of the brands matched case-insensitively
+    glossaryFp: "",             // the user's own glossary choices, part of the translation cache key
     reExact: null,
     reLoose: null,
+    reBrand: null,
     reRisky: null,
     dubEnabled: true,
     originalFirst: false,
@@ -97,7 +100,8 @@ function cstToast(message, opts = {}) {
         box.appendChild(close);
         host.appendChild(box);
         requestAnimationFrame(() => { box.style.opacity = "1"; });
-        const ms = opts.ms || (opts.actionLabel ? 12000 : 6000);
+        // a toast with a button stays long enough to be read and clicked (12 s was gone before the viewer reached it)
+        const ms = opts.ms || (opts.actionLabel ? 30000 : 6000);
         setTimeout(() => { box.style.opacity = "0"; setTimeout(() => box.remove(), 300); }, ms);
         return box;
     } catch (e) {
@@ -107,6 +111,38 @@ function cstToast(message, opts = {}) {
 }
 window.CST_UI = { toast: cstToast };
 
+// One place that turns a raw failure (a message from Gemini, Chrome or the network) into what the
+// viewer reads: what happened in plain Vietnamese and what to do next. Used by the Coursera and
+// YouTube translation errors so the same cause always reads the same way.
+function cstExplainError(err) {
+    const raw = String(err && err.message || err || "").trim();
+    const reload = { actionLabel: "Tải lại trang", onAction: () => location.reload() };
+    if (/context invalidated|extension was (updated|reloaded)/i.test(raw)) {
+        return { text: "Tiện ích vừa được cập nhật nên trang này đang dùng kết nối cũ. Hãy tải lại trang (F5) rồi bấm dịch lại.", ...reload };
+    }
+    if (/receiving end|establish connection|message port closed|không có phản hồi|service worker/i.test(raw)) {
+        return { text: "Tiện ích chưa phản hồi. Hãy chờ vài giây rồi bấm dịch lại; nếu vẫn lỗi, tải lại trang (F5).", ...reload };
+    }
+    if (/hết hạn mức|quota|per ?day|resource_exhausted/i.test(raw)) {
+        return { text: "Đã hết hạn mức Gemini trong ngày. Hãy thử lại vào ngày mai hoặc đổi API Key khác trong Cài đặt." };
+    }
+    if (/429|giới hạn tốc độ|rate.?limit/i.test(raw)) {
+        return { text: "Gemini đang giới hạn tốc độ vì gửi quá nhiều yêu cầu. Hãy chờ khoảng 1 phút rồi bấm dịch lại." };
+    }
+    if (/API Key|api key|\b(401|403)\b|permission_denied|unauthenticated/i.test(raw)) {
+        return { text: "API Key Gemini sai, hết hạn hoặc không đủ quyền. Hãy kiểm tra lại trong Cài đặt.",
+            actionLabel: "Mở Cài đặt", onAction: () => { try { chrome.runtime.sendMessage({ action: "openOptions" }); } catch (e) { /* bỏ qua */ } } };
+    }
+    if (/failed to fetch|networkerror|network|offline|timeout|timed out|quá thời gian|bridge-timeout|lỗi mạng/i.test(raw)) {
+        return { text: "Không kết nối được mạng hoặc máy chủ trả lời quá chậm. Hãy kiểm tra mạng rồi bấm dịch lại." };
+    }
+    if (/\b(500|502|503|504)\b|quá tải|overloaded|unavailable/i.test(raw)) {
+        return { text: "Máy chủ Gemini đang quá tải. Hãy thử lại sau vài phút." };
+    }
+    return { text: `Chưa dịch được${raw ? ` (${raw.slice(0, 140)})` : ""}. Hãy bấm dịch lại; nếu vẫn lỗi, tải lại trang (F5).` };
+}
+window.CST_UI.explainError = cstExplainError;
+
 function getCurrentSite() {
     const url = location.href;
     if (url.includes("coursera.org")) return "coursera";
@@ -115,6 +151,11 @@ function getCurrentSite() {
     // Any other page: the scripts only get here when the viewer asked for it (popup button or a
     // shortcut injects them through activeTab), and the page is served by the shared <video> path
     return "generic";
+}
+
+// A site with its own caption source (site-adapters.js); null when the page has none
+function csAdapterSite() {
+    return window.CST_SITES && getCurrentSite() === "generic" ? window.CST_SITES.find(location) : null;
 }
 
 // Coursera and every other page share one pipeline: a <video> with standard text tracks
@@ -179,6 +220,23 @@ function needsExactCase(term) {
     return /[A-Z]/.test(term);
 }
 
+// A brand with a capital inside ("ChatGPT", "PyTorch", "iPhone") is also found in a lower-case caption:
+// automatic captions are written in lower case ("chatgpt", "github"). Only when its lower-case form is
+// not an English word ("palm" for PaLM, "rope" for RoPE, "got" for GoT): CST_LOOSE_BRAND_SKIP lists the
+// ones that are, made from a word list by tools/brand-loose-skip.js. Four letters at least.
+function isLooseBrand(term, skip) {
+    if (!/[a-z][A-Z]/.test(term)) return false;
+    const low = term.toLowerCase();
+    if (/\s/.test(low)) return true;
+    return low.length >= 4 && !skip.has(low);
+}
+
+// A brand matched in any case takes a plain "s" only: "iPhones", but never "es", so "UniFi" does not
+// catch the verb "unifies" (1.67M words of lowercased text, 3 of 31 loose hits were exactly that).
+function brandToPattern(term) {
+    return escapeRegex(term) + (/[a-z0-9]$/i.test(term) ? "s?" : "");
+}
+
 // Bien mot thuat ngu thanh mau nhan dien, co chap nhan dang so nhieu.
 // Day la phan sua loi quan trong: truoc day "landing page" khong bat duoc
 // "landing pages", "AI agent" khong bat duoc "AI agents".
@@ -197,14 +255,90 @@ function termToPattern(term) {
     return escapeRegex(term);
 }
 
-// Dung bieu thuc gop tu danh sach thuat ngu, sap xep cum dai truoc
-// de "Claude Code" duoc bat truoc "Claude"
-function buildMasterRegex(terms, flags) {
+// A matcher over many terms that String.prototype.replace accepts like a global regex (2.5.9).
+// One alternation of every term ("(?:termA|termB|...)") costs time per term at every position of the
+// text: about 80 ms on a short window at 50,000 terms. Here the terms are indexed by the first three
+// characters (lowercased) every match of them starts with, and at each position where a word may
+// start only that bucket's own small regex is tried. Same results as the one big alternation: longer
+// terms first ("Claude Code" before "Claude"), plurals through termToPattern, no letter or digit
+// right before or after a match.
+function buildMasterRegex(terms, flags, brand) {
     if (terms.length === 0) return null;
-    const sorted = [...terms].sort((a, b) => b.length - a.length);
-    const parts = sorted.map(termToPattern);
-    // Khong cho khop khi ky tu lien ke la chu hoac so
-    return new RegExp(`(?<![\\w])(?:${parts.join("|")})(?![\\w])`, flags);
+    const ci = flags.includes("i");
+    const buckets = [new Map(), new Map(), new Map()];   // key length 1, 2, 3
+    for (const term of terms) {
+        // the literal start every match shares: "study" matches "stud(y|ies)"
+        const lit = /[bcdfghjklmnpqrstvwxz]y$/i.test(term) ? term.slice(0, -1) : term;
+        if (!lit) continue;
+        const key = lit.slice(0, 3).toLowerCase();
+        const m = buckets[key.length - 1];
+        if (!m.has(key)) m.set(key, []);
+        m.get(key).push(term);
+    }
+    const compiled = new Map();
+    const bucketRegex = (k, key) => {
+        const id = k + key;
+        let re = compiled.get(id);
+        if (re === undefined) {
+            const list = buckets[k].get(key);
+            re = list ? new RegExp(`(?:${list.slice().sort((a, b) => b.length - a.length).map(brand ? brandToPattern : termToPattern).join("|")})(?![\\w])`, ci ? "iy" : "y") : null;
+            compiled.set(id, re);
+        }
+        return re;
+    };
+    // Every bucket's regex is built on first use, and the big ones ("the ...": 1,100 terms) cost 40 to
+    // 80 ms: the first window of a video paid for them. warm() builds them largest first within a time
+    // budget, so the page can do it in idle slices after the glossary loads (next release).
+    const pending = [];
+    buckets.forEach((m, k) => m.forEach((list, key) => pending.push([list.length, k, key])));
+    pending.sort((a, b) => a[0] - b[0]);
+    const isWord = c => /\w/.test(c);
+    const matchAt = (text, i) => {
+        for (let k = 2; k >= 0; k--) {
+            if (i + k >= text.length) continue;
+            const re = bucketRegex(k, text.substr(i, k + 1).toLowerCase());
+            if (!re) continue;
+            re.lastIndex = i;
+            const m = re.exec(text);
+            if (m) return m[0];
+        }
+        return null;
+    };
+    return {
+        lastIndex: 0,
+        size: terms.length,
+        // true once every bucket is built
+        warm(budgetMs) {
+            const end = Date.now() + budgetMs;
+            while (pending.length && Date.now() < end) {
+                const [, k, key] = pending.pop();
+                const re = bucketRegex(k, key);
+                // the engine compiles on a first run and again, natively, on the next
+                if (re) for (let i = 0; i < 2; i++) { re.lastIndex = 0; re.test("a b"); }
+            }
+            return pending.length === 0;
+        },
+        // every match, left to right, not overlapping (what a global regex's replace visits)
+        matches(text) {
+            const out = [];
+            for (let i = 0; i < text.length; i++) {
+                if (i > 0 && isWord(text[i - 1])) continue;
+                const m = matchAt(text, i);
+                if (m) { out.push({ index: i, text: m }); i += m.length - 1; }
+            }
+            return out;
+        },
+        test(text) { return this.matches(String(text)).length > 0; },
+        [Symbol.replace](text, fn) {
+            text = String(text);
+            let out = "", last = 0;
+            for (const m of this.matches(text)) {
+                out += text.slice(last, m.index) + (typeof fn === "function" ? fn(m.text, m.index, text) : fn);
+                last = m.index + m.text.length;
+            }
+            return out + text.slice(last);
+        }
+    };
 }
 
 // ---------- Thuat ngu phu thuoc ngu canh ----------
@@ -232,6 +366,24 @@ function buildContextualRegex(text) {
     }
 }
 
+// Builds the matchers' buckets in slices of a few ms between other work. A newer rebuild stops the
+// loop of the older one. The timers are unref'd where that exists (tests), so they never hold a process.
+const GLOSSARY_WARM_SLICE_MS = 6;
+let glossaryWarmGen = 0;
+function warmGlossaryMatchers() {
+    const gen = ++glossaryWarmGen;
+    const step = () => {
+        if (gen !== glossaryWarmGen) return;
+        let done = true;
+        for (const m of [state.reExact, state.reBrand, state.reLoose]) if (m && m.warm && !m.warm(GLOSSARY_WARM_SLICE_MS)) { done = false; break; }
+        // the risky-name alternation is one regex: compiled here too, not on the first window
+        if (done && state.reRisky) for (let i = 0; i < 2; i++) { state.reRisky.lastIndex = 0; state.reRisky.test("a b"); }
+        if (!done) { const t = setTimeout(step, 20); if (t && t.unref) t.unref(); }
+    };
+    const t = setTimeout(step, 300);
+    if (t && t.unref) t.unref();
+}
+
 function rebuildGlossaryRegex() {
     const risky = new Set(
         (typeof CST_RISKY_PROPER !== "undefined" ? CST_RISKY_PROPER : [])
@@ -239,18 +391,26 @@ function rebuildGlossaryRegex() {
 
     const exact = [];
     const loose = [];
+    const brands = [];
     const riskyList = [];
 
+    state.glossaryCanon = new Map();
+    const skipBrand = new Set(typeof CST_LOOSE_BRAND_SKIP !== "undefined" ? CST_LOOSE_BRAND_SKIP : []);
     for (const term of state.glossaryKeep) {
         if (!term || term.length < 2) continue;
         if (risky.has(term)) riskyList.push(term);
-        else if (needsExactCase(term)) exact.push(term);
-        else loose.push(term);
+        else if (needsExactCase(term)) {
+            if (isLooseBrand(term, skipBrand)) {
+                brands.push(term);
+                if (!state.glossaryCanon.has(term.toLowerCase())) state.glossaryCanon.set(term.toLowerCase(), term);
+            } else exact.push(term);
+        } else loose.push(term);
     }
 
     try {
         state.reExact = buildMasterRegex(exact, "g");
         state.reLoose = buildMasterRegex(loose, "gi");
+        state.reBrand = buildMasterRegex(brands, "gi", true);
 
         // Tang thu ba: ten rieng trung tu tieng Anh thong dung.
         // Chi bao ve khi KHONG dung dau cau, tranh bat nham
@@ -269,22 +429,41 @@ function rebuildGlossaryRegex() {
         console.warn("Khong dung duoc bieu thuc tu dien:", err.message);
         state.reExact = null;
         state.reLoose = null;
+        state.reBrand = null;
         state.reRisky = null;
     }
 
+    warmGlossaryMatchers();
     console.log(`Tu dien: ${exact.length} muc dung chu hoa, ${loose.length} muc khong phan biet, ${riskyList.length} ten rieng can than trong`);
 }
 
 // The rendering declared for a matched term. The match patterns accept plurals, the map holds the
 // singular: "interest rates" and "case studies" must find "interest rate" and "case study".
 function translateAsFor(match) {
-    const map = state.glossaryTranslateAs;
+    return inflectedLookup(state.glossaryTranslateAs, match);
+}
+
+// The canonical spelling of a brand that matched loosely: "chatgpt" in a lowercase caption is kept as "ChatGPT".
+function canonicalFor(match) {
+    return inflectedLookup(state.glossaryCanon, match);
+}
+
+function inflectedLookup(map, match) {
     const k = String(match).toLowerCase();
     if (map.has(k)) return map.get(k);
     if (k.endsWith("ies") && map.has(k.slice(0, -3) + "y")) return map.get(k.slice(0, -3) + "y");
     if (k.endsWith("es") && map.has(k.slice(0, -2))) return map.get(k.slice(0, -2));
     if (k.endsWith("s") && map.has(k.slice(0, -1))) return map.get(k.slice(0, -1));
     return undefined;
+}
+
+// FNV-1a over what the user chose about the glossary (on or off, own terms, own renderings, groups on).
+// Built-in terms are not in it: a release that adds names must not make cached windows miss.
+function glossaryChoiceFp(saved, enabledGroups) {
+    const raw = [saved.glossaryEnabled ? 1 : 0, saved.userKeep || "", saved.userNormalize || "", [...enabledGroups].sort().join(",")].join("\u0001");
+    let h = 0x811c9dc5;
+    for (let i = 0; i < raw.length; i++) { h ^= raw.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h.toString(36);
 }
 
 function protectGlossary(text) {
@@ -306,7 +485,7 @@ function protectGlossary(text) {
         // thi dien dang muon hien, nguoc lai giu nguyen ban goc
         const custom = translateAsFor(match);
         const id = terms.length;
-        terms.push(custom !== undefined ? custom : match);
+        terms.push(custom !== undefined ? custom : (canonicalFor(match) || match));
         // Dung token an toan co khoang trang bao boc de may dich khong dinh tu lien vao token
         return ` [[__T${id}__]] `;
     };
@@ -314,6 +493,10 @@ function protectGlossary(text) {
     if (state.reExact) {
         state.reExact.lastIndex = 0;
         out = out.replace(state.reExact, replaceWithToken);
+    }
+    if (state.reBrand) {
+        state.reBrand.lastIndex = 0;
+        out = out.replace(state.reBrand, replaceWithToken);
     }
     if (state.reLoose) {
         state.reLoose.lastIndex = 0;
@@ -348,12 +531,14 @@ function restoreGlossary(text, terms) {
     if (terms.length === 0) return finalizeTranslation(text);
 
     // Regex da dang: bat ca format moi [[__T0__]] va format cu ZQ0QZ / Z Q 0 Q Z
+    // Each restored term is kept apart (\u0001...\u0002) until dropTermEchoes has looked around it
     let restored = text.replace(/(?:\[\[\s*__\s*T\s*(\d+)\s*__\s*\]\]|__T\s*(\d+)\s*__|Z\s*Q\s*(\d+)\s*Q\s*Z)/gi, (match, p1, p2, p3, offset, whole) => {
         const num = p1 !== undefined ? p1 : (p2 !== undefined ? p2 : p3);
         const idx = parseInt(num, 10);
         if (terms[idx] === undefined) return match;
-        return sentenceStartAt(whole, offset) ? capitalizeLowerTerm(terms[idx]) : terms[idx];
+        return "\u0001" + (sentenceStartAt(whole, offset) ? capitalizeLowerTerm(terms[idx]) : terms[idx]) + "\u0002";
     });
+    restored = dropTermEchoes(restored);
 
     // Don dep khoang trang thua sinh ra boi token
     restored = restored.replace(/[ \t]{2,}/g, " ").trim();
@@ -365,6 +550,40 @@ function restoreGlossary(text, terms) {
 
     // Ma nao con sot (vi du mo hinh doi so thu tu) thi xoa, khong de lot ra man hinh
     return finalizeTranslation(restored);
+}
+
+// (2.7.3) The model sometimes writes a term's meaning itself AND keeps its code, so the restored
+// rendering doubled: "sự bùng nổ kinh tế bùng nổ kinh tế", "nhịp tim lúc nghỉ nhịp tim lúc nghỉ",
+// "mệt mỏi khi ra quyết định mệt mỏi khi ra quyết định" (5 of 10,057 saved groups, every one a
+// glossary rendering). Words right before a restored term that are its own first words, or right
+// after it that are its last words (2 or more, only spaces between), are the echo and go.
+function dropTermEchoes(s) {
+    const parts = s.split(/(\u0001[^\u0001\u0002]*\u0002)/);
+    const norm = x => x.normalize("NFC").toLowerCase();
+    for (let i = 1; i < parts.length; i += 2) {
+        const term = parts[i].slice(1, -1);
+        const words = term.split(/\s+/).filter(Boolean);
+        if (words.length < 2) continue;
+        for (let k = words.length; k >= 2; k--) {
+            const head = words.slice(0, k).join(" ");
+            const before = parts[i - 1];
+            const at = before.length - head.length - 1;
+            if (at >= -1 && /\s$/.test(before) && norm(before.slice(Math.max(0, at), before.length - 1)) === norm(head) &&
+                (at <= 0 || /[\s"“'(]$/.test(before.slice(0, at)) || at === 0)) {
+                parts[i - 1] = before.slice(0, Math.max(0, at));
+                break;
+            }
+        }
+        for (let k = words.length; k >= 2; k--) {
+            const tail = words.slice(-k).join(" ");
+            const after = parts[i + 1] || "";
+            if (/^\s/.test(after) && norm(after.slice(1, 1 + tail.length)) === norm(tail) && !/^[\p{L}\p{M}\p{N}]/u.test(after.slice(1 + tail.length))) {
+                parts[i + 1] = after.slice(1 + tail.length);
+                break;
+            }
+        }
+    }
+    return parts.join("").replace(/[\u0001\u0002]/g, "");
 }
 
 // A term restored where a sentence starts: "độ lệch chuẩn cho biết..." must read "Độ lệch chuẩn...".
@@ -400,14 +619,33 @@ function protectMany(sentences) {
     return { texts, terms: res.terms };
 }
 
-function sendMessageAsync(msg) {
+// The service worker is stopped by Chrome after ~30 s idle and can die mid-request. Sending wakes it,
+// but the first call can still fail with one of these. A retry succeeds because the worker is then up.
+// "Extension context invalidated" is NOT here: the page holds a dead connection until it is reloaded.
+const CST_TRANSIENT_SW_ERROR = /receiving end does not exist|could not establish connection|message port closed|no response|không có phản hồi/i;
+const CST_SW_RETRY_DELAYS_MS = [250, 1000];
+
+function sendMessageOnce(msg) {
     return new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage(msg, response => {
-            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-            else if (!response || !response.ok) reject(new Error(response ? response.error : "Khong co phan hoi"));
-            else resolve(response);
-        });
+        try {
+            chrome.runtime.sendMessage(msg, response => {
+                if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                else if (!response || !response.ok) reject(new Error(response ? response.error : "Không có phản hồi từ tiện ích"));
+                else resolve(response);
+            });
+        } catch (e) { reject(e); }
     });
+}
+
+async function sendMessageAsync(msg) {
+    for (let attempt = 0; ; attempt++) {
+        try { return await sendMessageOnce(msg); }
+        catch (e) {
+            const delay = CST_SW_RETRY_DELAYS_MS[attempt];
+            if (delay === undefined || !CST_TRANSIENT_SW_ERROR.test(String(e && e.message))) throw e;
+            await new Promise(r => setTimeout(r, delay));
+        }
+    }
 }
 
 // What context went with the request, so it can be checked in the console while watching, with no
@@ -428,7 +666,20 @@ function logEngine(response, n, ctx) {
             "background:#D97757;color:#fff;padding:2px 6px;border-radius:4px;font-weight:bold;", "color:#D97757;font-weight:bold;");
     } else if (response.engine === "google_fallback") {
         console.warn(`[AI Subtitle] ⚠️ Gemini lỗi ("${response.fallbackReason || "Không xác định"}"), dùng Google Translate (không có ngữ cảnh)`);
+        noteFallback(response.fallbackReason, n, response.fallbackDetail);
     }
+}
+
+// (2.7.3) Why a window fell back to Google, kept on the device (last 40): a fallback keeps a YouTube
+// video from being saved, and the console was the only trace, which no session can read
+function noteFallback(reason, n, detail) {
+    try {
+        chrome.storage.local.get("cstFallbackLog").then(r => {
+            const log = Array.isArray(r.cstFallbackLog) ? r.cstFallbackLog : [];
+            log.push({ at: Date.now(), video: currentVideoMeta().videoKey, reason: String(reason || ""), n, ...(detail ? { detail: String(detail).slice(0, 300) } : {}) });
+            return chrome.storage.local.set({ cstFallbackLog: log.slice(-40) });
+        }).catch(() => {});
+    } catch (e) { /* storage gone after a reload */ }
 }
 
 // Gui mot cua so gom cac doan phu de lien tiep + goi ngu canh.
@@ -470,12 +721,24 @@ async function requestUnit(req, opts = {}) {
     if (Q && Q.soundNoteLine && !opts.refine) {
         const notes = req.sentences.map(Q.soundNoteLine);
         if (notes.every(n => n && n.vi)) return { ok: true, engine: "sound-notes", translations: notes.map(n => n.vi), terms: [] };
+        // (2.7.3) ... and so is such a line inside a window of speech. Sent along, the model may leave
+        // it empty, rightly (">> [music]" in YouTube's newer captions), and one empty item failed the
+        // whole window on every model: Google's version was shown and the video was never saved
+        const keep = notes.map((n, i) => (n && n.vi ? -1 : i)).filter(i => i >= 0);
+        if (keep.length < notes.length) {
+            const sub = await requestUnit({ ...req, sentences: keep.map(i => req.sentences[i]) }, opts);
+            const out = notes.map(n => (n && n.vi ? n.vi : ""));
+            keep.forEach((i, k) => { out[i] = (sub.translations || [])[k] || ""; });
+            return { ...sub, translations: out };
+        }
     }
     const prot = protectMany(req.sentences);
     const placeholders = prot.terms.map((term, id) => ({ id, term }));
     const msg = {
         action: "translateUnit",
         sentences: prot.texts,
+        source: req.sentences,
+        protectFp: state.glossaryFp,
         context: req.context,
         placeholders,
         tier: opts.tier || "cheap",
@@ -485,19 +748,23 @@ async function requestUnit(req, opts = {}) {
     };
     let res = await sendMessageAsync(msg);
     let translations = res.translations || [];
+    // A cached window is restored with the terms it was translated with, which may differ from this
+    // run's protection when the glossary has grown since
+    const terms = res.fromCache && Array.isArray(res.placeholders) ? res.placeholders.map(p => p.term) : prot.terms;
 
     if (res.restored) {
         // Bản cuối từ cache (đã khôi phục thuật ngữ từ trước)
         translations = translations.map(finalizeTranslation);
-    } else if (prot.terms.length) {
+    } else if (terms.length) {
         const joined = translations.join(" ");
-        if (!glossaryIntact(joined, prot.terms)) {
-            // Ma bi hong: gui lai ban goc khong bao ve (van giu ngu canh)
+        if (!glossaryIntact(joined, terms)) {
+            // Ma bi hong: gui lai ban goc khong bao ve (van giu ngu canh). noCache: the same key would
+            // answer with the same broken entry; the new answer replaces it.
             console.warn("Ma danh dau bi hong, dich lai khong bao ve thuat ngu");
-            res = await sendMessageAsync({ ...msg, sentences: req.sentences, placeholders: [] });
+            res = await sendMessageAsync({ ...msg, sentences: req.sentences, placeholders: [], noCache: true });
             translations = (res.translations || []).map(finalizeTranslation);
         } else {
-            translations = translations.map(t => restoreGlossary(t, prot.terms));
+            translations = translations.map(t => restoreGlossary(t, terms));
         }
     } else {
         translations = translations.map(finalizeTranslation);
@@ -506,9 +773,14 @@ async function requestUnit(req, opts = {}) {
     return { ...res, translations };
 }
 
+// Words the quality check lets stand in English: those of terms kept in English. A term with a
+// Vietnamese rendering comes back in Vietnamese, so its words ("interest", "rate") are no excuse for
+// English left in a line (2.5.9: with thousands of rendered terms they had whitelisted most words).
 function qualityKeepSet() {
     if (!state._qualityKeep || state._qualityKeepSrc !== state.glossaryKeep) {
-        state._qualityKeep = new Set(state.glossaryKeep.flatMap(t => String(t).toLowerCase().split(/\s+/)));
+        const asVi = state.glossaryTranslateAs || new Map();
+        state._qualityKeep = new Set(state.glossaryKeep.filter(t => !asVi.has(String(t).toLowerCase()))
+            .flatMap(t => String(t).toLowerCase().split(/\s+/)));
         state._qualityKeepSrc = state.glossaryKeep;
     }
     return state._qualityKeep;
@@ -668,6 +940,8 @@ function groupEndsSentence(g) {
 // alive(): false once the viewer has left the page; no further window is sent (the one in flight
 // finishes and is cached by the service worker, so coming back costs nothing).
 // opts.startAt: the playhead; its window goes first. opts.onWindow(results): after every window.
+// opts.fallbacks: an array; each window that came back from Google or failed is pushed to it (the
+// group indexes), so the caller can ask Gemini for it again (csHealFallbacks).
 async function translateAllGroups(session, groups, onProgress, alive = () => true, opts = {}) {
     const results = new Array(groups.length).fill("");
     const windows = [];
@@ -711,6 +985,7 @@ async function translateAllGroups(session, groups, onProgress, alive = () => tru
             try {
                 const r = await translateWindow(session, idxs, { realtime: false });
                 idxs.forEach((gi, k) => { results[gi] = r.translations[k] || ""; });
+                if (opts.fallbacks && csWeakAnswer(r, idxs, groups)) opts.fallbacks.push(idxs);
             } catch (err) {
                 console.warn("Loi dich cua so, dich tung nhom:", err.message);
                 for (const gi of idxs) {
@@ -718,8 +993,10 @@ async function translateAllGroups(session, groups, onProgress, alive = () => tru
                     try {
                         const r = await translateWindow(session, [gi], { realtime: false });
                         results[gi] = r.translations[0] || "";
+                        if (opts.fallbacks && csWeakAnswer(r, [gi], groups)) opts.fallbacks.push([gi]);
                     } catch (e2) {
                         results[gi] = "";
+                        if (opts.fallbacks) opts.fallbacks.push([gi]);
                     }
                 }
             }
@@ -747,9 +1024,14 @@ function pageTracks() {
     if (!v) return [];
     const own = els.filter(t => v.contains(t));
     const seen = new Set(own.map(t => t.track));
-    const extra = Array.from(v.textTracks || []).filter(tt => !seen.has(tt) && !/^cst/i.test(tt.label || "")
+    const extra = Array.from(v.textTracks || []).filter(tt => !seen.has(tt) && !/^cst/i.test(tt.label || "") && !tt.cstStale
         && tt.kind !== "metadata" && tt.kind !== "chapters" && tt.kind !== "descriptions");
-    return own.concat(extra.map(trackWrap));
+    const all = own.concat(extra.map(trackWrap));
+    // A site adapter's full captions beat the player's own track, which can still be loading
+    // (TED fills it as the talk plays): translating that one leaves everything after it untranslated
+    const mark = window.CST_SITES && window.CST_SITES.TRACK_MARK;
+    const site = mark ? all.filter(t => (t.label || "").startsWith(mark)) : [];
+    return site.length ? site : all;
 }
 
 function pickBestTrack() {
@@ -774,6 +1056,57 @@ function pickBestTrack() {
     const chosen = enTrack || pool[0];
     console.log("Dung track phu de ngon ngu:", chosen.srclang || "(khong ro)");
     return { track: chosen, alreadyVietnamese: false };
+}
+
+// The site's own Vietnamese track, when the voice may read it: the page also has captions in another
+// language, so the speech is not Vietnamese (CST_LANG.viVoiceSource). null otherwise.
+function csViVoiceSource() {
+    const LANG = window.CST_LANG;
+    if (!LANG || !LANG.viVoiceSource) return null;
+    const usable = pageTracks().filter(t => {
+        const kind = (t.kind || "").toLowerCase();
+        return kind === "" || kind === "subtitles" || kind === "captions";
+    });
+    const plan = LANG.viVoiceSource(usable.map(t => t.srclang));
+    const track = plan.offer ? usable.find(t => LANG.normCode(t.srclang) === "vi") : null;
+    return track ? { track, spoken: plan.spoken } : null;
+}
+
+// Voice from the Vietnamese captions the site already has: no Gemini call, no translation. The cues
+// become dub groups (CST_DUB_PLAN.groupsFromViCues) and go through the same engine as a translation.
+async function csStartViVoice(opts = {}) {
+    const api = window.CST_DUB, PLAN = window.CST_DUB_PLAN;
+    const videoEl = csVideo();
+    const src = csViVoiceSource();
+    if (!api || !PLAN || !videoEl || !src || api.dub.enabled || api.dub.starting || state.dubStarting) return false;
+    const gen = state.navGen;
+    const tr = src.track.track;
+    const was = tr.mode;
+    if (was === "disabled") tr.mode = "hidden";               // load the cues without showing them
+    const cues = await waitForCues(tr, 6000);
+    if (was === "disabled" && !state.active) tr.mode = was;
+    if (state.dead || state.navGen !== gen) return false;
+    const groups = cues ? PLAN.groupsFromViCues(Array.from(cues)) : [];
+    if (!groups.length) {
+        if (!opts.quiet) cstToast("Phụ đề tiếng Việt của trang này chưa nạp xong. Hãy phát video vài giây rồi thử lại.", { warn: true });
+        return false;
+    }
+    state.dubGroups = groups;
+    state.dubStarting = true;
+    try {
+        const ok = await api.start({ video: videoEl, container: csPlayerBox() || videoEl.parentElement, getGroups: () => state.dubGroups || [], quiet: !!opts.quiet });
+        csUpdateButton();
+        if (ok && !opts.quiet) rememberDub(true);
+        return ok;
+    } finally {
+        state.dubStarting = false;
+    }
+}
+
+// Toast options that offer the voice from the page's Vietnamese captions ({} when it cannot)
+function csViVoiceOffer() {
+    if (!csViVoiceSource()) return {};
+    return { actionLabel: "Lồng tiếng từ phụ đề Việt", onAction: () => { csStartViVoice(); } };
 }
 
 async function waitForCues(track, maxWaitMs = 8000) {
@@ -1194,6 +1527,116 @@ function genericMeta() {
     return { title, course: "", channel: host, courseKey: `generic_${host}_${first}` };
 }
 
+// ---------- Saved lectures (Coursera and generic pages) ----------
+// The service worker's per-window cache already answers a window it has seen, but its key holds the
+// protected glossary terms and the prompt version, so a glossary update (every release adds names)
+// or a prompt change re-bills every window that holds a new term; and that store is 30 MB shared with
+// YouTube, oldest out first. A lecture is therefore also kept whole, like YouTube's ytcache4_: the
+// final Vietnamese of every group, checked against a fingerprint of the groups' source text, so a
+// changed track or a changed grouping is translated afresh. Saved only when no group came from Google
+// or failed (csHealFallbacks asks Gemini for those first), so a revisit never keeps a stand-in.
+const CS_SAVE_PREFIX = "cscache1_";
+const CS_SAVE_INDEX = "cscacheIdx";          // [[key, luc]], oldest first: the sweep never reads all of storage
+const CS_SAVE_MAX = 200;
+
+function csSaveKey() {
+    const path = String(location.pathname || "/").replace(/\/+$/, "") || "/";
+    return (CS_SAVE_PREFIX + location.hostname + path).slice(0, 200);
+}
+
+// FNV-1a over the groups' source text and bounds: the same lecture cut into the same groups
+function csFingerprint(groups) {
+    let h = 0x811c9dc5;
+    const text = groups.map(g => `${g.text}\u0001${Math.round(g.start * 10)}`).join("\u0002");
+    for (let i = 0; i < text.length; i++) {
+        h ^= text.charCodeAt(i);
+        h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return `${groups.length}:${h.toString(16)}`;
+}
+
+// A window answer that must not be saved: Google's stand-in, or a group with text left without Vietnamese
+function csWeakAnswer(r, idxs, groups) {
+    if (!r || r.engine === "google_fallback") return true;
+    return idxs.some((gi, k) => String(groups[gi].text || "").trim() && !String((r.translations || [])[k] || "").trim());
+}
+
+async function csReadSaved(key, groups) {
+    try {
+        const got = await chrome.storage.local.get(key);
+        const data = got && got[key];
+        if (!data || data.fp !== csFingerprint(groups) || !Array.isArray(data.vi) || data.vi.length !== groups.length) return null;
+        return data;
+    } catch (e) {
+        return null;
+    }
+}
+
+// The index is read, changed and written back: two saves at once (two windows of one lecture, or two
+// tabs) each read the old index and the later write dropped the other's entry. One at a time per tab,
+// and across tabs of the same site under a Web Lock when the page has one.
+let csSaveQueue = Promise.resolve();
+function csWriteSaved(key, groups, translations) {
+    const run = () => csWriteSavedNow(key, groups, translations);
+    const locked = () => (typeof navigator !== "undefined" && navigator.locks && navigator.locks.request
+        ? navigator.locks.request("cst-cscache-index", run) : run());
+    const next = csSaveQueue.then(locked, locked);
+    csSaveQueue = next.catch(() => {});
+    return next;
+}
+
+async function csWriteSavedNow(key, groups, translations) {
+    if (groups.some((g, gi) => String(g.text || "").trim() && !String(translations[gi] || "").trim())) return false;
+    try {
+        const luc = Date.now();
+        const got = await chrome.storage.local.get(CS_SAVE_INDEX);
+        const index = (Array.isArray(got && got[CS_SAVE_INDEX]) ? got[CS_SAVE_INDEX] : []).filter(e => e && e[0] !== key);
+        index.push([key, luc]);
+        const drop = index.splice(0, Math.max(0, index.length - CS_SAVE_MAX)).map(e => e[0]);
+        await chrome.storage.local.set({ [key]: { luc, fp: csFingerprint(groups), vi: translations.slice() }, [CS_SAVE_INDEX]: index });
+        if (drop.length) await chrome.storage.local.remove(drop);
+        return true;
+    } catch (e) {
+        console.warn("[AI Subtitle] Không lưu được bản dịch bài này:", e.message);
+        return false;
+    }
+}
+
+// A window that came back from Google (or failed) is asked of Gemini again, like YouTube's YT_HEAL:
+// up to CS_HEAL.max rounds, gapMs, 2 x gapMs ... apart (a model rests after a slow answer), never a
+// window playing or due within leadS seconds, so the line on screen and its voice are not swapped
+// under the viewer. onHealed() after a round that mended something. True when nothing is left.
+const CS_HEAL = { max: 3, gapMs: 20000, leadS: 15 };
+async function csHealFallbacks(session, groups, results, wins, alive, onHealed) {
+    let left = wins.slice();
+    for (let round = 1; round <= CS_HEAL.max && left.length; round++) {
+        await sleep(CS_HEAL.gapMs * round);
+        if (!alive()) return false;
+        const v = csVideo();
+        const now = v ? v.currentTime : -Infinity;
+        const still = [];
+        let mended = 0;
+        for (const idxs of left) {
+            if (!alive()) return false;
+            const start = groups[idxs[0]].start, end = groups[idxs[idxs.length - 1]].end;
+            if (end >= now && start - now < CS_HEAL.leadS) { still.push(idxs); continue; }
+            try {
+                const r = await translateWindow(session, idxs, { realtime: false });
+                if (!alive()) return false;
+                if (csWeakAnswer(r, idxs, groups)) { still.push(idxs); continue; }
+                idxs.forEach((gi, k) => { results[gi] = r.translations[k]; });
+                mended++;
+            } catch (e) {
+                still.push(idxs);
+            }
+        }
+        if (mended && onHealed) onHealed();
+        console.log(`[AI Subtitle] Dịch lại bằng Gemini lần ${round}: sửa được ${mended}, còn ${still.length} đoạn dịch tạm bằng Google`);
+        left = still;
+    }
+    return left.length === 0;
+}
+
 // Coursera and generic pages: translate the video's own text track.
 // opts.onShown(): once, when the first translated lines are on screen (the voice can start then)
 async function translateTrackSite(opts = {}) {
@@ -1202,6 +1645,8 @@ async function translateTrackSite(opts = {}) {
         cstToast("Trang này không có video nào để dịch phụ đề.", { warn: true });
         return false;
     }
+    // Sites whose captions are not a <track> (CST_SITES adapters) get theirs added to the <video> first
+    if (generic && window.CST_SITES) await window.CST_SITES.prepare(csVideo());
     const picked = pickBestTrack();
     if (!picked) {
         cstToast(generic
@@ -1212,7 +1657,7 @@ async function translateTrackSite(opts = {}) {
     if (picked.alreadyVietnamese) {
         cstToast(generic
             ? "Video này đã có phụ đề tiếng Việt. Hãy chọn tiếng Việt trong menu phụ đề của trình phát."
-            : "Khóa học này đã có phụ đề tiếng Việt chính thức, chất lượng tốt hơn dịch máy. Hãy chọn Vietnamese trong menu phụ đề của trình phát.");
+            : "Khóa học này đã có phụ đề tiếng Việt chính thức, chất lượng tốt hơn dịch máy. Hãy chọn Vietnamese trong menu phụ đề của trình phát.", csViVoiceOffer());
         return false;
     }
 
@@ -1253,6 +1698,19 @@ async function translateTrackSite(opts = {}) {
     state.groupTotal = groups.length;
     console.log(`Linh vuc nhan dien: ${session.domain.primary}${session.domain.secondary ? " + " + session.domain.secondary : ""}`);
 
+    // A lecture translated before: shown at once, no request at all
+    const saveKey = csSaveKey();
+    const saved = await csReadSaved(saveKey, groups);
+    if (!alive()) return false;
+    if (saved) {
+        console.log("[AI Subtitle] Bài này đã dịch trước đó: dùng bản đã lưu, không gọi Gemini");
+        applyTranslation(trackEl.track, groups, saved.vi);
+        state.active = true;
+        setIconState("on");
+        if (opts.onShown) { try { opts.onShown(); } catch (e) { /* bỏ qua */ } }
+        return true;
+    }
+
     // Lines go on screen window by window (1.7.5). Before, nothing showed until the last window of the
     // whole lecture was back: one Gemini round trip per two windows, a dozen windows in a lecture.
     let shown = false;
@@ -1265,6 +1723,7 @@ async function translateTrackSite(opts = {}) {
         if (opts.onShown) { try { opts.onShown(); } catch (e) { /* bỏ qua */ } }
     };
     const v = csVideo();
+    const fallbacks = [];
     const translations = await translateAllGroups(
         session,
         groups,
@@ -1273,7 +1732,7 @@ async function translateTrackSite(opts = {}) {
             if (btn) btn.setAttribute("title", `Đang dịch ${done}/${total} nhóm…`);
         },
         alive,
-        { startAt: v ? v.currentTime : 0, onWindow: showSoFar }
+        { startAt: v ? v.currentTime : 0, onWindow: showSoFar, fallbacks }
     );
     if (!alive()) {
         console.log("[AI Subtitle] Đã chuyển trang trong lúc dịch: bỏ bản dịch của trang cũ");
@@ -1281,6 +1740,15 @@ async function translateTrackSite(opts = {}) {
     }
 
     applyTranslation(trackEl.track, groups, translations);
+    if (!fallbacks.length) {
+        csWriteSaved(saveKey, groups, translations);
+    } else {
+        // Not awaited: the lecture is on screen and `busy` is released; a page change or a switch-off stops it
+        console.log(`[AI Subtitle] ${fallbacks.length} đoạn dịch tạm bằng Google: chưa lưu, sẽ hỏi lại Gemini`);
+        csHealFallbacks(session, groups, translations, fallbacks, alive, () => applyTranslation(trackEl.track, groups, translations))
+            .then(ok => { if (ok && alive()) csWriteSaved(saveKey, groups, translations); })
+            .catch(() => {});
+    }
     return true;
 }
 
@@ -1323,7 +1791,8 @@ async function enableTranslation(opts = {}) {
         console.error("Dịch thất bại:", err);
         state.active = false;
         setIconState("error");
-        cstToast(`Dịch thất bại: ${err.message}\nHãy kiểm tra kết nối mạng rồi thử lại.`, { warn: true });
+        const why = cstExplainError(err);
+        cstToast(why.text, { warn: true, actionLabel: why.actionLabel, onAction: why.onAction });
     } finally {
         state.busy = false;
         // The state above was drawn while `busy` still held: the button kept spinning with
@@ -1587,7 +2056,8 @@ function csOverlay() {
     // must not wrap them again (white-space:pre), and the box hugs the text (width:max-content).
     ov.style.cssText = "position:absolute;left:50%;transform:translateX(-50%);max-width:92%;" +
         "width:max-content;box-sizing:border-box;text-align:center;pointer-events:none;" +
-        "white-space:pre;opacity:0;z-index:60;transition:opacity .12s ease,bottom .18s ease-out,transform .24s cubic-bezier(.16,1,.3,1),max-width .24s cubic-bezier(.16,1,.3,1);";
+        "white-space:pre;opacity:0;z-index:60;transition:" + (window.CST_STYLE
+            ? window.CST_STYLE.overlayTransition(window.CST_STYLE.prefersReducedMotion()) : "opacity .12s ease") + ";";
     box.appendChild(ov);
     cs.styleKey = "";
     csApplyOverlayStyle(ov);
@@ -1607,9 +2077,8 @@ function csApplyOverlayStyle(ov) {
     const box = csPlayerBox();
     const width = (box && box.clientWidth) || 640;
     const height = (box && box.clientHeight) || 360;
-    const base = Math.max(14, Math.min(width * 0.026, 40));
     ov.style.fontFamily = S.fontStack(s.fontFamily);
-    ov.style.fontSize = `${(base * S.sizeFactor(s.fontSize)).toFixed(1)}px`;
+    ov.style.fontSize = `${S.overlayFontPx(width, s.fontSize).toFixed(1)}px`;
     ov.style.fontWeight = s.fontWeight;
     ov.style.lineHeight = String(s.lineHeight);
     ov.style.color = s.fontColor;
@@ -1945,7 +2414,10 @@ function csOpenMenu(btn) {
         rowSub.setAttribute("aria-checked", String(!!state.active));
         const nguon = csSubtitleSource();
         const hauTo = state.active && nguon ? ` · ${nguon.nhan.toLowerCase()}` : "";
-        rowSub.cstSub.textContent = (state.active && csTranslating() ? "Đang bật, đang dịch tiếp" : csTranslating() ? "Đang dịch…" : state.active ? "Đang bật" : "Đang tắt") + hauTo;
+        const gsDone = (state.dubGroups || []).filter(g => g && g.viText).length;
+        const gsAll = Math.max((state.dubGroups || []).length, state.groupTotal || 0);
+        const prog = csTranslating() && gsAll ? ` ${gsDone}/${gsAll} đoạn` : "";
+        rowSub.cstSub.textContent = (state.active && csTranslating() ? `Đang bật, đang dịch tiếp${prog}` : csTranslating() ? `Đang dịch${prog || "…"}` : state.active ? "Đang bật" : "Đang tắt") + hauTo;
         rowSub.cstSub.style.color = state.active && nguon && nguon.canhBao ? "var(--cst-warn)" : "";
         rowDub.setAttribute("aria-checked", String(isDub));
         const st = dubApi && dubApi.dub ? dubApi.dub.lastStatus : null;
@@ -2023,8 +2495,15 @@ async function toggleDubbing(container) {
         if (ok) rememberDub(true);
     };
 
-    // Long tieng doc tu ban dich co ngu canh, nen phai dich truoc
+    // Long tieng doc tu ban dich co ngu canh, nen phai dich truoc. The page's own Vietnamese captions
+    // (video not spoken in Vietnamese) need no translation: the voice reads them.
     if (!state.active) {
+        const own = pickBestTrack();
+        if (own && own.alreadyVietnamese && csViVoiceSource()) {
+            cstToast("Đang chuẩn bị giọng đọc từ phụ đề tiếng Việt có sẵn…");
+            await csStartViVoice();
+            return;
+        }
         // Không hỏi bằng hộp thoại chặn trang: người dùng vừa bấm lồng tiếng nghĩa là đồng ý dịch
         cstToast("Đang dịch phụ đề để lồng tiếng…");
         // the voice starts with the first translated lines (the engine takes the rest as it comes)
@@ -2101,6 +2580,7 @@ async function loadGlossary() {
             ? CST_resolveEnabledGroups(saved) : saved.enabledGroups;
 
         state.glossaryEnabled = saved.glossaryEnabled;
+        state.glossaryFp = glossaryChoiceFp(saved, enabledGroups);
 
         // Gom thuat ngu tu cac nhom nganh dang bat
         const fromGroups = [];
@@ -2108,7 +2588,7 @@ async function loadGlossary() {
         state.glossaryTranslateAs = new Map();
         for (const key of enabledGroups) {
             if (groups[key] && Array.isArray(groups[key].terms)) {
-                fromGroups.push(...groups[key].terms);
+                for (const t of groups[key].terms) fromGroups.push(t);
             }
             for (const [en, vi] of Object.entries((groups[key] && groups[key].vi) || {})) {
                 state.glossaryTranslateAs.set(en, vi);
@@ -2139,10 +2619,12 @@ async function loadGlossary() {
 
         state.glossaryKeep = [...new Set([...userKeep, ...userTerms, ...fromGroups])];
         // Thuat ngu nhieu tu (dang hien thi cuoi cung) de bo phan doan khong cat doi
-        state.glossaryMultiTerms = [...new Set([
-            ...state.glossaryKeep,
-            ...state.glossaryTranslateAs.values()
-        ])].filter(t => /\s/.test(String(t).trim()));
+        // (filter first, then dedupe: the same list without a second 90,000-entry Set)
+        const multiSeen = new Set();
+        for (const src of [state.glossaryKeep, state.glossaryTranslateAs.values()]) {
+            for (const t of src) if (/\s/.test(String(t).trim())) multiSeen.add(t);
+        }
+        state.glossaryMultiTerms = [...multiSeen];
         state.glossaryNormalize = defaultNorm;
 
         rebuildGlossaryRegex();
@@ -2277,8 +2759,9 @@ async function init() {
 // Chỉ khi phụ đề KHÔNG phải tiếng Việt và nhận diện đủ chắc (nhận diện trên máy,
 // không gọi Gemini). Tắt "Tự động dịch" thì vẫn bấm nút dịch tay được.
 async function courseraAutoTranslate() {
-    // generic pages: the viewer just asked for a translation, nothing to decide automatically
-    if (getCurrentSite() !== "coursera") return null;
+    // generic pages: the viewer just asked for a translation, nothing to decide automatically,
+    // except on sites with an adapter (site-*.js), which are translated on arrival like Coursera
+    if (getCurrentSite() !== "coursera" && !csAdapterSite()) return null;
     if (!state.autoTranslate || state.active || state.autoTriedUrl === location.href) return null;
     const release = courseraHoldFirstPlay(location.href);
     try {
@@ -2326,6 +2809,14 @@ async function courseraAutoTranslateNow() {
     for (let i = 0; i < 80 && state.busy && location.href === url; i++) await sleep(250);
     if (state.busy) return null;
     let picked = null;
+    // adapter sites: the captions come from the site, not the player. Added before the player's own
+    // track can be picked, and again for every talk (the page may have moved on without a reload)
+    if (csAdapterSite()) {
+        for (let i = 0; i < 20 && location.href === url; i++) {
+            if (csVideo() && await window.CST_SITES.prepare(csVideo())) break;
+            await sleep(500);
+        }
+    }
     for (let i = 0; i < 30 && !(picked = pickBestTrack()); i++) await sleep(500);   // chờ trình phát nạp track
     if (location.href !== url || state.active || state.busy) return null;
     state.autoTriedUrl = url;
@@ -2345,6 +2836,13 @@ async function courseraAutoTranslateNow() {
     }
     state.langDecision = decision;
     console.log(`[AI Subtitle] Ngôn ngữ phụ đề: ${decision.lang} (${Math.round(decision.confidence * 100)}%, theo ${decision.source}) -> ${decision.action === "translate" ? "tự động dịch" : decision.action === "skip" ? "đã là tiếng Việt, không dịch" : "chưa chắc chắn, không tự dịch"}`);
+    // Adapter sites add their own tracks, so the viewer has no other sign that Vietnamese exists
+    if (decision.action === "skip" && picked.alreadyVietnamese && state.dubEnabled && csViVoiceSource()) {
+        // the viewer keeps the voice on: read the site's Vietnamese captions, as a translation would be
+        await csStartViVoice({ quiet: true });
+    } else if (decision.action === "skip" && picked.alreadyVietnamese && csAdapterSite()) {
+        cstToast("Video này đã có phụ đề tiếng Việt. Hãy chọn tiếng Việt trong menu phụ đề của trình phát.", csViVoiceOffer());
+    }
     if (decision.action === "translate") {
         // the voice starts with the first translated lines, not after the whole lecture
         await enableTranslation({ onShown: () => { if (location.href === url) courseraAutoDub(); } });

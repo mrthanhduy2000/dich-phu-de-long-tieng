@@ -4,6 +4,468 @@
 (function (root) {
     const HISTORY = [
         {
+            v: "3.0.6", luc: "23/10/2026", ten: "Thông báo có nút giữ lâu hơn",
+            y: [
+                "Thông báo có nút bấm (ví dụ \"Lồng tiếng từ phụ đề Việt\", \"Tải lại trang\") giờ ở lại 30 giây thay vì 12 giây, đủ thời gian để bấm."
+            ]
+        },
+        {
+            v: "3.0.5", luc: "23/10/2026", ten: "Lồng tiếng từ phụ đề tiếng Việt có sẵn",
+            y: [
+                "Coursera, TED và các trang khác đã có phụ đề tiếng Việt: giờ vẫn bật được lồng tiếng. Bấm \"Lồng tiếng từ phụ đề Việt\" trên thông báo hoặc bật Giọng đọc trong menu, giọng sẽ đọc thẳng phụ đề Việt của trang, không gọi Gemini dịch.",
+                "Chỉ áp dụng khi trang còn phụ đề ngôn ngữ khác, tức tiếng nói gốc không phải tiếng Việt. Video chỉ có phụ đề Việt được coi là video tiếng Việt và không lồng tiếng."
+            ]
+        },
+        {
+            v: "3.0.4", luc: "23/10/2026", ten: "Windows support (no runtime change, no version bump)",
+            y: [
+                "`tools/platform-paths.js`: Chrome store, VieNeu interpreter and temp folder per OS, used by the maintainer tools.",
+                "`tools/vieneu-runner.pyw`: CPU stays the default; `VIENEU_BACKEND` / `VIENEU_DEVICE` set in the user environment win (NVIDIA opt-in, `docs/WINDOWS.md`).",
+                "CI: `npm-test-windows` job on `windows-latest`; `.gitattributes` forces LF.",
+                "`tests/share.test.js`: Windows-safe (file URIs, CRLF, separators); macOS-only cases skip.",
+                "Needs a real Windows machine: GPU path untested; updater browser detection (`holders`) on the Windows profile layout is not covered by a test (BACKLOG 43 still open)."
+            ]
+        },
+        {
+            v: "3.0.3", luc: "23/10/2026", ten: "Hỗ trợ ted.com, lồng tiếng đọc tên chuẩn hơn, từ điển và bảo mật được củng cố",
+            y: [
+                "Thêm ted.com: phụ đề các bài TED được lấy từ trang, dịch tự động khi mở bài và khi chuyển sang bài khác trong trang, kèm thông báo nếu bài đã có tiếng Việt. Trang khác không dùng thẻ phụ đề chuẩn có thể thêm bộ đọc riêng.",
+                "Khi máy chủ VieNeu không chạy (máy yếu, Chromebook, Linux ARM), lồng tiếng dùng giọng tiếng Việt có sẵn của trình duyệt thay vì im lặng, rồi tự chuyển lại VieNeu khi sẵn sàng. Cài đặt > Lồng tiếng có công tắc để tắt.",
+                "Máy yếu: khi giọng VieNeu chậm hơn lời nói, thông báo gợi ý tốc độ video phù hợp và một cú bấm là đặt được; Cài đặt hiện loại máy (Mac chip Intel hay Apple) cạnh tốc độ giọng đo được. Trình cài đặt trên Mac nhận đúng chip Apple khi chạy qua Rosetta; giọng trên Mac Intel là tùy chọn, chưa chính thức.",
+                "Câu lồng tiếng ngắn hơn khung thời gian nay dùng khoảng ngừng dài hơn ở dấu câu của chính nó, nên giọng bớt im lặng khi người nói vẫn đang nói. Không bỏ hay thêm chữ nào. Trên 101 video đã lưu, số lần im từ 1,5 giây trở lên giảm từ 1.439 xuống 1.260.",
+                "Lồng tiếng đọc đúng hơn: thêm khoảng 340 tên nước ngoài đọc theo cách đọc tiếng Anh (Sao Paulo, Tau Ceti, Typhoon Saola...), các tên có chữ R đánh vần (CRH3, BRCA1, H&R Block) hết bị đọc kiểu tiếng Việt, tiền tệ (100.000đ, VND, €, £), số thập phân dài, mã OTP/PIN, giờ 9am/9:30 PM, đơn vị m2, m3 và 60fps.",
+                "Bỏ 41 từ tiếng Anh thông dụng (You, One, Time, House...) ra khỏi danh sách tên riêng để không giữ nguyên trong câu tiếng Việt; tên thương hiệu như ChatGPT, GitHub, PyTorch được giữ nguyên cả khi phụ đề tự động viết thường; bổ sung hơn 170 thuật ngữ chuyên ngành (AI, phần mềm, tài chính, y khoa, luật, kỹ thuật, vận hành).",
+                "Cập nhật từ điển không làm dịch lại những đoạn đã dịch; đoạn đầu tiên của video không còn khựng khi bộ lọc thuật ngữ khởi động. Nạp từ điển, phân tích lồng tiếng đầu tiên và kiểm tra chất lượng bản dịch nhanh hơn (kiểm tra chất lượng khoảng 680 xuống 35 micro giây mỗi câu), kết quả không đổi.",
+                "Sửa các lỗi hiếm tìm ra bằng kiểm thử ngẫu nhiên: thời gian phụ đề không còn thành NaN trong tệp .srt xuất ra, dấu phẩy mồ côi cạnh dấu cắt dòng, số từ 16 chữ số trở lên, ký tự điều khiển gửi tới giọng đọc, và từ quá dài làm kiểm tra chậm cả giây.",
+                "Tin nhắn tới service worker đang ngủ được thử lại thay vì lỗi ngay; hai bài Coursera lưu cùng lúc không còn làm mất một mục trong chỉ mục; nghe thử giọng ở Cài đặt không chồng tiếng khi bấm lần hai; bản dịch dự phòng MyMemory trả lại đúng câu gốc tiếng Trung, Thái, Ả Rập bị loại thay vì hiện như bản dịch.",
+                "Củng cố bảo mật: bỏ qua tin nhắn lạ, chỉ tải phụ đề từ youtube.com, khai báo CSP, thoát HTML ở trang Cài đặt.",
+                "Giao diện: lần đầu cài đặt mở trang chào hướng dẫn từng bước (dán và kiểm tra khóa Gemini, thử giọng VieNeu, video mẫu); ô khóa Gemini lên đầu nhóm Dịch & AI; các nhóm trong Cài đặt dùng được bằng bàn phím và trình đọc màn hình; nút Sáng/Tối/Theo máy và liên kết \"Tạo lại giọng đọc\" to hơn, dễ bấm hơn."
+            ]
+        },
+        {
+            v: "3.0.2", luc: "23/10/2026", ten: "Từ điển bỏ từ thông dụng lọt vào",
+            y: [
+                "Bỏ khoảng 660 mục vừa thêm ở 2.9.2 và 2.9.5: từ tiếng Anh thông dụng bị coi là tên riêng (President, Earth, Major, Honor, Death...) và tên lịch sử che mất bản dịch tiếng Việt đã có (Nội chiến, Chiến tranh vùng Vịnh...).",
+                "Đo trên 3,2 triệu từ phụ đề phim: bỏ được khoảng 2.300 lượt bắt nhầm, tên thật còn nguyên."
+            ]
+        },
+        {
+            v: "3.0.1", luc: "23/10/2026", ten: "Thông báo lỗi dễ hiểu hơn và hiện tiến độ dịch",
+            y: [
+                "Khi dịch lỗi, thông báo giờ nói rõ nguyên nhân bằng tiếng Việt (hết hạn mức, quá giới hạn tốc độ, sai API Key, mất mạng, máy chủ quá tải, tiện ích vừa cập nhật) và chỉ việc nên làm tiếp, kèm nút Tải lại trang hoặc Mở Cài đặt khi cần. Trước đây Coursera luôn bảo kiểm tra mạng dù lỗi do nguyên nhân khác.",
+                "Cửa sổ tiện ích và menu trên trình phát hiện \"Đang dịch x/y đoạn\" thay vì chỉ \"Đang dịch…\"."
+            ]
+        },
+        {
+            v: "3.0.0", luc: "23/10/2026", ten: "Trang Cài đặt cảnh báo khi màu phụ đề khó đọc",
+            y: [
+                "Phần xem trước nay báo ngay khi chữ và nền gần cùng màu, hoặc khi vừa không có nền vừa không có viền (chữ sẽ chìm trên cảnh sáng). Chỉ cảnh báo, không tự đổi lựa chọn của bạn.",
+                "Cài đặt mặc định và các kiểu viền thông thường không bị cảnh báo."
+            ]
+        },
+        {
+            v: "2.9.9", luc: "23/10/2026", ten: "Phụ đề không bị nhỏ quá ở trình phát nhỏ, tôn trọng chế độ giảm chuyển động",
+            y: [
+                "Ở trình phát hẹp (trình phát thu nhỏ, video nhúng, cửa sổ hẹp), chữ phụ đề trước đây có thể chỉ còn 9,8 px. Nay cỡ chữ không bao giờ dưới 12 px; dòng dài được ngắt lại cho vừa khung.",
+                "Nếu hệ điều hành bật giảm chuyển động, phụ đề không còn trượt lên xuống hay dịch ngang khi thanh điều khiển hiện ra, chỉ mờ dần.",
+                "Coursera nay trượt mượt khi phụ đề ở vị trí trên cùng, giống YouTube. Hai trang dùng chung một công thức cỡ chữ và một bộ hiệu ứng."
+            ]
+        },
+        {
+            v: "2.9.8", luc: "23/10/2026", ten: "Chữ phụ và nút chính dễ đọc hơn trong cửa sổ nhỏ và trang Cài đặt",
+            y: [
+                "Chữ mô tả, nhãn phiên bản và dòng phím tắt trong cửa sổ nhỏ trước đây chỉ đạt khoảng 3:1 độ tương phản (chuẩn dễ đọc là 4,5:1), nhất là ở nền sáng. Nay tất cả đạt từ 4,5:1 trở lên ở cả giao diện sáng lẫn tối.",
+                "Nút Bắt đầu dịch dùng cam đậm hơn một chút để chữ trắng rõ hơn (3,1:1 lên 4,8:1). Nút báo thành công ở giao diện tối không còn là chữ trắng trên nền xanh nhạt.",
+                "Trang Cài đặt: chữ phụ, nút Song ngữ và nhãn phần trăm cũng đạt 4,5:1. Không đổi cách dịch hay lồng tiếng."
+            ]
+        },
+        {
+            v: "2.9.7", luc: "23/10/2026", ten: "Bản dịch sạch hơn khi mô hình thêm định dạng",
+            y: [
+                "Bỏ số thứ tự mô hình chép thừa ở đầu câu, dấu sao in nghiêng, thẻ <i>/<b> và mã HTML (&amp;), chỉ khi câu gốc không có sẵn những dấu đó.",
+                "Bỏ ký tự vô hình (zero-width) và đổi khoảng trắng không ngắt dòng thành khoảng trắng thường, để giọng đọc không bị lệch."
+            ]
+        },
+        {
+            v: "2.9.6", luc: "23/10/2026", ten: "Không hiện thông báo hết hạn mức của MyMemory làm phụ đề",
+            y: [
+                "Khi Google Translate lỗi và dịch vụ dự phòng MyMemory hết hạn mức trong ngày, nó trả về một câu cảnh báo bằng tiếng Anh với mã HTTP 200. Trước đây câu cảnh báo đó bị hiện lên màn hình như một dòng phụ đề. Nay nó bị loại và dòng đó để trống để dịch lại sau."
+            ]
+        },
+        {
+            v: "2.9.5", luc: "23/10/2026", ten: "Từ điển thêm gần 35.000 tên riêng",
+            y: [
+                "Thêm khoảng 35.000 tên riêng về thể thao, giải trí, âm nhạc, khoa học, công nghệ, sức khỏe, địa danh, kinh tế, thú cưng, du lịch và thời trang. Từ điển có khoảng 73.000 mục.",
+                "Phần lớn tên này được soạn từ kiến thức có sẵn, chưa đối chiếu với nguồn, nên có thể sai. Khoảng 180 tên vẫn được đọc như tiếng Việt khi lồng tiếng.",
+                "Các từ thông dụng viết hoa, từ tiếng Anh viết thường và các ngày trong tuần bị bỏ khỏi từ điển, để không đọc sai câu tiếng Việt."
+            ]
+        },
+        {
+            v: "2.9.4", luc: "23/10/2026", ten: "Coursera lưu nguyên bài đã dịch, mở lại không gọi Gemini nữa",
+            y: [
+                "Mỗi bài Coursera (và trang video khác) dịch xong được lưu nguyên bài trên máy. Mở lại bài đó, phụ đề tiếng Việt hiện ngay, không tốn lượt gọi Gemini, kể cả sau khi từ điển được cập nhật.",
+                "Nếu phụ đề gốc của bài thay đổi, bản đã lưu không được dùng và bài được dịch lại. Giữ 200 bài gần nhất; nút xóa bộ nhớ dịch trong Cài đặt xóa luôn các bài đã lưu.",
+                "Đoạn nào Gemini lỗi và phải dịch tạm bằng Google sẽ được hỏi lại Gemini tối đa 3 lần (sau 20, 40, 60 giây), không đổi đoạn đang phát. Bài chỉ được lưu khi không còn đoạn nào dịch tạm."
+            ]
+        },
+        {
+            v: "2.9.3", luc: "23/10/2026", ten: "Phụ đề trống hoặc hỏng: thử hết các phụ đề còn lại",
+            y: [
+                "Khi phụ đề được chọn trống hoặc phụ đề tự động không đọc được, tiện ích từng chỉ thử thêm một phụ đề khác. Nếu phụ đề đó cũng trống thì dừng, dù video còn phụ đề dùng được. Nay tiện ích thử lần lượt tối đa 4 phụ đề khác.",
+                "Phụ đề trống mà YouTube trả về dạng XML từng bị báo \"YouTube chưa trả nội dung, hãy F5\" và thử lại mãi. Nay tiện ích báo rõ phụ đề trống, giống dạng JSON."
+            ]
+        },
+        {
+            v: "2.9.2", luc: "23/10/2026", ten: "Từ điển gần 55.000 mục: thêm hơn 21.000 tên từ 20 nhóm chủ đề",
+            y: [
+                "Thêm hơn 21.000 tên tiếng Anh giữ nguyên trong phụ đề: thành phố và địa danh, đại học và sân bay, thương hiệu tiêu dùng, nhà hàng và món ăn, thời trang và làm đẹp, xe hơi, công ty tài chính, tiền điện tử, doanh nhân, nhà khoa học, chính trị gia, lịch sử, sách, trò chơi, anime, K-pop, kênh YouTube, hãng bay và khách sạn, thương hiệu y tế.",
+                "Các tên được soạn từ kiến thức chung, chưa đối chiếu với nguồn: có thể còn tên sai hoặc không tồn tại. Tên một từ trùng từ tiếng Anh thường chỉ dùng giữa câu.",
+                "Cách đọc: 14 tên vẫn được VieNeu đọc theo âm tiếng Việt, và sẽ được xử lý ở bản sau. Từ điển có khoảng 39.000 tên giữ tiếng Anh."
+            ]
+        },
+        {
+            v: "2.9.1", luc: "23/10/2026", ten: "Từ điển thêm gần 4.800 tên: thể thao, cầu thủ, sản phẩm công nghệ, phần mềm, âm nhạc, phim",
+            y: [
+                "Thêm khoảng 4.800 tên tiếng Anh giữ nguyên trong phụ đề: giải đấu và đội bóng, vận động viên, điện thoại và thiết bị, phần mềm và công ty, nghệ sĩ và phim. Tên một từ trùng từ tiếng Anh thường được đánh dấu chỉ dùng giữa câu.",
+                "Các tên được soạn từ kiến thức chung, chưa đối chiếu với nguồn; có thể còn lỗi chính tả hay tên không đúng. Nên kiểm tra khi gặp.",
+                "Mọi cách đọc đều được kiểm tra trên bộ đọc của VieNeu: không tên nào còn đọc theo tiếng Việt. Thứ Hai đến Chủ nhật và tên tháng bị loại khỏi từ điển."
+            ]
+        },
+        {
+            v: "2.9.0", luc: "23/10/2026", ten: "Từ điển thêm tên thiết bị và cầu thủ mới: Galaxy S26, Pixel Watch 5, Nikola Jokic, Kylian Mbappe",
+            y: [
+                "Thêm các đời máy mới giữ nguyên tiếng Anh: Galaxy S26 (Ultra, Plus), Galaxy Watch 8, Pixel 10 Pro XL, Pixel Watch 4 và 5, MacBook Pro.",
+                "Thêm cầu thủ Nikola Jokic và Kylian Mbappe, các hãng Xiaomi và Huawei, Tesla Cybertruck, tuyến Tokaido Shinkansen, sân bay Narita, Trường Y Stanford.",
+                "Các tên này được rút từ phụ đề thật của những video đã lưu (thiết bị, thể thao, du lịch), và đối chiếu với danh sách ứng viên để không trùng từ điển có sẵn."
+            ]
+        },
+        {
+            v: "2.8.9", luc: "23/10/2026", ten: "Giọng đọc tên tiếng Anh có ký hiệu (CI/CD, async/await) theo kiểu quốc tế, từ điển thêm 55 tên",
+            y: [
+                "Các mã có dấu gạch chéo như CI/CD, UI/UX, AC/DC, async/await, RE/MAX được đọc từng chữ cái tiếng Anh, không còn bị đọc thành \"hoặc\".",
+                "Số 4K và 8K không đổi: trong tiếng Việt, chúng còn là số tiền (8K là 8 nghìn), nên giọng vẫn đọc theo tiếng Việt. Mục này được đếm riêng trong phép đo, không tính là lỗi.",
+                "Từ điển thêm 44 tên truyền thông (Wired, Newsweek, Los Angeles Times, Yahoo Finance, Kickstarter...) và 11 tên công nghệ, trò chơi, học trực tuyến."
+            ]
+        },
+        {
+            v: "2.8.8", luc: "23/10/2026", ten: "Chú thích \"[nhạc]\" mọi ngôn ngữ, phụ đề trống báo đúng",
+            y: [
+                "Chú thích âm thanh như \"[موسیقی]\" (nhạc, tiếng Ba Tư), \"[Muzică]\" (Rumani), \"[μουσική]\" (Hy Lạp) từng bị gửi cho Gemini, Gemini để trống và cả đoạn rơi về Google Dịch. Nay chúng hiện là [Âm nhạc], [Vỗ tay], [Tiếng cười] ngay, và một chú thích lạ bị để trống không còn làm hỏng cả đoạn.",
+                "Video có phụ đề tải lên nhưng không có chữ nào (gặp ở vlog tiếng Bengal) từng bị báo \"YouTube chưa trả nội dung, hãy F5\" và thử lại mãi. Nay tiện ích thử phụ đề khác nếu có; nếu không, báo rõ phụ đề trống."
+            ],
+            bang: { cot: ["110 video đã lưu", "2.8.7", "Nay"], hang: [
+                ["Dòng chú thích không nhận ra", "45", "12 (mô tả tiếng Anh, Gemini vẫn dịch)"],
+                ["Đoạn rơi về Google vì chú thích để trống", "3 trên video Ba Tư", "0"]
+            ] }
+        },
+        {
+            v: "2.8.7", luc: "23/10/2026", ten: "Đo đúng số chữ lồng tiếng bị bỏ sót",
+            y: [
+                "Bộ đo trên máy từng tính nhầm là \"mất chữ\" ở hai trường hợp: câu đã đọc nhưng kế hoạch đọc vừa được làm mới, và chú thích trong ngoặc như \"(Đoàng!!)\" vốn cố ý không đọc. Nay hai trường hợp đó không bị tính nữa. Giọng đọc không đổi."
+            ],
+            bang: { cot: ["Video đã lưu", "Trước", "Nay"], hang: [
+                ["Chữ \"mất\" trên video Rumani", "13", "0"],
+                ["Chữ \"mất\" trên video hoạt hình có chú thích", "6", "0"]
+            ] }
+        },
+        {
+            v: "2.8.6", luc: "23/10/2026", ten: "Giữ cách xưng \"tôi/mình\" cho video mọi ngôn ngữ",
+            y: [
+                "Quy tắc giữ đúng cách người nói tự xưng (\"tôi\" hay \"mình\") trước đây chỉ bật khi lời gốc là tiếng Anh. Nay nó nhận ra \"tôi\" trong khoảng 30 ngôn ngữ (Hàn, Nhật, Trung, Thái, Tây Ban Nha, Pháp, Đức, Nga, Hindi, Ả Rập...), nên video không phải tiếng Anh cũng không còn lẫn \"tôi\" với \"mình\".",
+                "Hai dấu chấm chép từ phụ đề gốc (\"thích thú..\") nay thành dấu ba chấm."
+            ],
+            bang: { cot: ["6 video không phải tiếng Anh, 69 đoạn (thử A/B)", "2.8.5", "Nay"], hang: [
+                ["Đoạn có gợi ý cách xưng", "0", "39"],
+                ["Đoạn Gemini đổi cách xưng giữa chừng", "1", "0"]
+            ] }
+        },
+        {
+            v: "2.8.5", luc: "23/10/2026", ten: "Nghỉ xong thì nói nhịp mới, không đọc vội rồi im",
+            y: [
+                "Trước đây sau một câu đọc nhanh, câu kế tiếp vẫn bị giữ nhịp nhanh dù giữa hai câu có khoảng nghỉ tới 4 giây, nên một câu ngắn bị đọc vội rồi giọng im trong khi người nói vẫn đang nói. Nay sau khoảng nghỉ từ 1 giây, câu mới được nói theo nhịp của chính nó, như người thật. Các câu nói liền nhau vẫn giữ nhịp đều như cũ."
+            ],
+            bang: { cot: ["100 video đã lưu, 8.977 câu (mô phỏng)", "2.8.4", "Nay"], hang: [
+                ["Câu đọc vội rồi im", "916", "687"],
+                ["Khoảng im từ 1,5 giây khi người nói vẫn nói", "1.193", "1.068"],
+                ["Câu bắt đầu trễ hơn 0,5 giây", "751", "716"],
+                ["Tổng thời gian trễ", "1.159 giây", "1.105 giây"],
+                ["Hai câu liền nhau đổi nhịp đột ngột", "55", "46"]
+            ] }
+        },
+        {
+            v: "2.8.4", luc: "23/10/2026", ten: "\"30k\" đọc là \"30 nghìn\"",
+            y: [
+                "Số có chữ \"k\" viết thường phía sau (\"triệu phú 30k\") từng được đọc là \"ba mươi ca\"; nay là \"30 nghìn\", như \"30K\" viết hoa. Tên quỹ hưu trí \"401k\" vẫn giữ nguyên."
+            ],
+            bang: { cot: ["18.129 dòng lồng tiếng đã lưu", "2.8.3", "Nay"], hang: [
+                ["Dòng đọc \"k\" thành \"ca\"", "5", "0"],
+                ["401k bị đổi nhầm", "", "0 trên 3"]
+            ] }
+        },
+        {
+            v: "2.8.3", luc: "23/10/2026", ten: "Giọng đọc hiểu đúng dấu gạch chéo, dấu >, @ và 7/11",
+            y: [
+                "Mọi dòng lồng tiếng đã lưu được cho qua bộ đọc của VieNeu để tìm ký hiệu bị đọc sai. Sửa được: \"paprika / ớt chuông\" (từng đọc \"trên\") nay là \"hoặc\"; \"3,5 dặm/giờ\" là \"một giờ\"; \"Tôi > Khuyến mãi\" (đường dẫn trong ứng dụng, từng đọc \"lớn hơn\") nay ngắt nghỉ; \"@tên_tài_khoản\" chỉ đọc tên, không đọc \"a còng\"; \"cửa hàng 7/11\" là \"seven eleven\".",
+                "Giữ nguyên: ngày tháng (\"ngày 7/11\"), chỉ số viết tắt (\"P/E\"), đơn vị (\"60 km/h\" vẫn là \"ki-lô-mét trên giờ\"), địa chỉ web."
+            ],
+            bang: { cot: ["18.129 dòng lồng tiếng đã lưu", "2.8.2", "Nay"], hang: [
+                ["Dòng đọc sai ký hiệu (/, >, @, 7/11)", "11", "0"],
+                ["Dòng bị đổi nhầm", "", "0"]
+            ] }
+        },
+        {
+            v: "2.8.2", luc: "23/10/2026", ten: "Giọng đọc bỏ qua mặt cười trong phụ đề",
+            y: [
+                "Mặt cười kiểu chữ trong phụ đề không còn bị đọc thành lời: \":D\" từng được đọc là \"đê\", \"<3\" là \"nhỏ hơn ba\", \"=)\" là \"bằng\", \"^^\" là \"mũ mũ\". Phụ đề vẫn hiện mặt cười như cũ.",
+                "Giờ và tỉ lệ (\"3:00\", \"8:3\") vẫn được đọc đúng.",
+                "Sửa một lỗi tiềm ẩn: số đứng trước một chữ viết hoa bắt đầu bằng M, K, B (\"Năm 2020 Mình...\") có thể bị đọc thành \"2020 triệuình\"."
+            ],
+            bang: { cot: ["18.129 dòng lồng tiếng đã lưu", "2.8.1", "Nay"], hang: [
+                ["Dòng đọc mặt cười thành chữ", "12", "0"],
+                ["Dòng bị đổi nhầm", "", "0"]
+            ] }
+        },
+        {
+            v: "2.8.1", luc: "23/10/2026", ten: "Lời thoại trong ngoặc đơn được lồng tiếng",
+            y: [
+                "Phụ đề của nhiều vlog Nhật, Hàn đặt lời của con mèo hay suy nghĩ trong ngoặc đơn, ví dụ \"(Mèo: Này, có nghe tôi nói không đấy?)\". Trước đây cả dòng như vậy bị coi là ghi chú âm thanh và không được đọc.",
+                "Nay ngoặc đơn chứa một câu thật được lồng tiếng; ngoặc chỉ là tiếng động (\"nhạc sôi động\", \"tiếng cửa đóng\") hoặc một hai chữ vẫn im lặng như cũ."
+            ],
+            bang: { cot: ["Đo trên video đã lưu", "2.8.0", "Nay"], hang: [
+                ["Dòng lời thoại trong ngoặc bị bỏ không đọc", "5", "0"],
+                ["Ghi chú âm thanh bị đọc nhầm", "0", "0 (84 ghi chú vẫn im lặng)"],
+                ["Chữ không được đọc, vlog Nhật có phụ đề", "35", "6"]
+            ] }
+        },
+        {
+            v: "2.8.0", luc: "23/10/2026", ten: "Giọng đọc nói đúng phân số, dặm/giờ, \"15$\" và 4K",
+            y: [
+                "Phân số trong công thức nấu ăn nay được đọc như người Việt nói: \"1/2 cốc\" là \"nửa cốc\", \"1/4 thìa\" là \"một phần tư thìa\" (trước đây máy đọc \"một trên bốn\"). Ngày tháng (\"ngày 1/4\") và \"24/7\" giữ nguyên.",
+                "\"4 mph\" đọc là \"4 dặm một giờ\", \"15$\" đọc là \"15 đô la\" (trước đây \"u s d\").",
+                "\"65g\", \"125g\" từng bị đánh vần như tiếng Anh vì nhầm với \"5G\" (mạng di động); nay đọc là gam.",
+                "\"Video 4K\", \"màn hình 8K\" đọc là \"bốn ca\", \"tám ca\" (trước đây \"4 nghìn\"). Tiền lương \"8K một tháng\" vẫn là \"8 nghìn\".",
+                "Đã đối chiếu từng cách đọc với chính bộ chuẩn hóa của giọng VieNeu: gam, mi-li-lít, độ C, oát, héc, gigabyte vốn đã được đọc đúng nên không đổi."
+            ],
+            bang: { cot: ["23.274 dòng lồng tiếng đã lưu", "2.7.9", "Nay"], hang: [
+                ["Dòng đọc sai số hoặc đơn vị (phân số, gam bị đánh vần)", "10", "0"],
+                ["Dòng bị đổi nhầm", "", "0"]
+            ] }
+        },
+        {
+            v: "2.7.9", luc: "23/10/2026", ten: "Phụ đề tự động bị nhận dạng hỏng thì dùng bản phụ đề khác",
+            y: [
+                "Đôi khi YouTube nhận nhầm ngôn ngữ của video, ví dụ một video phỏng vấn tiếng Tamil pha tiếng Anh bị gắn \"tiếng Hàn (tự động)\", và bản phụ đề tự động đó toàn dấu chấm, số và mảnh chữ (\". 5 - 6\", \"HFC B\"). Tiện ích từng chọn bản hỏng này vì nó là \"ngôn ngữ đang nói\", bỏ qua bản tiếng Anh do người đăng tải lên, và không đoạn nào dịch được.",
+                "Nay bản phụ đề tự động gần như không có chữ, hoặc không viết bằng chữ của ngôn ngữ nó ghi (tiếng Hàn mà không có chữ Hàn), được thay bằng bản tốt nhất còn lại. Đo trên 100 video đã lưu: không bản tốt nào bị nhận nhầm là hỏng."
+            ],
+            bang: { cot: ["Đo thật", "2.7.8", "Nay"], hang: [
+                ["Bản phụ đề tự động hỏng được nhận ra (video phỏng vấn đường phố)", "0", "1"],
+                ["Bản phụ đề tốt bị nhận nhầm là hỏng (100 video đã lưu)", "", "0"]
+            ] }
+        },
+        {
+            v: "2.7.8", luc: "23/10/2026", ten: "Nhật ký lỗi dịch ghi rõ dòng nào bị bỏ trống",
+            y: [
+                "Khi Gemini trả về rỗng cho một số dòng và cả đoạn phải dịch tạm bằng Google, nhật ký trên máy nay ghi lại chính những dòng gốc bị bỏ trống (tối đa 4 dòng), để tìm ra nguyên nhân chung mà không phải đoán. Không đổi gì trong cách dịch."
+            ]
+        },
+        {
+            v: "2.7.7", luc: "23/10/2026", ten: "Một dòng ngắn bị bỏ trống không còn làm hỏng cả đoạn dịch",
+            y: [
+                "Thỉnh thoảng Gemini trả về rỗng cho một dòng rất ngắn mà nó cho là không phải lời nói: một cái tên (\"vanmathi\"), \"that's all\", \"B.com\". Trước đây chỉ một dòng như vậy cũng làm cả đoạn 4 đến 12 câu bị dịch tạm bằng Google, dịch lại bao nhiêu lần cũng vậy, và video không được lưu.",
+                "Nay dòng rỗng có tối đa 3 chữ (và không quá một phần tư đoạn) được giữ nguyên chữ gốc, phần còn lại vẫn là bản dịch Gemini. Dòng dài hơn mà rỗng vẫn bị coi là lỗi như trước, vì có thể mất ý."
+            ],
+            bang: { cot: ["Video mới chạy thử", "2.7.6", "Nay"], hang: [
+                ["Video không lưu được vì một dòng ngắn rỗng", "1 (phỏng vấn đường phố)", "0 trong kiểm thử"]
+            ] }
+        },
+        {
+            v: "2.7.6", luc: "23/10/2026", ten: "Câu lồng tiếng đầu tiên của video không còn bị bỏ",
+            y: [
+                "Khi bắt đầu lồng tiếng, tiện ích đo lại tốc độ giọng đọc sau vài câu đầu và lập lại kế hoạch đọc. Trước đây việc lập lại có thể chia một câu dài thành các mảnh khác ngay trước khi tới lượt, bỏ bản giọng đã tạo sẵn; mảnh đầu không kịp có tiếng nên bị bỏ qua. Câu bị mất thường là câu chào đầu video.",
+                "Nay câu đã có giọng sẵn (hoặc đang tạo) mà chữ không đổi thì giữ nguyên cách chia và bản giọng đó. Câu có chữ thay đổi thật (bản dịch được sửa) vẫn được tạo giọng lại như trước."
+            ],
+            bang: { cot: ["Mô phỏng trên 100 video đã lưu", "2.7.5", "Nay"], hang: [
+                ["Câu bị bỏ", "2", "0"],
+                ["Chữ bị mất", "23", "0"],
+                ["Lượt tạo giọng", "12.398", "12.388"]
+            ] }
+        },
+        {
+            v: "2.7.5", luc: "22/10/2026", ten: "Dòng \"foreign\" của phụ đề tự động không còn làm hỏng cả đoạn",
+            y: [
+                "Phụ đề tự động của YouTube viết \"foreign\" ở chỗ người nói dùng tiếng nước khác (ví dụ \"foreign [Music]\"). Gemini để trống dòng đó, và một dòng trống làm cả đoạn bị dịch tạm bằng Google, dịch lại bao nhiêu lần cũng vậy, nên video không bao giờ được lưu. Nay dòng chỉ có \"foreign\" và ghi chú âm thanh được hiển thị là [Tiếng nước ngoài] ngay trên máy, không gửi Gemini, giọng đọc bỏ qua.",
+                "Câu thật có chữ \"foreign\" (\"foreign investment\") vẫn được dịch như thường."
+            ],
+            bang: { cot: ["Đợt chạy 13 video mới", "2.7.4", "Nay"], hang: [
+                ["Video có dòng \"foreign\" không lưu được", "1 trên 1", "0 trong kiểm thử"]
+            ] }
+        },
+        {
+            v: "2.7.4", luc: "22/10/2026", ten: "Gemini trả chậm không còn làm mất bản dịch của video",
+            y: [
+                "Khi một model Gemini trả lời chậm, tiện ích cho model đó nghỉ 15 giây. Trước đây trong 15 giây ấy mọi đoạn khác đều bị dịch tạm bằng Google (không theo ngữ cảnh). Nay model kế tiếp trong chuỗi (ví dụ 3.5 Flash-Lite) dịch thay ngay, vẫn bằng Gemini.",
+                "Đoạn đã phải dịch tạm bằng Google nay được tự động hỏi lại Gemini sau 20 giây (tối đa 3 lần, lần sau cách lâu hơn). Dịch lại được thì cả video được lưu, lần sau mở lại không phải dịch nữa. Đoạn sắp phát trong 15 giây tới thì không bị thay giữa chừng.",
+                "Xưng hô nhất quán: khi bản dịch đã chọn \"tôi\" hoặc \"mình\" cho người nói, các đoạn sau được dặn giữ đúng cách xưng đó. Trước đây một video có thể nửa đầu \"tôi\", nửa sau \"mình\".",
+                "Video đời thường (không phải bài giảng, không phải chủ đề kỹ thuật) nay được dịch theo giọng nói chuyện tự nhiên, gần gũi, thay cho giọng giảng viên. Bài giảng Coursera giữ nguyên như cũ.",
+                "Tên hoạt chất (retinol, tretinoin, niacinamide, axit hyaluronic...) không còn bị coi là \"sót tiếng Anh\", nên không còn tốn lượt gọi Gemini dịch lại vô ích."
+            ],
+            bang: { cot: ["Đo thật", "2.7.3", "Nay"], hang: [
+                ["Video có đoạn Gemini trả chậm nhưng vẫn được lưu (đợt 22 video mới)", "0 trên 2", "2 trên 2"],
+                ["Chỗ trộn \"tôi\" với \"mình\" (A/B 288 câu, 6 video)", "28", "6, cả 6 đều là cách dùng đúng"],
+                ["Đoạn dịch tự nhiên hơn (chấm mù 36 đoạn vlog)", "2", "30 (4 ngang nhau)"],
+                ["Lượt gọi Gemini dịch lại vô ích (100 video đã lưu)", "29", "22"]
+            ] }
+        },
+        {
+            v: "2.7.3", luc: "22/10/2026", ten: "Bản dịch được lưu ngay khi dịch xong đoạn cuối",
+            y: [
+                "Trước đây bản dịch của cả video chỉ được lưu khi vòng dịch tỉnh dậy lần kế (khoảng 1 giây, lâu hơn ở thẻ nền). Nếu người xem chuyển sang video kế ngay lúc hết video (YouTube tự phát), việc lưu bị hủy, và lần sau mở lại video phải dịch lại. Nay bản dịch được lưu ngay khi đoạn cuối cùng dịch xong.",
+                "Dòng chỉ có ghi chú âm thanh (\"[music]\", \">> [music]\") nằm giữa lời nói nay được dịch ngay trên máy, không gửi Gemini. Phụ đề tự động kiểu mới của YouTube viết \">> [music]\", Gemini để trống dòng đó, và một dòng trống từng làm cả đoạn bị dịch tạm bằng Google, video không được lưu.",
+                "Tiện ích ghi lại trên máy lý do mỗi lần phải dịch tạm bằng Google hoặc không lưu được bản dịch, để lần sau tìm lỗi nhanh hơn.",
+                "Thuật ngữ đã thống nhất không còn bị lặp đôi (\"sự bùng nổ kinh tế bùng nổ kinh tế\", \"nhịp tim lúc nghỉ nhịp tim lúc nghỉ\"): khi mô hình tự viết lại thuật ngữ ngay cạnh chỗ thuật ngữ được chèn vào, phần viết lại được bỏ. Gặp ở 5 trên 10.057 đoạn đã lưu."
+            ],
+            bang: { cot: ["Đo trên các video đã lưu", "2.7.2", "Nay"], hang: [
+                ["Video dịch xong mà không lưu vì một dòng \">> [music]\"", "1", "0"],
+                ["Thuật ngữ bị lặp đôi (bản dịch mới)", "5 trên 10.057 đoạn", "0 trong kiểm thử"]
+            ] }
+        },
+        {
+            v: "2.7.2", luc: "22/10/2026", ten: "Video mở ở thẻ nền vẫn được tự dịch",
+            y: [
+                "Khi video được mở ở thẻ nền hoặc cửa sổ bị che, YouTube đôi khi chưa trả nội dung phụ đề ở lần hỏi đầu. Trước đây tiện ích im lặng bỏ qua video đó, không dịch và không báo gì. Nay tiện ích tự hỏi lại khi thẻ được mở ra xem, hoặc sau 4, 12 và 30 giây. Lần hỏi lại không tốn tiền Gemini.",
+                "Tắt dịch bằng tay hoặc chuyển sang video khác thì tiện ích thôi hỏi lại."
+            ],
+            bang: { cot: ["Chạy thử video mới trong cửa sổ bị che", "2.7.1", "Nay"], hang: [
+                ["Video hỏng vì phụ đề về rỗng ở lần hỏi đầu (chạy lại đúng các video đó)", "2", "0"]
+            ] }
+        },
+        {
+            v: "2.7.1", luc: "22/10/2026", ten: "Phụ đề không còn nháy giữa hai dòng; không lặp chữ tiếng Anh sau thứ trong tuần",
+            y: [
+                "Khi hai dòng phụ đề cách nhau dưới 0,15 giây, dòng trước nay ở lại tới khi dòng sau hiện, thay vì tắt khoảng 60 mili giây rồi mới hiện dòng mới (một cái nháy). Áp dụng cho YouTube và Coursera.",
+                "Tên phim \"Wednesday\" trong bảng thuật ngữ làm mọi chữ \"Wednesday\" bị giữ nguyên, thành \"vào thứ Tư Wednesday\". Đã bỏ mục đó, và bảng thuật ngữ nay từ chối giữ nguyên các từ thường mà tiếng Anh luôn viết hoa (thứ, tháng, ngôn ngữ, quốc tịch, ngày lễ)."
+            ],
+            bang: { cot: ["Đo trên 73 video đã lưu", "2.7.0", "Nay"], hang: [
+                ["Lần chuyển dòng có khoảng trống dưới 0,15 giây (nháy)", "678", "0"],
+                ["Chữ \"Wednesday\" bị giữ nguyên", "8", "0"]
+            ] }
+        },
+        {
+            v: "2.7.0", luc: "22/10/2026", ten: "Giọng bắt kịp người nói nhanh hơn ở đầu câu mới",
+            y: [
+                "Khi một câu dày chữ đến ngay sau một câu đọc chậm, giọng được tăng tốc nhanh hơn (tối đa 0,2 thay vì 0,1 mỗi câu) nếu không thì câu sẽ tràn khung quá 0,4 giây. Trễ của câu đó không còn dồn sang các câu sau.",
+                "Trong cùng một câu, nhịp vẫn giữ đều như trước."
+            ],
+            bang: { cot: ["Mô phỏng 70 video đã lưu (8.989 câu)", "2.6.9", "Nay"], hang: [
+                ["Câu bắt đầu trễ quá 0,5 giây", "1.657", "1.419"],
+                ["Câu bắt đầu trễ quá 1 giây", "900", "766"],
+                ["Tổng số giây trễ", "2.506", "2.197"],
+                ["Cặp câu liền nhau đổi tốc độ quá 15%", "5", "77"],
+                ["Chữ bị bỏ", "0", "0"]
+            ] }
+        },
+        {
+            v: "2.6.9", luc: "22/10/2026", ten: "Giọng lồng tiếng không còn đọc trước người nói",
+            y: [
+                "Khi một câu kéo dài qua nhiều dòng phụ đề, giọng đọc đoạn tiếp theo sớm tối đa 0,3 giây thay vì 0,8 giây như trước. Trước đây gần như mọi đoạn nối đều bắt đầu sớm trọn 0,8 giây, nên nghe như giọng nói trước người thật.",
+                "Áp dụng cho mọi video, kể cả video có sẵn phụ đề tiếng Việt do người đăng tải lên."
+            ],
+            bang: { cot: ["Mô phỏng 70 video đã lưu (8.989 câu)", "2.6.8", "Nay"], hang: [
+                ["Câu bắt đầu sớm hơn người nói quá 0,3 giây", "1.371", "0"],
+                ["Khoảng lặng giữa câu dài hơn 0,4 giây", "114", "177"],
+                ["Câu bắt đầu trễ quá 0,5 giây", "1.649", "1.657"],
+                ["Chữ bị bỏ", "0", "0"]
+            ] }
+        },
+        {
+            v: "2.6.8", luc: "19/10/2026", ten: "Lớp an toàn chung cho phụ đề dạng khối không có thời gian từng chữ",
+            y: [
+                "Khi tiện ích không tự tải được bản phụ đề có thời gian từng chữ và phải dùng bản hiển thị của trình phát (các khối hai hàng chồng giờ lên nhau), mỗi hàng nay thành một dòng riêng, chia thời gian theo số chữ. Hàng sau không còn hiện và được đọc ngay từ đầu khối.",
+                "Phụ đề do tác giả tải lên (khối hai hàng không chồng giờ) giữ nguyên như cũ."
+            ]
+        },
+        {
+            v: "2.6.7", luc: "19/10/2026", ten: "Phụ đề và lồng tiếng không còn đi trước lời thoại",
+            y: [
+                "Có lúc tiện ích dùng bản phụ đề mà trình phát YouTube đã tải để hiển thị: các khối hai hàng dài 7 đến 11 giây, không có thời gian từng chữ. Hàng thứ hai của mỗi khối vì vậy hiện và được đọc sớm 4 đến 5 giây (video Modern Warfare 4).",
+                "Nay tiện ích tự tải bản đầy đủ có thời gian từng chữ, bản của trình phát chỉ dùng khi không tải được. Bản dịch đã lưu từ phiên bản 2.6.5 và 2.6.6 được dịch lại một lần."
+            ]
+        },
+        {
+            v: "2.6.6", luc: "19/10/2026", ten: "Đổi giọng theo người nói đúng chỗ hơn trong phim và trò chơi nhiều nhân vật",
+            y: [
+                "Khi một dòng phụ đề chứa hai, ba lượt nói (dấu >> ở giữa dòng, như phụ đề máy nghe tiếng Hàn của video Modern Warfare 4), mỗi lượt nay được gửi Gemini thành một dòng riêng, nên giọng đổi đúng lúc người khác nói thay vì đổi ở đầu dòng.",
+                "Gemini được hướng dẫn thêm cho cảnh phim, trò chơi: ai tra hỏi, ai trả lời; đặt tên theo vai (sĩ quan, cô bé, người mẹ) và đoán giới tính theo vai hoặc cách xưng hô, nên giọng nam, nữ được chọn hợp hơn. Lượt đọc người nói của các video sẽ được làm lại một lần."
+            ]
+        },
+        {
+            v: "2.6.5", luc: "19/10/2026", ten: "Dịch đúng lời gốc khi YouTube có cả bản lồng tiếng AI cùng ngôn ngữ",
+            y: [
+                "Sửa chẩn đoán sai của 2.6.4: video Modern Warfare 4 nói tiếng Hàn tới phút 17:30, và YouTube có phụ đề tiếng Hàn chép đúng lời gốc. Tiện ích đã bỏ nhầm phụ đề này vì YouTube cũng có bản lồng tiếng AI tiếng Hàn, rồi dịch phụ đề của bản lồng tiếng Ả Rập.",
+                "Nay tiện ích phân biệt phụ đề chép lời gốc với phụ đề chép bản lồng tiếng theo dấu YouTube gắn trên từng phụ đề, nên dịch từ lời gốc. Bản dịch đã lưu làm từ phụ đề khác sẽ được dịch lại."
+            ]
+        },
+        {
+            v: "2.6.4", luc: "19/10/2026", ten: "Đọc phụ đề in trên hình khi YouTube chỉ có phụ đề của bản lồng tiếng AI",
+            y: [
+                "Có video mà mọi phụ đề YouTube liệt kê đều chép lại giọng lồng tiếng AI (tiếng Ả Rập, Hàn...), không có phụ đề nào của lời gốc. Trước đây tiện ích dịch một bản như vậy nên câu dịch lệch hẳn với chữ trên hình.",
+                "Nay tiện ích nhận ra trường hợp này và đọc chữ in trên hình (phụ đề của trò chơi, phụ đề cứng) bằng Gemini, rồi dịch sang tiếng Việt. Phụ đề hiện chậm khoảng 1 giây và chưa có lồng tiếng. Nếu 45 giây không thấy chữ nào, tiện ích quay về cách cũ."
+            ]
+        },
+        {
+            v: "2.6.3", luc: "18/10/2026", ten: "Phụ đề tiếng Anh giữ nguyên được đọc đúng kiểu quốc tế: LA Times và các cụm chữ thường không phải tiếng Anh",
+            y: [
+                "Thêm LA Times vào từ điển, nên tên tờ báo được đọc theo kiểu tiếng Anh thay vì âm \"la\" tiếng Việt.",
+                "Phép đo phụ đề căn chỉnh cách đọc bằng dãy con chung dài nhất, nên một tên đứng cạnh tên khác không còn làm lệch kết quả. Cụm có chữ thường không phải tiếng Anh (đoạn hát lặp) được loại khỏi phép đo và được đếm riêng."
+            ]
+        },
+        {
+            v: "2.6.2", luc: "18/10/2026", ten: "Chữ cái sau tên tiếng Anh được đọc kiểu quốc tế, phép đo phụ đề chặt hơn",
+            y: [
+                "Tên viết tắt như \"C.S. Lewis\" được đọc kiểu Anh khi câu gốc ghi các chữ cái trước tên, kể cả khi hai chữ nằm ở hai câu phụ đề liền nhau (\"CS Lewis\").",
+                "Phép đo phụ đề mở rộng cửa sổ tìm bằng chứng từ ±0,5 giây lên ±4 giây, nên những tên bị tách qua hai câu được tính đúng."
+            ]
+        },
+        {
+            v: "2.6.1", luc: "18/10/2026", ten: "Giọng lồng tiếng đọc tiếng Anh trong phụ đề theo kiểu quốc tế, từ điển gần 29.500 thuật ngữ",
+            y: [
+                "Đo trên phụ đề thật của 50 video đã xem (2.041 cụm chữ tiếng Anh được giữ nguyên trong bản dịch): số cụm bị đọc kiểu Việt hay đánh vần giảm từ 64 (3,1%) xuống 21 (1,0%). Phần còn lại chủ yếu là chỗ cố ý đọc tiếng Việt như \"nhóm A\", \"750 W\".",
+                "Đọc đúng kiểu quốc tế: vitamin D3, vitamin C, D3, E và K, urolithin A, Plan B, model G1; đánh vần R-E-V-E-R-I-E, L-taurine; tên miền DonorsChoose.org và cả \"chấm com gạch chéo\" thành \"dot com slash\"; mã có trong câu gốc như KS Fit, DPOs, eGFR, C.S.; Disney+, C++, C#, Travel + Leisure, 401(k), Lp(a).",
+                "Tên tiếng Anh trùng âm tiết Việt được đọc kiểu Anh khi câu gốc cho thấy đó là tên riêng (Ram 2500, Dan và John). Bảng cách đọc các tên này tăng từ 58 lên 106 từ. Tên và mã tiếng Việt (Lan, Minh, SSI, VTV, giấy A4, đội U23) vẫn đọc kiểu Việt.",
+                "Các đoạn tiếng Anh nằm cạnh nhau được gộp thành một, nên câu nhiều tên riêng không còn bị vượt giới hạn 8 đoạn của giọng VieNeu.",
+                "Trong 13.962 tên giữ tiếng Anh của từ điển, chỉ còn 117 tên (0,8%) đọc chưa chuẩn.",
+                "Từ điển tăng từ khoảng 24.900 lên khoảng 29.500 thuật ngữ: đội bóng và giải đấu, trò chơi điện tử, công ty và sản phẩm, ứng dụng, tất cả quốc gia và các bang Mỹ, sách và podcast, anime và phim, ca sĩ và nhóm nhạc, thuốc và thực phẩm bổ sung, chuỗi nhà hàng và đồ uống, tài chính và chứng khoán, bài tập gym, tâm lý và từ lóng mạng, giống chó mèo và cây cảnh, kỳ thi và cơ quan, du lịch, nhà cửa, ô tô và xe điện, mô hình AI."
+            ]
+        },
+        {
+            v: "2.6.0", luc: "18/10/2026", ten: "Từ điển gần 25.000 thuật ngữ, giọng đọc nói tên riêng theo kiểu quốc tế",
+            y: [
+                "Từ điển thuật ngữ tăng từ khoảng 14.000 lên khoảng 24.900 mục, từ 35 lên 52 chủ đề. Chủ đề mới: nhân vật nổi tiếng, thương hiệu toàn cầu, địa danh, âm nhạc, tâm linh, dã ngoại, thủ công, đồ uống, nhiếp ảnh, kỹ thuật, nông nghiệp, động vật, triết học, ngôn ngữ, quân sự, đám cưới, kế toán.",
+                "Thêm hàng nghìn tên riêng giữ nguyên tiếng Anh: mẫu điện thoại, máy tính, đồng hồ, xe hơi, xe máy, giày, túi, mỹ phẩm, trường đại học, bảo tàng, sân bay, YouTuber, podcast, vận động viên. Địa danh có tên tiếng Việt quen thuộc được dịch đúng (Beijing thành Bắc Kinh, Ha Long Bay thành vịnh Hạ Long).",
+                "Giọng đọc VieNeu nói các tên giữ tiếng Anh theo cách phát âm quốc tế: trong 11.684 tên, số tên bị đọc thành âm tiếng Việt giảm từ 496 xuống 98 (phần còn lại chủ yếu là con số, vốn cố ý đọc tiếng Việt). Ví dụ CeraVe, CUDA đọc như tiếng Anh; Johnson & Johnson đọc là \"and\"; Samuel L. Jackson, e.l.f. đọc đúng chữ cái tiếng Anh.",
+                "Tên tiếng Việt và mã viết tắt Việt (SSI, VTV, Hoàng Thùy Linh) vẫn đọc kiểu Việt như cũ.",
+                "Tiếp tục loại các từ nhiều nghĩa (foundation, period, momentum, commit, fork, highlights...) để video đời sống không bị dịch sai nghĩa."
+            ]
+        },
+        {
+            v: "2.5.9", luc: "17/10/2026", ten: "Từ điển thuật ngữ lớn hơn bảy lần, thêm 16 chủ đề đời sống",
+            y: [
+                "Từ điển thuật ngữ tăng từ khoảng 1.700 lên khoảng 14.000 mục. Các chủ đề cũ (công nghệ và AI, sức khỏe, y khoa, tâm lý, marketing, kinh doanh, kinh tế, dữ liệu, pháp lý...) đều được mở rộng.",
+                "Thêm 16 chủ đề cho video đời sống: đời sống và tối giản, làm đẹp, ẩm thực, mua sắm, tài chính cá nhân, du lịch, nhà cửa, phim ảnh và âm nhạc, thể thao, đồ công nghệ, thú cưng, gia đình, khoa học, lịch sử và xã hội, ô tô, thời trang. Bật tắt từng chủ đề ở Cài đặt > Dịch & AI.",
+                "Tên thương hiệu trùng với từ tiếng Anh thông thường (Headspace, Athletic Greens, Eight Sleep, Goodwill, Target, Walking Pad...) được giữ nguyên thay vì bị dịch theo nghĩa đen; tên chỉ được giữ khi đứng giữa câu để không bắt nhầm từ thường ở đầu câu.",
+                "Từ thông dụng nhiều nghĩa (single, mean, tip, judge, bill...) và thành ngữ (in the long run, doomed to failure...) cố ý không đưa vào, để video đời sống không bị dịch sai nghĩa.",
+                "Bộ so khớp thuật ngữ được viết lại: nhanh hơn khoảng 14 lần so với cách cũ khi từ điển lớn, kết quả giống hệt trên 2.326 đoạn phụ đề thật."
+            ]
+        },
+        {
+            v: "2.5.8", luc: "17/10/2026", ten: "Đọc đúng tên thương hiệu viết hoa và tên AI",
+            y: [
+                "Tên thương hiệu viết hoa toàn bộ được giọng đọc nói thành một từ thay vì đánh vần từng chữ: WHOOP đọc như tiếng Anh, \"wúp\" (trước đây là \"vê kép hát ô ô phê\"), NIKE, LEGO, SONY, ADIDAS, SAMSUNG, GARMIN cũng vậy. Mã viết tắt thật như HTML, CPAP, UCLA, HTTPS vẫn đọc từng chữ; viết tắt tiếng Việt như DN, THPTQG vẫn đọc kiểu Việt.",
+                "Sửa cách đọc một số tên AI và công nghệ: Qwen, Groq, xAI, NotebookLM, DALL-E, LangChain, CRISPR, NGINX, Oura, Huawei, Xiaomi, GoPro.",
+                "Từ điển thuật ngữ khi dịch thêm thiết bị đeo (WHOOP, Oura Ring, Garmin, Strava, Fitbit, Apple Watch, Peloton, các điểm giấc ngủ / phục hồi) và các tên, cụm từ AI mới (Veo, Imagen, Nano Banana, Kling, Runway, ElevenLabs, Suno, Codex, Gemini CLI, mô hình suy luận, vibe coding, deep research, test-time compute...), để bản dịch giữ nguyên tên và không dịch nhầm. Phụ đề tự động viết thường \"my whoop strap\" cũng được nhận ra là WHOOP."
+            ]
+        },
+        {
             v: "2.5.7", luc: "16/10/2026", ten: "Phím tắt tự đặt cho Windows và Mac",
             y: [
                 "Phím tắt không còn đặt sẵn (trước đây là Alt+S, Alt+D, Alt+Shift+V). Vào Cài đặt > Dịch & AI > Phím tắt, bấm \"Tùy chỉnh\" ở việc muốn dùng rồi nhấn tổ hợp phím: bật/tắt phụ đề tiếng Việt, bật/tắt lồng tiếng Việt, mở bảng điều khiển trên video. Bấm \"Xóa\" để bỏ một phím.",

@@ -85,8 +85,11 @@ def serve():
     k.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
     k.SetProcessInformation.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_ulong]
     _keep_full_speed(k)
-    os.environ.update(HOST="127.0.0.1", PORT=PORT, VIENEU_BACKEND="onnx", VIENEU_DEVICE="cpu",
-                      VIENEU_PRECISION="fp32", VIENEU_QUEUE="4", VIENEU_QUEUE_TIMEOUT="20",
+    # CPU by default. A user environment variable (setx VIENEU_BACKEND pytorch, setx VIENEU_DEVICE
+    # cuda, see docs/WINDOWS.md) wins, so an NVIDIA machine can opt in without editing this file.
+    for k, v in (("VIENEU_BACKEND", "onnx"), ("VIENEU_DEVICE", "cpu"), ("VIENEU_PRECISION", "fp32")):
+        os.environ.setdefault(k, v)
+    os.environ.update(HOST="127.0.0.1", PORT=PORT, VIENEU_QUEUE="4", VIENEU_QUEUE_TIMEOUT="20",
                       PYTHONIOENCODING="utf-8")
     pinned = use_pinned_model()
     os.chdir(HERE)

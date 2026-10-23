@@ -47,8 +47,12 @@
 
     // 175 -> "một trăm bảy mươi lăm"; 2024 -> "hai nghìn không trăm hai mươi tư"
     function numberToVietnamese(num) {
+        // Past 15 digits a double has lost the low digits and "units" below runs out (1e18 read "một"):
+        // such a run is an id or a serial, said digit by digit like a long fraction
+        if (typeof num === "string" && /^\d{16,}$/.test(num)) return num.split("").join(" ");
         let n = Math.floor(Math.abs(Number(num)));
         if (!Number.isFinite(n)) return String(num);
+        if (n >= 1e18) return BigInt(n).toString().split("").join(" ");
         if (n === 0) return "không";
         const units = ["", "nghìn", "triệu", "tỷ", "nghìn tỷ", "triệu tỷ"];
         const groups = [];
@@ -135,26 +139,111 @@
 
     // ---------------- Chuyển văn bản sang dạng dễ đọc thành tiếng ----------------
     // Chỉ đổi CÁCH VIẾT, không đổi nghĩa: ký hiệu, số thập phân, ngoặc đơn.
+    // 2.6.2: a glossary name with a number, a symbol or a hyphen in it ("Veo 3.1", "K+", "2% BHA", "(G)I-DLE") is
+    // said by its own reading (GLOSSARY_SAY, dub-speech.js) before the number and symbol rules below
+    // turn "3.1" into "3 phẩy 1". Only those keys: the rest of the glossary goes through render().
+    let keepKeys = null;
+    const keepRe = () => {
+        if (keepKeys !== null) return keepKeys;
+        const SP = (root && root.CST_DUB_SPEECH) ||
+            (typeof require === "function" ? (() => { try { return require("./dub-speech.js"); } catch (e) { return null; } })() : null);
+        const say = SP && SP.GLOSSARY_SAY ? SP.GLOSSARY_SAY : {};
+        const keys = Object.keys(say).filter(k => /[^\p{L} ]/u.test(k)).sort((x, y) => y.length - x.length);
+        const esc = k => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        // a key that starts with a symbol ("% Arabica") may follow a letter once cleanText has closed the space
+        const sym = keys.filter(k => !/^\p{L}/u.test(k)), words = keys.filter(k => /^\p{L}/u.test(k));
+        keepKeys = keys.length ? {
+            // (2.8.0) one led by a digit ("5G") never starts inside a longer number: "65g" was "6" + "5G"
+            sym: sym.length ? new RegExp("(" + sym.map(k => (/^\p{N}/u.test(k) ? "(?<!\\p{N})" : "") + esc(k)).join("|") + ")(?![\\p{L}\\p{N}])", "giu") : null,
+            re: words.length ? new RegExp("(?<![\\p{L}\\p{N}])(" + words.map(esc).join("|") + ")(?![\\p{L}\\p{N}])", "giu") : null,
+            say } : false;
+        return keepKeys;
+    };
+    const UNIT_SQ = { km: "ki-lô-mét", m: "mét", cm: "xen-ti-mét", mm: "mi-li-mét" };
+    // (2.9.9) digit-by-digit words: a PIN, a one-time code, a phone number, a tax or ID number
+    const ID_WORDS = /((?<![\p{L}])(?:OTP|PIN|CCCD|CMND|CMT|MST|SĐT|STK|mã số thuế|số điện thoại|điện thoại|hotline|số tài khoản|mã xác (?:nhận|minh|thực)|mã bảo mật|mã pin|mã otp)(?![\p{L}])[^\d\n]{0,10}?)(\+?\d[\d ]{2,}\d)(?![\d.,]\d)/giu;
     function adaptForSpeech(text) {
-        let t = SEG ? SEG.cleanText(text, { keepHints: true }) : String(text || "");
+        // (2.6.4) letter-led names are kept before cleanText, which turns a slash into "hoặc" ("CI/CD")
+        const keep = keepRe();
+        let t = String(text || "");
+        if (keep && keep.re) t = t.replace(keep.re, (m, g1, off, all) => {
+            const r = keep.say[m.toLowerCase()];
+            return r ? (off > 0 && /\p{L}$/u.test(all[off - 1]) ? " " : "") + r : m;
+        });
+        t = SEG ? SEG.cleanText(t, { keepHints: true }) : t;
+        if (keep) for (const re of [keep.sym]) if (re) t = t.replace(re, (m, g1, off, all) => {
+            const r = keep.say[m.toLowerCase()];
+            return r ? (off > 0 && /\p{L}$/u.test(all[off - 1]) ? " " : "") + r : m;
+        });
         // Every rule below was checked against the VieNeu server's own normalizer (sea_g2p), by
         // reading back what it actually says. See tests/dub.test.js "speech text".
+        // (2.8.2) Text faces are read as words by VieNeu: ":D" "đê", "^^" "mũ mũ", "<3" "nhỏ hơn ba",
+        // "=)))" "bằng", "xD" "xd" (tools/vieneu-g2p.py). The subtitle keeps them; the voice says nothing
+        // Eyes are only : ; = (an 8 is a digit: "583" lost its "83"), and a face looks right ("):" closed
+        // a bracket after "(04:58")
+        // never right after a digit: "8:3", "2:1", "3:00" are times and ratios
+        t = t.replace(/(^|[\s\p{L}.,!?…])(?:[:;=][-'^]?[)(DPpOo3\]\[|]+|\^[_.\-]?\^|T[_.]T|-_-|>_<|<3+|xD+|XD+)(?=$|[\s.,!?…])/gu, (m0, lead) => (/\s/.test(lead) ? "" : lead));
+        // (2.8.3) Symbols between words, as VieNeu read them (a corpus pass over every saved line):
+        // "paprika / ớt chuông" said "trên" (it means or), "Tôi > Khuyến mãi" (a menu path) "lớn hơn",
+        // "@thebudgetdermatologist" "a còng ...", "cửa hàng 7/11" (the shop, not the 7th of November)
+        t = t.replace(/((?:cửa hàng|tiệm|ở|tại|siêu thị)\s+)7\s?\/\s?11(?![\p{N}])/giu, "$1<en>seven eleven</en>").replace(/7-Eleven/gi, "<en>seven eleven</en>");
+        t = t.replace(/(\p{L})\s+>\s+(?=\p{L})/gu, "$1, ");
+        t = t.replace(/(^|\s)@(?=[A-Za-z0-9_.]{2,})/g, "$1");
         // Web addresses: without this the scheme is spelled out letter by letter ("hát tê tê phê")
         t = t.replace(/\bhttps?:\/\/(?:www\.)?/gi, "").replace(/\bwww\./gi, "");
         // Only real domain endings, lower case: "TP.HCM" or "v.v." must stay as they are
         t = t.replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|org|net|ai|io|dev|edu|gov|vn|co|app|me|info|so|gg|tv|ly|us|uk)\b(?:\/[\w\-./]*[\w\-/])?/g,
             m => m.replace(/\//g, " gạch chéo ").replace(/\./g, " chấm ").replace(/\s+/g, " ").trim());
+        // (2.9.9) A code, a PIN or a phone number is said digit by digit, never as one amount
+        // ("mã OTP 482913" was "bốn trăm tám mươi hai nghìn chín trăm mười ba")
+        t = t.replace(ID_WORDS, (m0, lead, num) => lead + num.replace(/\d/g, d => " " + d).replace(/\s+/g, " ").trim().replace(/^/, ""));
+        // 9am, 9:30 PM, 7 p.m.: the hour and the part of the day ("a m" was spelled out)
+        t = t.replace(/(?<![\p{L}\p{N}:])(\d{1,2})(?::(\d{2}))?\s?([ap])\.?m(?:\.(?=\s+\p{Ll}))?(?![\p{L}\p{N}])/giu, (m0, h, mi, ap) => {
+            const hour = Number(h);
+            if (hour < 1 || hour > 12 || (mi && Number(mi) > 59)) return m0;
+            const part = ap.toLowerCase() === "a" ? "sáng" : (hour === 12 || hour < 6 ? "chiều" : "tối");
+            return `${hour} giờ${mi && mi !== "00" ? " " + Number(mi) : ""} ${part}`;
+        });
+        // (2.9.9) 60fps: the server leaves "fps" bare. A spaced hyphen between a larger and a smaller number
+        // is a subtraction ("10 - 5"), which the server read as the range "mười đến năm"; a rising pair stays
+        t = t.replace(/(\d)\s?fps(?![\p{L}\p{N}])/giu, "$1 khung hình trên giây");
+        t = t.replace(/(?<![\p{L}\p{N}.,-])(\d+)\s[-–]\s(\d+)(?![\p{L}\p{N}.,-])/gu, (m0, x, y) => (Number(x) > Number(y) ? `${x} trừ ${y}` : m0));
+        // A minus sign before a number: -5, −5°C ("gạch ngang năm" otherwise)
+        t = t.replace(/(?<![\p{L}\p{N}])(?<!\d\s)[-−](?=\d)/gu, "âm ");
         // $20 -> "20 đô la" (read as "hai mươi u s d" otherwise); 5 USD -> "5 đô la"
-        t = t.replace(/(?:US)?\$\s?(\d[\d.,]*)(\s?(?:[KMB]|nghìn|ngàn|triệu|tỷ)\b)?/g, (m0, n, mag) => `${n}${mag || ""} đô la`);
+        t = t.replace(/(?:US)?\$\s?(\d+(?:[.,]\d+)*)(\s?(?:[KMB]|nghìn|ngàn|triệu|tỷ)\b)?/g, (m0, n, mag) => `${n}${mag || ""} đô la`);
         t = t.replace(/(\d)\s?USD\b/g, "$1 đô la");
+        // (2.9.9) the other currencies: €50, 50€, 20 EUR, £30, ¥1000; and the dong: 100.000đ, 5 VND
+        // ("một trăm nghìnđ" glued, "vê en đê" spelled)
+        const CURRENCY = { "€": "ơ-rô", "£": "bảng Anh", "¥": "yên", EUR: "ơ-rô", GBP: "bảng Anh", JPY: "yên", CNY: "nhân dân tệ", RMB: "nhân dân tệ" };
+        t = t.replace(/([€£¥])\s?(\d+(?:[.,]\d+)*)(\s?(?:[KMB]|nghìn|ngàn|triệu|tỷ)(?![\p{L}\p{N}]))?/gu, (m0, c, n, mag) => `${n}${mag || ""} ${CURRENCY[c]}`);
+        t = t.replace(/(\d)\s?([€£¥])/gu, (m0, d, c) => `${d} ${CURRENCY[c]}`);
+        t = t.replace(/(\d)\s?(EUR|GBP|JPY|CNY|RMB)(?![\p{L}\p{N}])/gu, (m0, d, c) => `${d} ${CURRENCY[c]}`);
+        t = t.replace(/(\d)\s?(?:₫|đ|VNĐ|VND)(?![\p{L}\p{N}])/gu, "$1 đồng");
         t = t.replace(/(\d)\s*%/g, "$1 phần trăm");
         // 7B / 200K / 1.5M after a number: "7 tỷ", "200 nghìn", "1.5 triệu" (not "bảy bê", "hai trăm ca")
-        t = t.replace(/\b(\d+(?:[.,]\d+)?)\s?([KMB])\b/g, (m0, n, u) => `${n} ${{ K: "nghìn", M: "triệu", B: "tỷ" }[u]}`);
+        // (2.8.0) ... except a screen or a video: "4K", "8K" in a line about one is a resolution ("video 4
+        // nghìn" before), said "bốn ca" (as a digit before "ca", VieNeu read "four"). Money stays
+        // nghìn: "6K đến 8K một tháng" names no screen
+        const SCREEN = /video|màn hình|độ phân giải|quay|camera|máy ảnh|tivi|\bTV\b|HDR|phim|youtube|stream|chuẩn|\bfps\b|\d\s?fps|\bOLED\b|\bUHD\b|\bHz\b/i;
+        if (SCREEN.test(t)) t = t.replace(/\b([48])K\b/g, (m0, n) => `${n === "4" ? "bốn" : "tám"} ca`);
+        // (2.8.2) ... only a letter standing alone: "2020 Mình" was "2020 triệuình" (\b ends at "ì")
+        t = t.replace(/\b(\d+(?:[.,]\d+)?)\s?([KMB])(?![\p{L}\p{N}])/gu, (m0, n, u) => `${n} ${{ K: "nghìn", M: "triệu", B: "tỷ" }[u]}`);
+        // (2.8.4) ... and "30k" in lower case (VieNeu: "ba mươi ca"), but not a retirement plan (401k, 403b)
+        t = t.replace(/\b(\d+(?:[.,]\d+)?)\s?k(?![\p{L}\p{N}])/gu, (m0, n) => (/^(?:401|403|457)$/.test(n) ? m0 : `${n} nghìn`));
         // Grouped thousands, Vietnamese 1.500.000 or English 1,500,000: say it in words. The old code
         // stripped the dots to 1500000, and the server reads 7+ digit runs one digit at a time
         // ("một năm không không không không không"); an English 1,000 came out as "một".
-        t = t.replace(/\b\d{1,3}(?:\.\d{3})+(?![.,]?\d)|\b\d{1,3}(?:,\d{3})+(?![.,]?\d)/g, m => numberToVietnamese(Number(m.replace(/[.,]/g, ""))));
-        t = t.replace(/\b\d{7,}\b/g, m => numberToVietnamese(Number(m)));
+        // (2.9.9) 1.234,56 and 1,234.56: the grouped part in words, the cents after "phẩy"
+        t = t.replace(/\b(\d{1,3}(?:\.\d{3})+),(\d{1,2})(?!\d)|\b(\d{1,3}(?:,\d{3})+)\.(\d{1,2})(?!\d)/g, (m0, a, b, c, d) =>
+            `${numberToVietnamese(Number((a || c).replace(/[.,]/g, "")))} phẩy ${b || d}`);
+        // (2.9.9) a long fraction is a decimal, digit by digit: 3.14159, 0.001 (a leading 0 group is
+        // never a thousand). 1.234 and 12.500 stay Vietnamese thousands
+        t = t.replace(/(?<![\p{N}.,])(\d+)[.,](\d+)(?![.,]?\d)/gu, (m0, a, b) =>
+            b.length >= 4 || (b.length === 3 && /^0+$/.test(a)) ? `${a} phẩy ${b.split("").join(" ")}` : m0);
+        t = t.replace(/\b\d{1,3}(?:\.\d{3})+(?![.,]?\d)|\b\d{1,3}(?:,\d{3})+(?![.,]?\d)/g, m => numberToVietnamese(m.replace(/[.,]/g, "")));
+        // a run starting with 0 is an identifier (tax code, phone): the server says it digit by digit
+        t = t.replace(/\b(?!0)\d{7,}\b/g, m => numberToVietnamese(m.length > 15 ? m : Number(m)));
         // A hyphenated identifier with a number in it is one name, not a range: "GPT-5.6",
         // "Llama-3.3-70B", "COVID-19", a model id with a version inside. The server says the hyphen
         // ("gạch ngang", "dash") and reads the dot as a decimal ("phẩy"): split into words, dots "chấm".
@@ -181,20 +270,60 @@
         t = t.replace(/\b(\d{2}|\d{3}0)'?s\b/g, "thập niên $1");
         // #1 -> "số 1" ("thăng một" otherwise)
         t = t.replace(/#(\d+)/g, "số $1");
+        // 2.6.1: C#, F#: "sharp" (the server said "thăng")
+        t = t.replace(/(?<![\p{L}\p{N}])([A-G])#(?![\p{L}\p{N}#])/gu, "$1 sharp");
 
         t = t.replace(/(\d)\s*[x×]\s*(\d)/g, "$1 nhân $2");
+        // (2.9.9) Area and volume units, powers, comparison signs
+        t = t.replace(/(\d)\s?(km|cm|mm|m)[²2](?![\p{L}\p{N}])/gu, (m0, d, u) => `${d} ${UNIT_SQ[u]} vuông`);
+        t = t.replace(/(\d)\s?(km|cm|mm|m)[³3](?![\p{L}\p{N}])/gu, (m0, d, u) => `${d} ${UNIT_SQ[u]} khối`);
+        t = t.replace(/(?<=[\p{L}\p{N}])²/gu, " bình phương").replace(/(?<=[\p{L}\p{N}])³/gu, " lập phương");
+        t = t.replace(/(?<=[\p{L}\p{N}])\s?\^\s?(\d+)(?![\p{L}\p{N}])/gu, (m0, e) => ` mũ ${e}`);
+        t = t.replace(/\s?≥\s?/g, " lớn hơn hoặc bằng ").replace(/\s?≤\s?/g, " nhỏ hơn hoặc bằng ").replace(/\s?≠\s?/g, " khác ")
+            .replace(/\s?[≈≃]\s?/g, " xấp xỉ ").replace(/\s?±\s?/g, " cộng trừ ").replace(/√\s?(?=\p{N})/gu, "căn bậc hai của ").replace(/π/g, "pi");
         t = t.replace(/\s=\s|(?<=\w)=(?=\w)/g, " bằng ");
+        // 2.6.1: "+" inside an English name is "and" ("Travel + Leisure", "Florence + The Machine"),
+        // glued to its end "plus" ("Disney+", "Apple TV+", "C++"); between numbers still "cộng"
+        const enName = w => /^[A-Z][A-Za-z'’.]*$/.test(w) && !(SEG && SEG.isVietWord && SEG.isVietWord(w.replace(/['’]s$|\.$/i, "").toLowerCase()));
+        // word lengths are bounded below: an unbounded run made one 100,000-letter word cost 22 s (quadratic scan)
+        t = t.replace(/([A-Za-z][A-Za-z'’.]{0,40})\s\+\s([A-Z][A-Za-z'’.]{0,40})/g, (m0, a, b) => (enName(a) || enName(b) ? `${a} and ${b}` : m0));
+        t = t.replace(/(?<![\p{L}\p{N}])([A-Za-z][A-Za-z0-9]*)(\+{1,2})(?![\p{L}\p{N}+])/gu, (m0, w, plus) =>
+            /^[A-Z]/.test(w) || w.length === 1 ? `${w} ${plus.length === 2 ? "plus plus" : "plus"}` : m0);
         t = t.replace(/\s\+\s/g, " cộng ");
         t = t.replace(/\s*(?:->|→|=>)\s*/g, " thành ");
+        // 2.6.0: "&" inside an English name ("Johnson & Johnson", "Ben & Jerry's") is "and", said the
+        // English way; between Vietnamese words, or Vietnamese-syllable ones ("Nam & Lan"), "và"
+        const enWord = w => /^[A-Za-z][A-Za-z'’.]*$/.test(w) && !(SEG && SEG.isVietWord && SEG.isVietWord(w.replace(/['’]s$|\.$/i, "").toLowerCase()));
+        t = t.replace(/([A-Za-z][A-Za-z'’.]{0,40})\s&\s([A-Z][A-Za-z'’.]{0,40})/g, (m0, a, b) => (enWord(a) || enWord(b) ? `${a} and ${b}` : m0));
         t = t.replace(/\s&\s/g, " và ");
         // Đơn vị đo đọc như người Việt nói: "60 km/h" -> "60 ki-lô-mét trên giờ"
         const UNIT_SAY = { km: "ki-lô-mét", m: "mét", cm: "xen-ti-mét", mm: "mi-li-mét", kg: "ki-lô-gam", g: "gam", h: "giờ", s: "giây", ms: "mi-li-giây", min: "phút" };
         t = t.replace(/(\d)\s*(km|m|cm|kg|g)\/(h|s|min)\b/gi, (m0, d, u1, u2) => `${d} ${UNIT_SAY[u1.toLowerCase()]} trên ${UNIT_SAY[u2.toLowerCase()]}`);
         t = t.replace(/(\d)\s*(km|cm|mm|kg|ms)\b/g, (m0, d, u) => `${d} ${UNIT_SAY[u]}`);
+        // (2.8.0) The VieNeu normalizer reads most units glued to a number itself ("400g" bốn trăm gam,
+        // "500ml", "225°C" độ xê, "45W" oát, "12GB"), checked with tools/vieneu-g2p.py. Not these:
+        // "4 mph" (said "mph"), "15$" ("u s d")
+        t = t.replace(/(\d)\s?mph(?![\p{L}\p{N}])/gu, "$1 dặm một giờ");
+        t = t.replace(/(\d[\d.,]*)\s?\$(?![\p{L}\p{N}])/g, "$1 đô la");
+        // a cook's fraction: "1/2 cốc" is "nửa cốc", "3/4 chén" "ba phần tư chén" (VieNeu: "ba trên bốn"); not a date ("ngày 1/4")
+        // nor "24/7" (numerator not below its denominator)
+        t = t.replace(/(?<![\p{L}\p{N}/.,])([1-7])\/([2-8])(?![\p{N}/])/gu, (m0, a, b, at, all) => {
+            if (+a >= +b || /(?:ngày|hôm|tháng|mùng|mồng)\s*$/i.test(all.slice(0, at))) return m0;
+            if (a === "1" && b === "2") return "nửa";
+            return `${numberToVietnamese(+a)} phần ${b === "4" ? "tư" : numberToVietnamese(+b)}`;
+        });
+        // (2.8.3) a slash between words (after the web addresses and the units: "km/h"): "per" before a unit of time or count
+        // ("dặm/giờ" một giờ, "50 nghìn/người"), kept between single letters ("P/E", "A/B"), "or" else
+        t = t.replace(/(\p{L}{1,40})\s*\/\s*(\p{L}{1,40})/gu, (m0, a, b) =>
+            (a.length < 2 && b.length < 2 || /^(?:km|m|cm|mm|kg|g)$/i.test(a) && /^(?:h|s|min)$/i.test(b) ? m0
+                : /^(?:giờ|phút|giây|ngày|tuần|tháng|năm|người|lần|suất|cái|chiếc|gói|hộp|kg|ký|cân|lít|m2|tiếng|h|s|min)$/i.test(b) ? `${a} một ${b}` : `${a} hoặc ${b}`));
         t = t.replace(/\be\.g\.,?/gi, "ví dụ,").replace(/\bi\.e\.,?/gi, "tức là,");
         t = t.replace(/(ví dụ|tức là),\s+\1(?![\p{L}])/giu, "$1");   // "e.g. ví dụ" said the same words twice
         // Ngoặc đơn: đọc như chú thích, ngắt nghỉ nhẹ hai bên
-        t = t.replace(/\s*\(([^()]{1,80})\)\s*/g, ", $1, ");
+        // 2.6.1: one letter in parentheses glued to a code is part of its name: "401(k)", "Lp(a)",
+        // "Ear (a)": the letter, no pause
+        t = t.replace(/\s*\(([^()]{1,80})\)\s*/g, (m0, inner, at, all) =>
+            /^[a-z]$/.test(inner) && /(?:^|[^\p{L}\p{N}])(?:\d{3,}|[A-Za-z]*[A-Z][A-Za-z]*)$/u.test(all.slice(0, at)) ? m0 : `, ${inner}, `);
         t = t.replace(/["“”«»]/g, "");
         t = t.replace(/^\s*[-–—]\s+/, "");
         t = t.replace(/\s*,\s*,/g, ",").replace(/,\s*([.!?])/g, "$1");
@@ -416,7 +545,12 @@
             .replace(/\(([^()]{1,60})\)/g, (m, inner) => (srcNotesOnly || isSoundNote(inner) ? " " : m))
             .replace(/\s{2,}/g, " ").trim();
     }
-    const notesOnly = text => /[\[(♪♫]/.test(text) && !hasWords(String(text || "").replace(/\[[^\]]*\]|\([^()]*\)|[♪♫]+/g, " "));
+    // (2.8.1) A parenthesis that holds a sentence is speech, not a note: subtitled Japanese and Korean
+    // vlogs put a cat's or a thought's words in brackets ("(Cat: Are you listening?)"), and a line of
+    // nothing else was taken for a sound note and never read. A note is a sound (isSoundNote) or a
+    // word or two ("(door closes)", "(Speaking Japanese)")
+    const notesOnly = text => /[\[(♪♫]/.test(text) && !hasWords(String(text || "").replace(/\[[^\]]*\]|[♪♫]+/g, " ")
+        .replace(/\(([^()]*)\)/g, (m, inner) => (isSoundNote(inner) || inner.trim().split(/\s+/).length < 3 ? " " : m)));
     const hasWords = t => /[\p{L}\p{N}]/u.test(String(t || "").replace(/¦/g, ""));
 
     // A speaker label of edited captions ("ANDREW HUBERMAN: Welcome to...") stays in the translation,
@@ -707,7 +841,30 @@
             }
         }
         const sizes = out.map(l => l.text.length).sort((a, b) => a - b);
-        return sizes.length && sizes[sizes.length >> 1] < JOIN_SHORT ? joinCaptionLines(out) : out;
+        const pieces = splitAtMarks(out);
+        return sizes.length && sizes[sizes.length >> 1] < JOIN_SHORT ? joinCaptionLines(pieces) : pieces;
+    }
+    // A ">>" inside a caption line opens a line of its own (2.6.6), as it already did when short
+    // pieces are joined: the reading names turns by line, so a turn inside a line was placed at the
+    // line's start or not at all. qSlxe4hA66g (Korean recognizer captions, two lines a caption, 92 of
+    // 167 captions carry a ">>", most of them inside): the reading gave one speaker to whole lines
+    // holding two or three turns. A piece's time is its share of the line's characters, as the
+    // marks' times are in speakerTurns. Which length decides joining is still the whole lines'.
+    function splitAtMarks(lines) {
+        const out = [];
+        for (const l of lines) {
+            const text = l.text;
+            const at = [...text.matchAll(/>>/g)].map(m => m.index).filter(i => i > 0);
+            if (!at.length) { out.push(l); continue; }
+            const span = l.end - l.start;
+            const cuts = [0, ...at, text.length];
+            for (let k = 0; k + 1 < cuts.length; k++) {
+                const piece = text.slice(cuts[k], cuts[k + 1]).trim();
+                if (!piece || piece === ">>" || TURN_NOTE.test(piece.replace(/^>>\s*/, ""))) continue;
+                out.push({ start: l.start + span * cuts[k] / text.length, end: l.start + span * cuts[k + 1] / text.length, text: piece });
+            }
+        }
+        return out;
     }
     // Short caption pieces joined into sentences: a piece goes on the line before unless that line
     // ends a sentence, would pass JOIN_MAX characters, or JOIN_GAP seconds of silence lie between;
@@ -1371,9 +1528,24 @@
         return smoothRates(plans);
     }
 
+    // Captions that are already Vietnamese (a site's official track): one dub group per cue, in the
+    // shape the translator makes, so the planner, the pacing and the pauses see no difference.
+    // Cues are { start, end, text } or TextTrack cues { startTime, endTime, text }.
+    function groupsFromViCues(cues) {
+        const out = [];
+        for (const c of cues || []) {
+            const start = c.start !== undefined ? c.start : c.startTime;
+            const end = c.end !== undefined ? c.end : c.endTime;
+            const text = String((c && c.text) || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+            if (!text || !isFinite(start) || !isFinite(end) || end <= start) continue;
+            out.push({ start, end, viText: text, srcCues: [{ start, end, text }], viCues: [{ start, end, text }] });
+        }
+        return out;
+    }
+
     const api = {
-        numberToVietnamese, countSyllables, adaptForSpeech, numberRole, classifyIntent, buildPhrases, speakerTurns, speakerAt, NO_TURNS, MAX_VOICES, speakerLines, speakerHints, mergeSpeakerHints,
-        buildDubScript, stripSoundNotes, speakerLabels, stripSpeakerLabels, stripLabelsAt, planSegment, planAll, smoothRates, speechSeconds, pauseSeconds, rateForSps, rateForSpeedup, speedMultiplier,
+        groupsFromViCues, numberToVietnamese, countSyllables, adaptForSpeech, numberRole, classifyIntent, buildPhrases, speakerTurns, speakerAt, NO_TURNS, MAX_VOICES, speakerLines, speakerHints, mergeSpeakerHints,
+        buildDubScript, stripSoundNotes, notesOnly, speakerLabels, stripSpeakerLabels, stripLabelsAt, planSegment, planAll, smoothRates, speechSeconds, pauseSeconds, rateForSps, rateForSpeedup, speedMultiplier,
         DEFAULT_VOICE_MODEL, LIMITS, INTENT_PROSODY, PAUSE
     };
     if (typeof module === "object" && module.exports) module.exports = api;

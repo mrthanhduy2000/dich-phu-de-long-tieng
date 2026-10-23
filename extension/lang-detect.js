@@ -100,10 +100,32 @@
     // auto-dubbed, and the English ASR of the dub listed FIRST, which made the old "first ASR track"
     // rule call the video English and translate YouTube's English dub back into Vietnamese.
     const TRANSLATED_MARK = /vietsub|viet\s*sub|thuy[eế]t\s*minh|l[oồ]ng\s*ti[eế]ng|ph[uụ]\s*đ[eề]\s*vi[eệ]t|engsub|eng\s*sub/i;
+    // Which ASR tracks transcribe one of YouTube's AI dubs. YouTube marks those URLs with
+    // "variant=timing-optimized" (2026-10-19, qSlxe4hA66g: 20 of 21 ASR tracks carry it; the one
+    // without, Korean, is the original speech, while a Korean dub exists too). When any track has the
+    // mark, the mark decides; without one (older responses, test fixtures) an ASR track in a dubbed
+    // language counts as a dub transcript, as before.
+    const DUB_VARIANT = /[?&]variant=timing-optimized(?:&|$)/;
+    function dubTranscripts(tracks, audio) {
+        const list = tracks || [];
+        const dubbed = new Set(((audio && audio.tracks) || []).filter(t => t.isAutoDubbed).map(t => normCode(t.lang)));
+        const marked = list.some(t => t.kind === "asr" && DUB_VARIANT.test(t.baseUrl || ""));
+        return new Set(list.filter(t => t.kind === "asr" &&
+            (marked ? DUB_VARIANT.test(t.baseUrl || "") : dubbed.has(normCode(t.languageCode)))));
+    }
+
     function spokenLanguage({ audio, tracks, title, description } = {}) {
         const a = audio || {};
-        if (a.original) return { lang: normCode(a.original), confidence: 0.97, source: "audio" };
         const list = tracks || [];
+        // YouTube's own transcript of the original audio, told apart from the dubs' by their mark:
+        // what its recogniser heard beats the uploader's audio label (qSlxe4hA66g is labelled en-US
+        // and spoken in Korean up to 17:30)
+        if (list.some(t => DUB_VARIANT.test(t.baseUrl || ""))) {
+            const dubs = dubTranscripts(list, a);
+            const own = list.filter(t => t.kind === "asr" && !dubs.has(t));
+            if (own.length === 1) return { lang: normCode(own[0].languageCode), confidence: 0.96, source: "asr-original" };
+        }
+        if (a.original) return { lang: normCode(a.original), confidence: 0.97, source: "audio" };
         const dubbed = new Set((a.tracks || []).filter(t => t.isAutoDubbed).map(t => normCode(t.lang)));
         const asr = list.filter(t => t.kind === "asr");
         const meta = [title, description].filter(Boolean).join(" ");
@@ -126,7 +148,37 @@
         return !!(audio && audio.currentDubbed && normCode(audio.current) === "vi" && normCode(audio.original) !== "vi");
     }
 
-    const api = { normCode, detectText, decide, spokenLanguage, hearsVietnameseDub, TRANSLATED_MARK };
+    // (2.7.9) A machine transcript that heard nothing usable: mostly dots and digits, or tagged with a
+    // language of its own script and written in none of it. YouTube tagged a Tamil-English street
+    // interview "ko (auto)": its 413 lines were ". 5 - 6", "HFC B", "ook", and the uploaded English
+    // track went unused, every window came back with empty items and the video was never saved.
+    // Judged on the first lines, notes and numbers out. { broken, why }
+    const SCRIPT_OF = { ko: "ko", ja: "ja", zh: "zh", ru: "ru", uk: "ru", bg: "ru", sr: "ru", mk: "ru", be: "ru", kk: "ru", th: "th", ar: "ar", fa: "ar", ur: "ar", he: "he", hi: "hi", mr: "hi", ne: "hi" };
+    function brokenTranscript(code, text) {
+        const t = String(text || "").replace(/\[[^\]]*\]|\([^)]*\)|https?:\S+/g, " ");
+        const chars = (t.match(/\S/gu) || []).length;
+        const letters = (t.match(/\p{L}/gu) || []).length;
+        if (chars < 60) return { broken: false, why: "" };
+        if (letters / chars < 0.5) return { broken: true, why: "no-words" };
+        const want = SCRIPT_OF[normCode(code)];
+        if (want && letters >= 40) {
+            const re = SCRIPTS.find(([l]) => l === want)[1];
+            const own = (t.match(re) || []).length + (want === "ja" ? (t.match(/[一-鿿]/g) || []).length : 0);
+            if (own / letters < 0.2) return { broken: true, why: "wrong-script" };
+        }
+        return { broken: false, why: "" };
+    }
+
+    // Can the voice read a site's own Vietnamese captions? Only when the page also offers captions in
+    // another language: that is the sign the speech is not Vietnamese. A Vietnamese-only page is
+    // taken as a Vietnamese video, which gets no voice. langs: the language codes of the page's tracks.
+    function viVoiceSource(langs) {
+        const codes = (langs || []).map(normCode).filter(Boolean);
+        const foreign = codes.filter(c => c !== "vi");
+        return { offer: codes.includes("vi") && foreign.length > 0, spoken: foreign[0] || "" };
+    }
+
+    const api = { viVoiceSource, normCode, detectText, decide, spokenLanguage, hearsVietnameseDub, dubTranscripts, brokenTranscript, TRANSLATED_MARK };
     if (typeof module === "object" && module.exports) module.exports = api;
     if (root) root.CST_LANG = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

@@ -106,10 +106,12 @@ thư mục `DichPhuDe`, nhưng giữ cài đặt và khóa riêng.
 |---|---|---|---|
 | Mac chip Apple (M1 trở lên) | Có | Có | Có |
 | Windows 10/11, Intel hoặc AMD | Có | Có | Có |
-| Mac chip Intel, Windows chip ARM | Có | Không | Không: nhấp đúp **Cập nhật Dịch Phụ Đề** trên màn hình chính |
+| Mac chip Intel | Có | Thử nghiệm: thêm `DPD_INTEL_VOICE=1` trước chữ `bash` khi chạy lệnh cài | Có nếu cài giọng, không thì nhấp đúp **Cập nhật Dịch Phụ Đề** |
+| Windows chip ARM | Có | Không | Không: nhấp đúp **Cập nhật Dịch Phụ Đề** trên màn hình chính |
 
 Giọng đọc chạy bằng CPU; trang Cài đặt báo tốc độ đo được trên máy bạn (dưới 0,4 là thoải mái, trên
-0,8 thì giọng sẽ trễ dần).
+0,8 thì giọng sẽ trễ dần). Khi giọng không theo kịp, tiện ích tự báo và gợi ý tốc độ phát video phù hợp
+(ví dụ 0,75× khi mất 1,3 giây cho 1 giây lời nói), bấm một nút là đặt luôn.
 
 Huy hiệu ở đầu trang là kết quả cài thử tự động: mỗi bản mới được GitHub cài thử bằng đúng lệnh trên,
 trên máy Windows và Mac sạch (kể cả thư mục người dùng có tên tiếng Việt có dấu), rồi kiểm mô hình

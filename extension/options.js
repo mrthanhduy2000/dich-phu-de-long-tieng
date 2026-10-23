@@ -8,15 +8,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     const navTabs = document.querySelectorAll(".nav-tab");
     const tabPanels = document.querySelectorAll(".tab-panel");
 
-    navTabs.forEach(tab => {
-        tab.addEventListener("click", () => {
-            const targetId = tab.dataset.tab;
-            navTabs.forEach(t => t.classList.remove("active"));
-            tabPanels.forEach(p => p.classList.remove("active"));
-
-            tab.classList.add("active");
-            const targetPanel = document.getElementById(targetId);
-            if (targetPanel) targetPanel.classList.add("active");
+    // WAI-ARIA tabs: the active tab is the only one in the Tab order, arrow keys / Home / End move between tabs
+    const selectTab = (tab, focus) => {
+        navTabs.forEach(t => {
+            const on = t === tab;
+            t.classList.toggle("active", on);
+            t.setAttribute("aria-selected", on ? "true" : "false");
+            t.tabIndex = on ? 0 : -1;
+        });
+        tabPanels.forEach(p => p.classList.toggle("active", p.id === tab.dataset.tab));
+        if (focus) tab.focus();
+    };
+    navTabs.forEach((tab, i) => {
+        tab.addEventListener("click", () => selectTab(tab, false));
+        tab.addEventListener("keydown", e => {
+            const last = navTabs.length - 1;
+            const to = { ArrowRight: i === last ? 0 : i + 1, ArrowLeft: i === 0 ? last : i - 1, Home: 0, End: last }[e.key];
+            if (to === undefined) return;
+            e.preventDefault();
+            selectTab(navTabs[to], true);
         });
     });
 
@@ -178,6 +188,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         // the original line's own options matter in Song ngữ only
         const origOptions = document.getElementById("origOptions");
         if (origOptions) origOptions.classList.toggle("is-off", !dual);
+
+        const legib = document.getElementById("legibilityHint");
+        if (legib) {
+            const issue = S.legibilityIssue(s);
+            legib.hidden = !issue;
+            legib.textContent = issue ? "⚠ " + issue.message : "";
+        }
 
         // 2. Position & Offset
         subOffsetVal.textContent = `${s.offset}%`;
@@ -347,6 +364,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // ========================================================
     // 3. GEMINI AI & MODEL SETTINGS
     // ========================================================
+    // HTML-escape anything that did not originate in this file (model ids, server replies, error text)
+    const esc = x => String(x).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
     const optUseAiBox = document.getElementById("optUseAi");
     const geminiKeyInput = document.getElementById("geminiApiKeyInput");
     const geminiModelSelect = document.getElementById("geminiModelSelect");
@@ -587,16 +606,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             // model nào key này gọi được (nguồn sự thật là kết quả gọi generateContent thật)
             const r = await bgSend({ action: "testKey", key, model });
             const skipped = r && r.skipped && r.skipped.length
-                ? `<br>• Không khả dụng với key này nên đã bỏ qua: <b>${r.skipped.map(COST.modelLabel).join(", ")}</b>` : "";
+                ? `<br>• Không khả dụng với key này nên đã bỏ qua: <b>${r.skipped.map(x => esc(COST.modelLabel(x))).join(", ")}</b>` : "";
             if (r && r.ok) {
                 aiKeyStatus.style.color = "";
                 aiKeyStatus.innerHTML = `
                     <div class="cst-note ok">
                         <div class="cst-note-title">✓ API Key hoạt động</div>
                         <div class="cst-note-body">
-                            • Model trả lời: <b>${COST.modelLabel(r.model)}</b> (${r.model})<br>
-                            • Tốc độ phản hồi: <b>${r.latency} ms</b>${skipped}<br>
-                            • Kết quả dịch mẫu: <i>"${String(r.sample || "").replace(/</g, "&lt;")}"</i>
+                            • Model trả lời: <b>${esc(COST.modelLabel(r.model))}</b> (${esc(r.model)})<br>
+                            • Tốc độ phản hồi: <b>${esc(r.latency)} ms</b>${skipped}<br>
+                            • Kết quả dịch mẫu: <i>"${esc(r.sample || "")}"</i>
                         </div>
                     </div>`;
             } else {
@@ -605,7 +624,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     <div class="cst-note err">
                         <div class="cst-note-title">✕ Chưa gọi được Gemini API</div>
                         <div class="cst-note-body">
-                            ${String((r && r.error) || "Không liên lạc được với tiện ích (hãy mở trang này từ biểu tượng tiện ích)").replace(/</g, "&lt;")}${skipped}
+                            ${esc((r && r.error) || "Không liên lạc được với tiện ích (hãy mở trang này từ biểu tượng tiện ích)")}${skipped}
                         </div>
                     </div>`;
             }
@@ -615,7 +634,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // ---- Chi phí ước tính & ngân sách ----
     const toks = n => Math.round(n || 0).toLocaleString("vi-VN");
-    const esc = x => String(x).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
     const nameOf = id => (COST.findModel(id) || { label: id }).label;
     const mins = sec => `${((sec || 0) / 60).toFixed(1).replace(".", ",")} phút`;
     const ddmm = d => d.slice(8, 10) + "/" + d.slice(5, 7);
@@ -850,7 +868,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const testStatus = document.getElementById("testVoiceStatus");
 
     const dubSaved = await chrome.storage.sync.get({
-        dubVoiceName: "", dubDuck: 0.2, dubVolume: 1, dubProvider: "vieneu", dubPrepareWait: true, dubSpeakers: "auto", dubSpeakerAi: true,
+        dubVoiceName: "", dubDuck: 0.2, dubVolume: 1, dubProvider: "vieneu", dubPrepareWait: true, dubSystemFallback: true, dubSpeakers: "auto", dubSpeakerAi: true,
         dubGeminiVoice: "Kore", dubGeminiVoice2: "Charon", dubTtsModel: "", dubMaxRate: 0,
         dubLocalVoice: "", dubLocalVoice2: ""
     });
@@ -882,9 +900,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         localStatusEl.className = "cst-note " + (running ? "ok" : "err");
         // Tốc độ tạo giọng thật: dưới 0,4 là thoải mái; gần 1 thì giọng sẽ trễ dần
         const rtf = Number(r && r.rtf) || 0;
-        const tocDo = rtf ? `<br>Tốc độ tạo giọng đo được: <b>${rtf.toFixed(2)}</b> (tạo 1 giây lời nói mất ${rtf.toFixed(2)} giây). ${rtf < 0.4 ? "Tốt." : rtf < 0.8 ? "Hơi chậm, giọng vẫn kịp." : "Quá chậm, giọng sẽ trễ dần: kiểm tra mục ProcessType trong tệp tự khởi động, phải là Interactive."}` : "";
+        // The machine and, when the voice cannot keep up, the video speed it can (dub-hardware.js)
+        const HW = window.CST_HW;
+        const may = HW ? await HW.readMachine() : null;
+        const mayTa = may && HW.describeMachine(may) ? ` Máy: ${HW.describeMachine(may)}.` : "";
+        const tocChamLai = HW && HW.sustainableRate(rtf) ? ` Phát video ở tốc độ ${String(HW.sustainableRate(rtf)).replace(".", ",")}× thì giọng theo kịp.` : "";
+        const tocDo = rtf ? `<br>Tốc độ tạo giọng đo được: <b>${rtf.toFixed(2)}</b> (tạo 1 giây lời nói mất ${rtf.toFixed(2)} giây).${mayTa} ${rtf < 0.4 ? "Tốt." : rtf < 0.8 ? "Hơi chậm, giọng vẫn kịp." : "Quá chậm, giọng sẽ trễ dần: kiểm tra mục ProcessType trong tệp tự khởi động, phải là Interactive." + tocChamLai}` : "";
         localStatusEl.innerHTML = running
-            ? `<div class="cst-note-title">✓ Máy chủ VieNeu đang chạy trên máy này (${r.model === LOCAL.model ? LOCAL.modelLabel : (r.model || "không rõ model")})</div><div class="cst-note-body">Lồng tiếng dùng giọng Việt miễn phí, không gửi lời thoại ra ngoài. Nhịp nói tự đều theo từng giọng (giọng chậm được tăng tốc nhẹ, giữ cao độ).${tocDo}</div>`
+            ? `<div class="cst-note-title">✓ Máy chủ VieNeu đang chạy trên máy này (${r.model === LOCAL.model ? LOCAL.modelLabel : esc(r.model || "không rõ model")})</div><div class="cst-note-body">Lồng tiếng dùng giọng Việt miễn phí, không gửi lời thoại ra ngoài. Nhịp nói tự đều theo từng giọng (giọng chậm được tăng tốc nhẹ, giữ cao độ).${tocDo}</div>`
             : `<div class="cst-note-title">Máy chủ VieNeu chưa sẵn sàng</div><div class="cst-note-body">Cài MỘT LẦN để nó tự chạy mỗi khi bật máy: nhấp đúp tệp <b>tools/vieneu-autostart.command</b> (máy Mac) hoặc <b>tools/vieneu-autostart.cmd</b> (máy Windows) trong thư mục tiện ích. Sau đó máy chủ tự bật khi đăng nhập và tự bật lại nếu bị tắt, không phải làm gì nữa. Trang này và trình phát tự nhận ra khi máy chủ sẵn sàng.</div>`;
         return running;
     }
@@ -931,6 +954,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (speakerAiBox) speakerAiBox.checked = dubSaved.dubSpeakerAi !== false;
     const prepareWaitBox = document.getElementById("dubPrepareWait");
     if (prepareWaitBox) prepareWaitBox.checked = dubSaved.dubPrepareWait !== false;
+    const systemFallbackBox = document.getElementById("dubSystemFallback");
+    if (systemFallbackBox) systemFallbackBox.checked = dubSaved.dubSystemFallback !== false;
     if (gVoiceSel) gVoiceSel.value = dubSaved.dubGeminiVoice;
     if (gVoice2Sel) gVoice2Sel.value = dubSaved.dubGeminiVoice2;
     const maxRateSel = document.getElementById("dubMaxRate");
@@ -950,6 +975,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Nghe thử: chạy qua đúng pipeline (kế hoạch ngữ điệu -> giọng), không đọc thô
     if (testBtn) {
+        // One voice preview at a time: a new one stops the previous, and the blob URL is released when it ends
+        let previewAudio = null, previewUrl = "";
+        const newPreviewAudio = blob => {
+            if (previewAudio) { try { previewAudio.pause(); } catch (e) { /* ignore */ } }
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+            previewUrl = URL.createObjectURL(blob);
+            const url = previewUrl;
+            previewAudio = new Audio(url);
+            previewAudio.addEventListener("ended", () => { URL.revokeObjectURL(url); if (previewUrl === url) previewUrl = ""; }, { once: true });
+            return previewAudio;
+        };
         testBtn.addEventListener("click", async () => {
             const P = window.CST_DUB_PLAN, E = window.CST_DUB_ENGINE, A = window.CST_DUB_AUDIO;
             const sample = [
@@ -971,7 +1007,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (!res || !res.ok) { testStatus.textContent = `✕ VieNeu lỗi: ${res ? res.error : "không phản hồi"}`; return; }
                 const bytes = A.base64ToBytes(res.audio);
                 const clean = A.prepareSpeech(/wav/i.test(res.mimeType || "") ? A.decodeWav(bytes).samples : A.pcm16leToFloat(bytes), res.sampleRate);
-                const audio = new Audio(URL.createObjectURL(new Blob([A.encodeWav(clean, res.sampleRate)], { type: "audio/wav" })));
+                const audio = newPreviewAudio(new Blob([A.encodeWav(clean, res.sampleRate)], { type: "audio/wav" }));
                 audio.volume = Number(volSlider.value) / 100;
                 // Cùng tốc độ sàn như khi lồng tiếng thật (giọng chậm không dưới ~4 âm tiết/giây nghe
                 // được, giữ cao độ); khi lồng tiếng, câu dày chữ còn được nhanh thêm cho khớp phụ đề
@@ -992,7 +1028,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const bytes = A.base64ToBytes(res.audio);
                 const samples = /wav/i.test(res.mimeType || "") ? A.decodeWav(bytes).samples : A.pcm16leToFloat(bytes);
                 const clean = A.prepareSpeech(samples, res.sampleRate);
-                const audio = new Audio(URL.createObjectURL(new Blob([A.encodeWav(clean, res.sampleRate)], { type: "audio/wav" })));
+                const audio = newPreviewAudio(new Blob([A.encodeWav(clean, res.sampleRate)], { type: "audio/wav" }));
                 audio.volume = Number(volSlider.value) / 100;
                 audio.play();
                 testStatus.textContent = `✓ Giọng ${gVoiceSel.value} (model ${res.model}), dài ${(clean.length / res.sampleRate).toFixed(1)} giây.`;
@@ -1065,6 +1101,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             dubVolume: volSlider ? Number(volSlider.value) / 100 : 1,
             dubProvider: providerSel ? providerSel.value : "vieneu",
             dubPrepareWait: document.getElementById("dubPrepareWait") ? document.getElementById("dubPrepareWait").checked : true,
+            dubSystemFallback: document.getElementById("dubSystemFallback") ? document.getElementById("dubSystemFallback").checked : true,
             dubSpeakers: speakersSel ? speakersSel.value : "auto",
             dubSpeakerAi: speakerAiBox ? speakerAiBox.checked : true,
             dubGeminiVoice: gVoiceSel ? gVoiceSel.value : "Kore",
