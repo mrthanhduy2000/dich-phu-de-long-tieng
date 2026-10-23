@@ -4,6 +4,14 @@
 (function (root) {
     const HISTORY = [
         {
+            v: "3.0.7", luc: "23/10/2026", ten: "Giữ thuật ngữ ổn định hơn khi Gemini viết lệch mã bảo vệ",
+            y: [
+                "Một số video hiện cảnh báo lặp lại vì Gemini viết lệch mã giữ chỗ thuật ngữ (đổi dấu ngoặc, bỏ gạch dưới), khiến đoạn bị dịch lại không bảo vệ thuật ngữ và tốn thêm một lượt gọi. Nay các dạng viết lệch thường gặp đều được nhận ra và khôi phục đúng thuật ngữ.",
+                "Nếu Gemini tự viết sẵn thuật ngữ thay cho mã thì đoạn dịch được giữ, không dịch lại.",
+                "Mã không có thuật ngữ tương ứng không còn lọt ra màn hình."
+            ]
+        },
+        {
             v: "3.0.6", luc: "23/10/2026", ten: "Thông báo có nút giữ lâu hơn",
             y: [
                 "Thông báo có nút bấm (ví dụ \"Lồng tiếng từ phụ đề Việt\", \"Tải lại trang\") giờ ở lại 30 giây thay vì 12 giây, đủ thời gian để bấm."

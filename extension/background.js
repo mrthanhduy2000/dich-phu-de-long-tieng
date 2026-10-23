@@ -429,7 +429,8 @@ function thinkingConfigFor(model) {
 // Tăng khi đổi prompt / cấu trúc đầu ra / chiến lược ngữ cảnh -> bản dịch cũ tự hết hiệu lực
 const TR_PROMPT_VERSION = 4;
 const AUDIO_CACHE_VERSION = 1;
-const PLACEHOLDER_RE = /\[\[\s*(?:\\?_){2}\s*T\s*(\d+)\s*(?:\\?_){2}\s*\]\]/gi;
+// The code is "[[__T0__]]"; models also write "[__T0__]", "[[T0]]", "[[_T0_]]", "[[**T0**]]", full-width brackets
+const PLACEHOLDER_RE = /[\[【「]{1,3}\s*(?:\\?[_*]){0,3}\s*T\s*(\d+)\s*(?:\\?[_*]){0,3}\s*[\]】」]{1,3}/gi;
 
 // The dubbing audio store: 3 GB (2.4.0, was 200 MB), the user's own ceiling. One second of voice is
 // 96 KB (48 kHz, 16 bit, mono) and the voice speaks 0.85 s per second of video (8,353 s over 9,845 s

@@ -466,6 +466,15 @@ function glossaryChoiceFp(saved, enabledGroups) {
     return h.toString(36);
 }
 
+// The code a protected term travels as is "[[__T0__]]". Models bend it: "[__T0__]", "[[T0]]", "[[_T0_]]",
+// "[[**T0**]]", escaped underscores, full-width brackets. All of those are the same code; the
+// number is the only part that matters. Bare "__T0__" and the old "ZQ0QZ" count too. The id is the
+// first capture group of each alternative (read through tokenId).
+const GLOSS_TOKEN_SRC = "[\\[【「]{1,3}\\s*(?:\\\\?[_*]){0,3}\\s*T\\s*(\\d+)\\s*(?:\\\\?[_*]){0,3}\\s*[\\]】」]{1,3}" +
+    "|(?:\\\\?_){2}\\s*T\\s*(\\d+)\\s*(?:\\\\?_){2}|Z\\s*Q\\s*(\\d+)\\s*Q\\s*Z";
+const glossTokenRe = () => new RegExp(GLOSS_TOKEN_SRC, "gi");
+const tokenId = (p1, p2, p3) => parseInt(p1 !== undefined ? p1 : (p2 !== undefined ? p2 : p3), 10);
+
 function protectGlossary(text) {
     if (!state.glossaryEnabled) return { text, terms: [] };
 
@@ -520,7 +529,7 @@ function protectGlossary(text) {
 // bao ngoai. Giu lai dau goi y ngat nghi "¦" cho bo phan doan (se bi xoa khi hien thi).
 function finalizeTranslation(text) {
     if (window.CST_VI_SEG) return window.CST_VI_SEG.cleanText(text, { keepHints: true });
-    return String(text || "").replace(/\[\[[^\]]*\]\]|__T\d+__|ZQ\d+QZ/gi, " ").replace(/\s{2,}/g, " ").trim();
+    return String(text || "").replace(glossTokenRe(), " ").replace(/\[\[[^\]]*\]\]|__T\d+__|ZQ\d+QZ/gi, " ").replace(/\s{2,}/g, " ").trim();
 }
 
 function stripHints(text) {
@@ -532,10 +541,9 @@ function restoreGlossary(text, terms) {
 
     // Regex da dang: bat ca format moi [[__T0__]] va format cu ZQ0QZ / Z Q 0 Q Z
     // Each restored term is kept apart (\u0001...\u0002) until dropTermEchoes has looked around it
-    let restored = text.replace(/(?:\[\[\s*__\s*T\s*(\d+)\s*__\s*\]\]|__T\s*(\d+)\s*__|Z\s*Q\s*(\d+)\s*Q\s*Z)/gi, (match, p1, p2, p3, offset, whole) => {
-        const num = p1 !== undefined ? p1 : (p2 !== undefined ? p2 : p3);
-        const idx = parseInt(num, 10);
-        if (terms[idx] === undefined) return match;
+    let restored = text.replace(glossTokenRe(), (match, p1, p2, p3, offset, whole) => {
+        const idx = tokenId(p1, p2, p3);
+        if (terms[idx] === undefined) { state.glossaryMisses++; return " "; }   // a code with no term behind it never reaches the screen
         return "\u0001" + (sentenceStartAt(whole, offset) ? capitalizeLowerTerm(terms[idx]) : terms[idx]) + "\u0002";
     });
     restored = dropTermEchoes(restored);
@@ -543,7 +551,7 @@ function restoreGlossary(text, terms) {
     // Don dep khoang trang thua sinh ra boi token
     restored = restored.replace(/[ \t]{2,}/g, " ").trim();
 
-    const leftover = restored.match(/(?:\[\[\s*__\s*T\s*\d+\s*__\s*\]\]|__T\s*\d+\s*__|Z\s*Q\s*\d+\s*Q\s*Z)/gi);
+    const leftover = restored.match(glossTokenRe());
     if (leftover) {
         state.glossaryMisses += leftover.length;
     }
@@ -598,10 +606,20 @@ function capitalizeLowerTerm(term) {
     return t.charAt(0).toLocaleUpperCase("vi") + t.slice(1);
 }
 
+// Is the window usable with its codes? A code counts when it came back, or when the model wrote the
+// term itself in its place (the prompt gives each code's meaning): nothing is lost then. Below 40% of the
+// terms the window is asked again unprotected.
 function glossaryIntact(translatedText, terms) {
     if (terms.length === 0) return true;
-    const found = (translatedText.match(/(?:\[\[\s*__\s*T\s*\d+\s*__\s*\]\]|__T\s*\d+\s*__|Z\s*Q\s*\d+\s*Q\s*Z)/gi) || []).length;
-    return found >= Math.ceil(terms.length * 0.4);
+    const ids = new Set();
+    for (const m of translatedText.matchAll(glossTokenRe())) ids.add(tokenId(m[1], m[2], m[3]));
+    const low = translatedText.toLowerCase();
+    let ok = 0;
+    terms.forEach((t, i) => {
+        const w = String(t).toLowerCase();
+        if (ids.has(i) || (w.length >= 3 && low.includes(w))) ok++;
+    });
+    return ok >= Math.ceil(terms.length * 0.4);
 }
 
 // ---------- Tang goi dich thuat (co ngu canh) ----------
