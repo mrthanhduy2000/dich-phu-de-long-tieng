@@ -42,7 +42,7 @@
                     </svg>
                     Cài đặt
                 </button>
-                <span class="brand-badge" title="Cập nhật lúc 18:33 23/10/2026">v3.0.7</span>
+                <span class="brand-badge" title="Cập nhật lúc 23:13 23/10/2026">v3.0.8</span>
             </div>
         </header>
 
@@ -143,6 +143,9 @@
                 </div>
             </button>
 
+            <!-- Turn the translation off again (was only possible from the player menu or a shortcut) -->
+            <button id="stopBtn" class="button-secondary" type="button" hidden>Tắt phụ đề tiếng Việt</button>
+
             <!-- Animated Status Feedback Box -->
             <div id="statusContainer" class="status-container">
                 <div id="statusIconWrap" class="status-icon-wrap">
@@ -150,6 +153,11 @@
                 </div>
                 <p id="status" class="status-text"></p>
             </div>
+
+            <!-- What is missing before the first click: no Gemini key, or no VieNeu voice server -->
+            <p class="ready-hint" id="readyHint" role="status" hidden>
+                <span id="readyText"></span> <button type="button" class="link-btn" id="readyFix"></button>
+            </p>
 
             <p class="page-status" id="pageStatus" role="status" aria-live="polite" hidden></p>
             <p class="hint-row" id="shortcutHint"></p>

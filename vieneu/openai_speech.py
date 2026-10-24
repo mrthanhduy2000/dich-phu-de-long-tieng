@@ -177,7 +177,41 @@ def _error(status: int, message: str, code: Optional[str] = None, headers=None) 
                                    "code": code or status}}, status_code=status, headers=headers)
 
 
+# [CST patch] A web page can reach 127.0.0.1 too: a cross-site form post is a "simple" request that
+# skips the CORS preflight (it could enroll voices or fill the queue), and a rebound DNS name makes
+# the server look same-origin. On a loopback bind, refuse any request whose Host is not a loopback
+# name, and any browser request whose Origin is not an extension page. Callers without an Origin
+# (curl, the install test, a script) pass. With HOST=0.0.0.0 on purpose, the checks are off.
+_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+_LOOPBACK_BIND = os.environ.get("HOST", "127.0.0.1") in _LOOPBACK_HOSTS
+
+
+def _host_name(value: str) -> str:
+    value = value.strip().lower()
+    if value.startswith("["):
+        return value[1:].split("]", 1)[0]
+    return value.rsplit(":", 1)[0] if value.count(":") == 1 else value
+
+
+class _LoopbackOnly:
+    """Pure ASGI (not BaseHTTPMiddleware): a streaming body must reach Starlette untouched."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and _LOOPBACK_BIND:
+            h = {k.decode("latin-1"): v.decode("latin-1") for k, v in scope["headers"]}
+            origin = h.get("origin")
+            if _host_name(h.get("host", "")) not in _LOOPBACK_HOSTS or (
+                    origin is not None and not origin.startswith("chrome-extension://")):
+                await _error(403, "request refused: this server only answers the local extension")(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
 app = FastAPI(title="VieNeu-TTS speech API", version="1.0")
+app.add_middleware(_LoopbackOnly)
 
 
 @app.exception_handler(HTTPException)

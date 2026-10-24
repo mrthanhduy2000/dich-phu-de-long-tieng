@@ -4,6 +4,18 @@
 (function (root) {
     const HISTORY = [
         {
+            v: "3.0.8", luc: "23/10/2026", ten: "Máy chủ giọng VieNeu chỉ nghe tiện ích và 1 cải tiến khác",
+            y: [
+                "Máy chủ giọng trên máy bạn từ chối mọi yêu cầu đến từ trang web khác, nên một trang lạ không thể dùng ngầm giọng của bạn. Tiện ích vẫn dùng bình thường.",
+                "Bộ cài Windows kiểm chữ ký Microsoft của gói Visual C++ trước khi chạy với quyền cao.",
+                "Popup có nút \"Tắt phụ đề tiếng Việt\" khi đang dịch, và một dòng báo ngay nếu chưa có API Key Gemini hoặc giọng VieNeu chưa chạy.",
+                "Thông báo cảnh báo trên video ở lại đủ lâu để đọc hết (khoảng 70 ms mỗi ký tự) và có dấu chấm than, không chỉ khác màu viền.",
+                "Chữ cảnh báo, thông báo lỗi và liên kết phụ trong popup đạt độ tương phản chuẩn WCAG AA.",
+                "Khung \"VieNeu chưa sẵn sàng\" chỉ nêu tệp cài tự chạy của đúng hệ điều hành đang dùng.",
+                "Cài đặt bỏ thẻ chào cũ không còn đường vào; thanh tab mờ dần ở mép phải khi cửa sổ hẹp."
+            ]
+        },
+        {
             v: "3.0.7", luc: "23/10/2026", ten: "Giữ thuật ngữ ổn định hơn khi Gemini viết lệch mã bảo vệ",
             y: [
                 "Một số video hiện cảnh báo lặp lại vì Gemini viết lệch mã giữ chỗ thuật ngữ (đổi dấu ngoặc, bỏ gạch dưới), khiến đoạn bị dịch lại không bảo vệ thuật ngữ và tốn thêm một lượt gọi. Nay các dạng viết lệch thường gặp đều được nhận ra và khôi phục đúng thuật ngữ.",

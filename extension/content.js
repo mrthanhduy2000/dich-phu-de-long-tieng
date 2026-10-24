@@ -79,6 +79,14 @@ function cstToast(message, opts = {}) {
             font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
             box-shadow:0 18px 46px rgba(0,0,0,.5);
             border:1px solid ${opts.warn ? "rgba(232,184,75,.55)" : "#3A3732"};opacity:0;transition:opacity .25s`;
+        if (opts.warn) {
+            // A warning is told apart by a mark as well as the amber border (colour alone is lost on some eyes)
+            const mark = document.createElement("span");
+            mark.setAttribute("aria-hidden", "true");
+            mark.textContent = "!";
+            mark.style.cssText = "flex-shrink:0;width:18px;height:18px;border-radius:50%;background:#E8B84B;color:#2A2723;font-weight:700;font-size:12px;line-height:18px;text-align:center";
+            box.appendChild(mark);
+        }
         const text = document.createElement("span");
         text.textContent = message;
         text.style.cssText = "flex:1;white-space:pre-line";
@@ -101,7 +109,9 @@ function cstToast(message, opts = {}) {
         host.appendChild(box);
         requestAnimationFrame(() => { box.style.opacity = "1"; });
         // a toast with a button stays long enough to be read and clicked (12 s was gone before the viewer reached it)
-        const ms = opts.ms || (opts.actionLabel ? 30000 : 6000);
+        // and one without a button stays as long as it takes to read: ~70 ms a character, 6 s at least
+        // (a 120 character quota message was gone in 6 s)
+        const ms = opts.ms || (opts.actionLabel ? 30000 : Math.min(30000, Math.max(6000, String(message).length * 70)));
         setTimeout(() => { box.style.opacity = "0"; setTimeout(() => box.remove(), 300); }, ms);
         return box;
     } catch (e) {

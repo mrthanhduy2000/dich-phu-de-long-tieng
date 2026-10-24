@@ -96,6 +96,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function veTrangThai(st) {
+        const stop = document.getElementById("stopBtn");
+        if (stop) stop.hidden = !(st && st.active);
         const el = document.getElementById("pageStatus");
         if (!el) return;
         if (!st) { el.hidden = true; return; }
@@ -250,6 +252,47 @@ document.addEventListener("DOMContentLoaded", async () => {
             hintEl.append("Chưa có phím tắt. ", link);
         }
     }
+
+    // Turn the Vietnamese subtitles off: the same command the keyboard shortcut sends
+    const stopBtn = document.getElementById("stopBtn");
+    if (stopBtn) stopBtn.addEventListener("click", async () => {
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            const r = tab && tab.id ? await chrome.tabs.sendMessage(tab.id, { method: "phimTat", command: "bat-tat-phu-de" }) : null;
+            if (r && r.ok && r.on === false) {
+                stopBtn.hidden = true;
+                setIdleLabel(`Bắt đầu dịch ${noun}`);
+                showStatus("Đã tắt phụ đề tiếng Việt.", "success");
+            } else showStatus("Chưa tắt được: dùng menu trên video.", "error");
+        } catch (e) { showStatus("Chưa tắt được: dùng menu trên video.", "error"); }
+    });
+
+    // One line on what is missing before the first click (it was found out only after clicking)
+    async function veSanSang() {
+        const box = document.getElementById("readyHint");
+        if (!box) return;
+        const show = (text, fixLabel) => {
+            document.getElementById("readyText").textContent = text;
+            const fix = document.getElementById("readyFix");
+            fix.textContent = fixLabel;
+            fix.onclick = () => openOptionsPageSafely();
+            box.hidden = false;
+        };
+        try {
+            const ai = await chrome.storage.sync.get({ geminiApiKey: "", useAi: true });
+            if (ai.useAi !== false && !String(ai.geminiApiKey || "").trim()) {
+                show("Chưa có API Key Gemini nên đang dịch bằng Google Dịch, kém tự nhiên hơn.", "Thêm khóa");
+                return;
+            }
+            if (dubbingBox.checked) {
+                chrome.runtime.sendMessage({ action: "localTtsStatus" }, r => {
+                    if (chrome.runtime.lastError || !r || r.running !== false) return;
+                    show("Giọng VieNeu chưa chạy, lồng tiếng sẽ chờ máy chủ.", "Cách bật");
+                });
+            }
+        } catch (e) { /* ngoài tiện ích */ }
+    }
+    veSanSang();
 
     const forgetBtn = document.getElementById("forgetAudio");
     if (forgetBtn) forgetBtn.addEventListener("click", async () => {

@@ -25,7 +25,7 @@
     --claude-success-fill: #2E7D32;
     --claude-success-subtle: #E8F5E9;
     --claude-success-border: #C8E6C9;
-    --claude-warning: #C53929;
+    --claude-warning: #B3281A;
     --claude-warning-subtle: #FDF2F2;
     --claude-warning-border: #F8D7DA;
 
@@ -67,7 +67,7 @@
         --claude-success-fill: #2E7D32;
         --claude-success-subtle: #1B2E1D;
         --claude-success-border: #2E5A33;
-        --claude-warning: #E57373;
+        --claude-warning: #F28B8B;
         --claude-warning-subtle: #3A1D1D;
         --claude-warning-border: #662E2E;
         --claude-shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.2);
@@ -94,7 +94,7 @@
         --claude-success-fill: #2E7D32;
         --claude-success-subtle: #1B2E1D;
         --claude-success-border: #2E5A33;
-        --claude-warning: #E57373;
+        --claude-warning: #F28B8B;
         --claude-warning-subtle: #3A1D1D;
         --claude-warning-border: #662E2E;
         --claude-shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.2);
@@ -903,9 +903,8 @@ body {
     text-decoration: underline;
     text-underline-offset: 2px;
     cursor: pointer;
-    opacity: 0.8;
 }
-.link-btn:hover { opacity: 1; }
+.link-btn:hover { color: var(--claude-text); }
 .link-btn[hidden] { display: none; }
 .cost-today[hidden] { display: none; }
 
@@ -983,7 +982,7 @@ input:focus-visible,
 .now-card[hidden] { display: none; }
 .now-kicker { display: flex; justify-content: space-between; align-items: baseline; font-size: 10.5px;
     letter-spacing: .6px; text-transform: uppercase; color: var(--claude-text-muted); }
-.now-site { letter-spacing: .2px; text-transform: none; font-size: 11px; color: var(--claude-accent); font-weight: 600; }
+.now-site { letter-spacing: .2px; text-transform: none; font-size: 11px; color: var(--claude-accent-fill); font-weight: 600; }
 .now-title { margin: 6px 0 0; font-family: var(--claude-font-serif); font-size: 15px; line-height: 1.35; color: var(--claude-text);
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .now-title[hidden] { display: none; }
@@ -997,6 +996,22 @@ input:focus-visible,
 .now-voice { margin: 9px 0 0; padding-top: 9px; border-top: 1px dashed var(--claude-border); font-size: 12px;
     line-height: 1.45; color: var(--claude-text-secondary); }
 .now-voice[hidden] { display: none; }
-.now-voice.warn { color: #B4791C; }
+.now-voice.warn { color: #8A5A0C; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .now-voice.warn { color: #E8B84B; } }
 :root[data-theme="dark"] .now-voice.warn { color: #E8B84B; }
+/* "Đang xem" site name: the dark brand fill reads on light cards; dark cards keep the bright accent */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .now-site { color: var(--claude-accent); } }
+:root[data-theme="dark"] .now-site { color: var(--claude-accent); }
+
+/* Secondary action under the primary button */
+.button-secondary {
+    width: 100%; padding: 9px 12px; border-radius: var(--claude-radius-sm); cursor: pointer;
+    background: var(--claude-card); color: var(--claude-text); border: 1px solid var(--claude-border);
+    font-family: var(--claude-font-sans); font-size: 13px; font-weight: 500;
+}
+.button-secondary:hover { background: var(--claude-card-hover); border-color: var(--claude-border-hover); }
+.button-secondary[hidden] { display: none; }
+.ready-hint { margin: 0; padding: 8px 10px; border-radius: var(--claude-radius-sm); font-size: 12px; line-height: 1.45;
+    background: var(--claude-card-subtle); border: 1px solid var(--claude-border); color: var(--claude-text-secondary); }
+.ready-hint[hidden] { display: none; }
+.ready-hint .link-btn { padding: 0 2px; font-size: inherit; color: var(--claude-text); }

@@ -193,6 +193,11 @@ try {
         if ((& $testOrt) -ne 0) {
             Say 'Dang cai Microsoft Visual C++ Redistributable (Windows se hoi quyen, bam Yes)...'
             Invoke-WebRequest -UseBasicParsing 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile "$tmp\vc_redist.x64.exe"
+            # It runs elevated: only a file Microsoft signed (and nobody changed) gets that far
+            $sig = Get-AuthenticodeSignature "$tmp\vc_redist.x64.exe"
+            if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
+                throw 'Tep cai Visual C++ tai ve khong co chu ky hop le cua Microsoft, nen khong chay. Cai tay tai https://aka.ms/vs/17/release/vc_redist.x64.exe roi chay lai bo cai.'
+            }
             try { Start-Process "$tmp\vc_redist.x64.exe" -ArgumentList '/install', '/passive', '/norestart' -Verb RunAs -Wait } catch {}
             if ((& $testOrt) -ne 0) {
                 throw 'Thieu Microsoft Visual C++ Redistributable. Cai tai https://aka.ms/vs/17/release/vc_redist.x64.exe roi chay lai bo cai.'

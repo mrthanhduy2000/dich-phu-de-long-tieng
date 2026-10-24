@@ -774,11 +774,6 @@
         .cst-note-body { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
         .cst-stale-warning { border-color: var(--primary) !important; background: var(--primary-light) !important; }
         .cst-stale-warning button { background: var(--primary) !important; }
-        .welcome-card { border-color: var(--primary-border); background: var(--primary-light); }
-        .welcome-steps { margin: 0 0 16px; padding-left: 20px; color: var(--text-main); font-size: 14px; line-height: 1.6; }
-        .welcome-steps li { margin-bottom: 8px; }
-        .welcome-steps a { color: var(--primary); }
-        .welcome-actions { display: flex; justify-content: flex-end; }
 
         /* ============================================================
            2.5.5: simpler page. Switches instead of check boxes, one-line hints, what is seldom
@@ -861,7 +856,9 @@
             .brand-title { font-size: 17px; }
             .header-badge { display: none; }
             .layout-main { padding: 0 16px; margin-top: 12px; gap: 12px; }
-            .sidebar { flex-direction: row; overflow-x: auto; gap: 4px; padding-bottom: 4px; scrollbar-width: none; }
+            .sidebar { flex-direction: row; overflow-x: auto; gap: 4px; padding-bottom: 4px; scrollbar-width: none;
+                /* fade the right edge so a tab cut off by the window reads as "scrolls" */
+                -webkit-mask-image: linear-gradient(to right, #000 88%, transparent); mask-image: linear-gradient(to right, #000 88%, transparent); }
             .nav-tab { width: auto; white-space: nowrap; padding: 7px 12px; }
             .nav-tab-quiet { margin-top: 0; }
             .content-area > .tab-panel > .card { padding: 18px 16px; }
@@ -897,7 +894,7 @@
                 <button type="button" class="theme-btn" data-theme-set="dark" title="Luôn dùng giao diện tối">Tối</button>
                 <button type="button" class="theme-btn" data-theme-set="auto" title="Theo cài đặt sáng/tối của máy">Theo máy</button>
             </div>
-            <span class="header-badge" title="Cập nhật lúc 18:33 23/10/2026">Phiên bản v3.0.7 · cập nhật 18:33 23/10/2026</span>
+            <span class="header-badge" title="Cập nhật lúc 23:13 23/10/2026">Phiên bản v3.0.8 · cập nhật 23:13 23/10/2026</span>
         </div>
     </header>
 
@@ -915,22 +912,6 @@
         <!-- Content Area -->
         <section class="content-area">
 
-            <!-- Shown once, right after a first install (background.js opens options.html#welcome) -->
-            <div class="card welcome-card" id="welcomeCard" hidden>
-                <div class="card-header">
-                    <h2 class="card-title">Cài xong rồi! Ba việc nhỏ để bắt đầu</h2>
-                    <p class="card-desc">Làm một lần là xong; về sau tiện ích tự chạy.</p>
-                </div>
-                <ol class="welcome-steps">
-                    <li><b>Dán khóa Gemini</b> vào ô "Gemini API Key" ngay bên dưới để dịch theo ngữ cảnh, tự nhiên hơn. Khóa miễn phí, lấy tại <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>. Chưa có khóa vẫn dịch được bằng Google Dịch.</li>
-                    <li><b>Giọng đọc VieNeu:</b> <span id="welcomeVoice">đang kiểm tra…</span></li>
-                    <li><b>Ghim tiện ích</b> lên thanh công cụ (biểu tượng mảnh ghép, chọn ghim), rồi mở một video YouTube và bấm nút phụ đề Việt trên thanh điều khiển của trình phát. Muốn dùng phím tắt thì tự đặt ở mục Dịch &amp; AI, thẻ Phím tắt.</li>
-                </ol>
-                <div class="welcome-actions">
-                    <button type="button" class="btn btn-primary" id="welcomeDone">Đã hiểu</button>
-                </div>
-            </div>
-
             <!-- PHỤ ĐỀ -->
             <div id="tab-subtitle" class="tab-panel active" role="tabpanel" aria-labelledby="navtab-tab-subtitle">
                 <!-- Segmented Mode Control -->
@@ -945,7 +926,7 @@
                     <div class="preview-backdrop"></div>
 
                     <!-- YouTube Top Bar Overlay -->
-                    <div class="yt-mock-top" aria-hidden="true">
+                    <div class="yt-mock-top" aria-hidden="true" inert>
                         <div class="yt-mock-title-group">
                             <div class="yt-mock-avatar">
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="white"><path d="M8 5v14l11-7z"/></svg>
@@ -961,7 +942,7 @@
                     <div class="preview-subtitle-box" id="previewBox"><span class="orig-line" id="previewOrigLine" style="display: none;">But for me personally, the most important thing is consistency.</span><span class="vi-line" id="previewViLine">Nhưng với cá nhân tôi,<br>điều quan trọng nhất là sự nhất quán.</span></div>
 
                     <!-- YouTube Bottom Controls Bar Overlay -->
-                    <div class="yt-mock-bottom" aria-hidden="true">
+                    <div class="yt-mock-bottom" aria-hidden="true" inert>
                         <div class="yt-mock-progress-bar">
                             <div class="yt-mock-progress-buffer"></div>
                             <div class="yt-mock-progress-current"></div>
