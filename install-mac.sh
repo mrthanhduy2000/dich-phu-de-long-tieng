@@ -1,9 +1,9 @@
 #!/bin/bash
 # Cài (hoặc cập nhật) tiện ích "Dịch Phụ Đề & Lồng Tiếng AI" và máy chủ giọng VieNeu trên macOS.
-#   curl -fsSL https://raw.githubusercontent.com/mrthanhduy2000/dich-phu-de-long-tieng/main/install-mac.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/mrthanhduy2000/vietnamese-subtitle-translator/share/install-mac.sh | bash
 # Chạy lại bất cứ lúc nào để cập nhật: cài đặt và khóa API trong trình duyệt được giữ nguyên.
 # Gỡ bỏ:
-#   curl -fsSL https://raw.githubusercontent.com/mrthanhduy2000/dich-phu-de-long-tieng/main/install-mac.sh | bash -s -- --uninstall
+#   curl -fsSL https://raw.githubusercontent.com/mrthanhduy2000/vietnamese-subtitle-translator/share/install-mac.sh | bash -s -- --uninstall
 #
 # Must run on macOS's own /bin/bash 3.2. Overrides, for testing only: DPD_SRC (an unpacked share
 # tree instead of the download), DPD_REF (a branch, tag or commit of the share repo to download
@@ -14,7 +14,7 @@ set -euo pipefail
 # The whole body is one function, called on the last line: under `curl | bash` the script is read
 # from stdin, and a child that reads stdin would otherwise swallow the rest of it.
 main() {
-REPO="mrthanhduy2000/dich-phu-de-long-tieng"
+REPO="mrthanhduy2000/vietnamese-subtitle-translator"
 # VieNeu is pinned: vieneu/openai_speech.py is a patched copy of this exact commit's file.
 VIENEU_COMMIT="d350c63fceb0792d7b2db9a51d61cc040b1f8efa"
 EXT_DIR="${DPD_EXT_DIR:-$HOME/DichPhuDe}"
@@ -152,7 +152,7 @@ if [[ -n "${DPD_SRC:-}" ]]; then
     SRC="$DPD_SRC"
 else
     say "Đang tải bản mới nhất..."
-    REF="${DPD_REF:-refs/heads/main}"
+    REF="${DPD_REF:-refs/heads/share}"
     curl -fsSL "https://codeload.github.com/$REPO/zip/$REF" -o "$TMP/share.zip"
     ditto -x -k "$TMP/share.zip" "$TMP/share"
     SRC="$(find "$TMP/share" -mindepth 1 -maxdepth 1 -type d | head -1)"

@@ -73,12 +73,15 @@ function cstToast(message, opts = {}) {
         const inPlayer = host !== document.body;
         // Same palette as the popup, the Settings page and the on-player menu. It stays dark in both
         // themes because it sits on top of a video, where a cream panel would glare.
-        box.style.cssText = `position:${inPlayer ? "absolute" : "fixed"};top:${inPlayer ? "58px" : "16px"};left:50%;transform:translateX(-50%);
+        // Slides up 8 px while it fades in; a viewer with "reduce motion" gets the fade only
+        const still = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+        box.style.cssText = `position:${inPlayer ? "absolute" : "fixed"};top:${inPlayer ? "58px" : "16px"};left:50%;transform:${still ? "translateX(-50%)" : "translate(-50%,-8px)"};
             max-width:min(620px,84%);display:flex;align-items:center;gap:12px;z-index:2147483001;
             padding:11px 14px;border-radius:12px;background:rgba(40,38,34,.965);color:#ECE8E1;
             font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
             box-shadow:0 18px 46px rgba(0,0,0,.5);
-            border:1px solid ${opts.warn ? "rgba(232,184,75,.55)" : "#3A3732"};opacity:0;transition:opacity .25s`;
+            border:1px solid ${opts.warn ? "rgba(232,184,75,.55)" : "#3A3732"};opacity:0;
+            transition:${still ? "opacity .25s" : "opacity .25s ease,transform .3s ease-out"}`;
         if (opts.warn) {
             // A warning is told apart by a mark as well as the amber border (colour alone is lost on some eyes)
             const mark = document.createElement("span");
@@ -107,7 +110,7 @@ function cstToast(message, opts = {}) {
         close.addEventListener("click", () => box.remove());
         box.appendChild(close);
         host.appendChild(box);
-        requestAnimationFrame(() => { box.style.opacity = "1"; });
+        requestAnimationFrame(() => { box.style.opacity = "1"; box.style.transform = "translateX(-50%)"; });
         // a toast with a button stays long enough to be read and clicked (12 s was gone before the viewer reached it)
         // and one without a button stays as long as it takes to read: ~70 ms a character, 6 s at least
         // (a 120 character quota message was gone in 6 s)
@@ -157,7 +160,8 @@ function getCurrentSite() {
     const url = location.href;
     if (url.includes("coursera.org")) return "coursera";
     // YouTube do youtube.js lo, vi phu de o do hoat dong theo co che khac han
-    if (url.includes("youtube.com")) return "youtube";
+    // incl. the embed frames (youtube-nocookie.com) TED/TEDx pages use
+    if (/^https?:\/\/([^/?#]*\.)?youtube(-nocookie)?\.com([/?#:]|$)/.test(url)) return "youtube";
     // Any other page: the scripts only get here when the viewer asked for it (popup button or a
     // shortcut injects them through activeTab), and the page is served by the shared <video> path
     return "generic";
@@ -2197,6 +2201,8 @@ function csPaint(ov, vi, origText) {
         }
     }
     ov.replaceChildren(...blocks);
+    // Fade a changed line in (CST_STYLE.fadeInCue); the key is the text on screen, not the cue object
+    if (S) S.fadeInCue(ov, blocks.length ? `${vi ? vi.text : ""}\n${origText || ""}` : "");
     ov.style.opacity = blocks.length ? "1" : "0";
 }
 
@@ -2807,6 +2813,9 @@ async function courseraAutoTranslate() {
 // held its start since "Chờ chuẩn bị" (dubPrepareWait); Coursera never did. The lecture's first play
 // (its own autoplay or the viewer's click) now waits, up to 5 s, for the voice of the line it starts
 // on, then plays from 0 (prepareHold initial). Returns a function that drops the hold.
+// An adapter site fetches its captions first (master playlist + every segment), so the first play is
+// held longer than the 5 s the other sites get; the hold still ends the moment the voice is ready.
+const CS_ADAPTER_HOLD_MS = 15000;
 function courseraHoldFirstPlay(url) {
     const api = window.CST_DUB;
     if (!state.dubEnabled || !state.prepareWait || !api || !api.prepareHold) return () => {};
@@ -2817,7 +2826,7 @@ function courseraHoldFirstPlay(url) {
         document.removeEventListener("play", onPlay, true);
         if (location.href !== url) return;
         api.prepareHold(v, () => { const e = api.dub.engine; return !!(e && e.isReadyAt(v.currentTime)); },
-            { initial: true, container: csPlayerBox() || v.parentElement });
+            { initial: true, container: csPlayerBox() || v.parentElement, maxMs: csAdapterSite() ? CS_ADAPTER_HOLD_MS : undefined });
     };
     // Media events do not bubble, but a capturing listener on the document still sees them
     const onPlay = e => { if (e.target instanceof HTMLVideoElement) hold(e.target); };
@@ -2840,7 +2849,7 @@ async function courseraAutoTranslateNow() {
     // adapter sites: the captions come from the site, not the player. Added before the player's own
     // track can be picked, and again for every talk (the page may have moved on without a reload)
     if (csAdapterSite()) {
-        for (let i = 0; i < 20 && location.href === url; i++) {
+        for (let i = 0; i < 40 && location.href === url; i++) {
             if (csVideo() && await window.CST_SITES.prepare(csVideo())) break;
             await sleep(500);
         }

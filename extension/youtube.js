@@ -20,6 +20,23 @@ const YT_BORN = Date.now() + Math.random();
 const YT_OVERLAY = `.cst-yt-overlay[data-cst-gen="${YT_GEN}"]`;
 const YT_BTN = `.cst-ytp-btn[data-cst-gen="${YT_GEN}"]`;
 
+// Diagnostics readable from the DOM (data-cst-yt-* on <html>): which step of the start-up this frame
+// reached. The YouTube embed player (TEDx pages) cannot be inspected live, so each step leaves a mark.
+function ytChanDoan(key, value) {
+    try { document.documentElement.dataset["cstYt" + key] = String(value).slice(0, 200); } catch (e) { /* bỏ qua */ }
+}
+
+ytChanDoan("Loaded", String(location.hostname) + String(location.pathname || "").slice(0, 20));
+
+// The player box: the watch page's #movie_player, or any HTML5 player wrapper, or (embeds with a
+// different player skin) the parent of the <video>
+function ytPlayerEl() {
+    const p = document.querySelector("#movie_player") || document.querySelector(".html5-video-player");
+    if (p) return p;
+    const v = document.querySelector("video");
+    return v && v.parentElement && v.parentElement !== document.body ? v.parentElement : null;
+}
+
 const yt = {
     cues: [],           // cue tieng Anh: [{ start, end, text, words? }]
     groups: [],         // nhom dich: [{ text, cueIndexes, srcCues, start, end, translated, viCues }]
@@ -297,20 +314,34 @@ function ytChonTrack(tracks, skipSameLang = true, ctx = {}) {
         const real = tracks.filter(t => !dubs.has(t));
         if (real.length) tracks = real;
     }
+    const sp = ctx.spoken && ctx.spoken !== "vi" ? ctx.spoken : "";
+    // The speech is known to be another language: a Vietnamese track is then a translation of it, not
+    // the speech, so it must not become the source of the original line (the bilingual view showed
+    // Vietnamese on both lines for an English video). It is handed back as viTrack: the caller reads
+    // it as the translation line, and the speech's own track as the original line.
+    let viTrack = null;
+    if (sp) {
+        const speechTracks = tracks.filter(t => !t.languageCode.startsWith("vi"));
+        if (speechTracks.length) {
+            viTrack = tracks.find(t => t.languageCode.startsWith("vi") && t.kind !== "asr") ||
+                tracks.find(t => t.languageCode.startsWith("vi")) || null;
+            tracks = speechTracks;
+        }
+    }
 
     // Neu video da co phu de tieng Viet
-    const viTrack = tracks.find(t => t.languageCode.startsWith("vi"));
+    const viSan = tracks.find(t => t.languageCode.startsWith("vi"));
     const viThuCong = tracks.find(t => t.languageCode.startsWith("vi") && t.kind !== "asr");
 
-    if (viTrack && skipSameLang) {
+    if (viSan && skipSameLang) {
         return {
-            track: viThuCong || viTrack,
-            daCoTiengViet: true
+            track: viThuCong || viSan,
+            daCoTiengViet: true,
+            viTrack: null
         };
     }
 
     // Uu tien: ngon ngu dang noi (thu cong > tu dong) > tieng Anh thu cong > tieng Anh tu dong > bat ky thu cong > bat ky
-    const sp = ctx.spoken && ctx.spoken !== "vi" ? ctx.spoken : "";
     return {
         track:
             (sp && tracks.find(t => norm(t.languageCode) === sp && t.kind !== "asr")) ||
@@ -319,6 +350,7 @@ function ytChonTrack(tracks, skipSameLang = true, ctx = {}) {
             tracks.find(t => t.languageCode.startsWith("en")) ||
             tracks.find(t => t.kind !== "asr") ||
             tracks[0],
+        viTrack,
         daCoTiengViet: false
     };
 }
@@ -500,8 +532,7 @@ function ytAnCuaMaKhac(root, selector) {
 }
 
 function ytTaoLopPhuDe() {
-    const player = document.querySelector("#movie_player") ||
-                   document.querySelector(".html5-video-player");
+    const player = ytPlayerEl();
     if (!player) return null;
 
     if (yt.dead) return null;
@@ -707,6 +738,8 @@ function ytVePhuDe(overlay, viCue, enText, opts = {}) {
         }
     }
     overlay.replaceChildren(...blocks);
+    // Fade a changed line in (CST_STYLE.fadeInCue); the key is the text on screen, not the cue object
+    if (window.CST_STYLE) window.CST_STYLE.fadeInCue(overlay, blocks.length ? `${viCue ? viCue.text : ""}\n${enText || ""}` : "");
     overlay.style.opacity = blocks.length ? (opts.dim ? "0.85" : "1") : "0";
 }
 
@@ -1005,7 +1038,7 @@ function ytDichKhanCap(cueIdx) {
 // The player marks an ad with a class on itself. Found once, looked up again if YouTube replaced it
 function ytAdShowing() {
     let p = yt.adPlayer;
-    if (!p || !p.isConnected) p = yt.adPlayer = document.querySelector("#movie_player") || document.querySelector(".html5-video-player");
+    if (!p || !p.isConnected) p = yt.adPlayer = ytPlayerEl();
     return !!(p && p.classList && (p.classList.contains("ad-showing") || p.classList.contains("ad-interrupting")));
 }
 
@@ -1265,10 +1298,11 @@ function ytKichHoatHienThi() {
 }
 
 // Phụ đề tiếng Việt có sẵn: hiển thị nguyên (0 lượt gọi Gemini); lồng tiếng đọc thẳng
-// phụ đề tiếng Việt, nhịp theo chính nó
-function ytHienThiNguyenTiengViet(viCues) {
+// phụ đề tiếng Việt, nhịp theo chính nó. originalCues: the speech's own captions, for the original
+// line of a bilingual view (the Vietnamese captions are the translation then); default: the same cues
+function ytHienThiNguyenTiengViet(viCues, originalCues = viCues) {
     const seg = window.CST_VI_SEG;
-    yt.cues = viCues;
+    yt.cues = originalCues;
     yt.groups = [];
     yt.viCues = viCues.map(c => ({
         start: c.start, end: c.end, text: c.text,
@@ -1368,6 +1402,7 @@ async function ytNhanDienNgonNgu(info) {
 
 async function ytTuDongDich() {
     const ma = ytLayMaVideo();
+    ytChanDoan("Auto", `start;id=${ma};auto=${ytSettings.autoTranslate};active=${yt.active};tried=${yt.autoTried === ma}`);
     if (yt.dead || !ytSettings.autoTranslate || !ma || yt.active || yt.autoTried === ma) return null;
     // The video just left may still be loading (ytBatDauDich stops at its next wait): wait for it
     // rather than skip this video for good, which is what returning on `busy` did
@@ -1398,11 +1433,13 @@ async function ytTuDongDichSau(ma) {
         try { info = await ytHoiDanhSachPhuDe(); } catch (e) { info = null; }
         if (ytLayMaVideo() !== ma) return null;
         if (info && info.videoId === ma && info.tracks && info.tracks.length) break;
+        ytChanDoan("Auto", `tracks;try=${i};got=${info ? (info.error || (info.tracks ? info.tracks.length : "?") + "/" + info.videoId) : "null"}`);
         info = null;
         await new Promise(r => setTimeout(r, 400));
     }
-    if (!info || yt.active || yt.busy) return null;
+    if (!info || yt.active || yt.busy) { ytChanDoan("Auto", "no-tracks"); return null; }
     const q = await ytNhanDienNgonNgu(info);
+    ytChanDoan("Auto", `decision=${q.action};lang=${q.lang}`);
     yt.langDecision = q;
     console.log(`[AI Subtitle] Ngôn ngữ video: ${q.lang} (${Math.round(q.confidence * 100)}%, theo ${q.source}) -> ${q.action === "translate" ? "tự động dịch" : q.action === "skip" ? "đã là tiếng Việt, không dịch" : "chưa chắc chắn, không tự dịch"}`);
     if (q.action !== "translate") return q;
@@ -1449,7 +1486,7 @@ async function ytTuBatLongTieng() {
     if (!ytSettings.dubEnabled || !api || api.dub.enabled || api.dub.starting || yt.dubStarting || !yt.active || !yt.videoEl) return false;
     yt.dubStarting = true;
     try {
-        const player = document.querySelector("#movie_player") || document.querySelector(".html5-video-player");
+        const player = ytPlayerEl();
         const ok = await api.start({ video: yt.videoEl, container: player, getGroups: ytNhomLongTieng, quiet: true });
         ytDatTrangThaiNutLongTieng(ok);
         return ok;
@@ -1515,6 +1552,22 @@ async function ytBatDauDich(opts = {}) {
             }
         }
 
+        // The speech is another language and the page has Vietnamese captions (chon.viTrack): they
+        // are the translation, the speech's own captions the original line. No Gemini call; a pair
+        // without both sides falls through to the normal translation
+        if (chon.viTrack && ytSettings.skipSameLang) {
+            const viCues = await ytTaiBanChepLoi(chon.viTrack.baseUrl);
+            if (stale()) return false;
+            const goc = viCues.length > 0 ? await ytTaiBanChepLoi(chon.track.baseUrl) : [];
+            if (stale()) return false;
+            if (viCues.length > 0 && goc.length > 0) {
+                console.log(`Phụ đề tiếng Việt có sẵn làm dòng dịch, dòng gốc lấy từ ${chon.track.languageCode}`);
+                yt.trackInfo = { languageCode: chon.track.languageCode, kind: chon.track.kind || "", viSan: true };
+                ytHienThiNguyenTiengViet(viCues, goc);
+                return true;
+            }
+        }
+
         // Every track transcribes one of YouTube's AI dubs, none the original speech: what they say
         // is what the dubbing made of the video. Read the captions burned into the picture instead
         // (screen-text.js, 2.6.4). Checked before the saved copy: one saved from a dub transcript
@@ -1552,7 +1605,10 @@ async function ytBatDauDich(opts = {}) {
             }));
             ytRepairCachedLeaks();
             yt.daDichXong = true;
+            // the menu names the source captions; the cache branch used to leave this unset
+            yt.trackInfo = { languageCode: chon.track.languageCode, kind: chon.track.kind || "", viSan: !!chon.daCoTiengViet };
             ytKichHoatHienThi();
+            ytBaoNguonThua(chon.track, yt.cues);      // a saved copy of a source that heard almost nothing
             console.log("Lay ban dich tu bo nho dem, khong can dich lai");
             return true;
         }
@@ -1592,6 +1648,10 @@ async function ytBatDauDich(opts = {}) {
             baoLoi("YouTube chưa trả nội dung phụ đề. Hãy phát video vài giây rồi bấm dịch lại; nếu vẫn lỗi, tải lại trang (F5).");
             return false;
         }
+        // A source that heard almost nothing (CST_LANG.sparseTranscript: sound notes and a handful of
+        // words over minutes of video) looked "on" and translated, while the screen stayed empty and
+        // nothing said why. Tell the viewer, also on an auto start; what there is still gets translated
+        ytBaoNguonThua(track, cues);
         // Phụ đề nguồn đã là tiếng Việt (theo mã track hoặc nội dung): hiển thị nguyên,
         // không gửi Gemini dịch Việt sang Việt
         const LANG = window.CST_LANG;
@@ -1806,12 +1866,14 @@ function ytDatTrangThaiNutLongTieng(on) {
 }
 
 function ytTaoNutThanhDieuKhien() {
-    const player = document.querySelector("#movie_player") ||
-                   document.querySelector(".html5-video-player");
+    const player = ytPlayerEl();
     if (!player) return;
 
-    const rightControls = player.querySelector(".ytp-right-controls");
-    if (!rightControls) return;
+    // The embed player's newer control bar has no .ytp-right-controls: the button then floats in the
+    // player's top-right corner instead of staying missing
+    const bar = player.querySelector(".ytp-right-controls");
+    const rightControls = bar || player;
+    ytChanDoan("Button", bar ? "bar" : "float");
 
     if (yt.dead) return;
     // Nút của mã cũ (bấm không còn tác dụng): ẨN, không xóa (xem ytAnCuaMaKhac)
@@ -1847,6 +1909,10 @@ function ytTaoNutThanhDieuKhien() {
     btn.style.verticalAlign = "top";
     btn.style.marginLeft = "2px";
 
+    if (!bar) {
+        btn.style.cssText += ";position:absolute;top:8px;right:8px;width:34px;height:34px;margin:0;z-index:2147483000;" +
+            "border-radius:8px;background:rgba(0,0,0,.55);opacity:.85";
+    }
     // Thêm vào vị trí cuối thanh điều khiển (cạnh nút phóng to toàn màn hình)
     rightControls.appendChild(btn);
     ytCapNhatTrangThaiNutThanhDieuKhien();
@@ -2128,7 +2194,7 @@ function ytNhomLongTieng() {
 // draws from, so the panel costs no extra work and fills in as the translation arrives.
 function ytTranscriptAdapter() {
     return {
-        box: () => document.querySelector("#movie_player") || document.querySelector(".html5-video-player"),
+        box: () => ytPlayerEl(),
         videoEl: () => yt.videoEl || document.querySelector("video"),
         lines: () => (window.CST_TRANSCRIPT ? window.CST_TRANSCRIPT.mergeLines(yt.viCues, yt.cues) : []),
         title: () => pageVideoTitle(),
@@ -2136,12 +2202,37 @@ function ytTranscriptAdapter() {
         theme: () => ytSettings.uiTheme || "auto",
         onPanel: on => {
             yt.panelOpen = !!on;
-            const player = document.querySelector("#movie_player") || document.querySelector(".html5-video-player");
+            const player = ytPlayerEl();
             const overlay = document.querySelector(YT_OVERLAY);
             if (player && overlay) ytCapNhatViTri(player, overlay);
             yt.renderKey = "";
         }
     };
+}
+
+// (sparse source) The notice for captions that heard almost nothing, and the flag the menu shows.
+// The language is named only for a machine transcript: there it is what YouTube thought it heard
+function ytBaoNguonThua(track, cues) {
+    const LD = window.CST_LANG;
+    if (!LD || !LD.sparseTranscript || !cues.length) return null;
+    const v = document.querySelector("#movie_player video") || document.querySelector("video");
+    const lastEnd = Math.max(...cues.map(c => c.end || 0));
+    const seconds = v && Number.isFinite(v.duration) && v.duration > 0 ? v.duration : lastEnd;
+    const r = LD.sparseTranscript(cues.map(c => c.text), seconds);
+    if (!r.sparse) return r;
+    if (yt.trackInfo) yt.trackInfo.sparse = true;
+    const words = cues.map(c => String(c.text || "").replace(/\[[^\]]*\]|\([^)]*\)|[♪♫]|>>/g, " "))
+        .join(" ").split(/\s+/).filter(w => /\p{L}/u.test(w)).length;
+    const asr = track && track.kind === "asr";
+    let lang = "";
+    try { lang = asr ? new Intl.DisplayNames(["vi"], { type: "language" }).of(track.languageCode) || "" : ""; } catch (e) { /* unknown code */ }
+    const minutes = Math.max(1, Math.round(seconds / 60));
+    const msg = (asr ? "Phụ đề tự động" : "Phụ đề") + ` của video này gần như không có lời: chỉ có khoảng ${words} chữ trong ${minutes} phút` +
+        (lang ? ` (YouTube nhận là ${lang.charAt(0).toLowerCase() + lang.slice(1)}, có thể đã nghe nhầm)` : "") +
+        ". Tiện ích vẫn dịch phần có chữ, nhưng gần như sẽ không có phụ đề và giọng Việt.";
+    console.log(`[AI Subtitle] Nguồn phụ đề gần như trống: ${r.letters} chữ cái, ${r.perMinute}/phút (${track && track.languageCode}${asr ? ", tự động" : ""})`);
+    ytBao(msg, { warn: true });
+    return r;
 }
 
 // How trustworthy the source captions are: the one thing that decides translation quality and the
@@ -2150,6 +2241,7 @@ function ytNguonPhuDe() {
     const info = yt.trackInfo;
     if (!info) return null;
     if (info.kind === "screen") return { nhan: "Chữ in trên hình (Gemini đọc)", canhBao: false };
+    if (info.sparse) return { nhan: (info.kind === "asr" ? "Phụ đề máy nghe tự động" : "Phụ đề") + " gần như không có lời", canhBao: true };
     if (info.kind === "asr") return { nhan: "Phụ đề máy nghe tự động", canhBao: true };
     return { nhan: info.viSan ? "Phụ đề tiếng Việt có sẵn" : "Phụ đề tác giả tải lên", canhBao: false };
 }
@@ -2212,7 +2304,8 @@ function ytGhiLongTieng(on) {
 function ytLayMaVideo() {
     try {
         const u = new URL(location.href);
-        return u.searchParams.get("v") || "";
+        // an embedded player (youtube-nocookie.com/embed/<id>) carries the id in the path
+        return u.searchParams.get("v") || (/^\/embed\/([\w-]{6,20})/.exec(u.pathname) || [])[1] || "";
     } catch (e) {
         return "";
     }
@@ -2290,7 +2383,8 @@ function ytTuTatKhiMatKetNoi() {
 }
 
 async function ytKhoiDong() {
-    if (!location.hostname.includes("youtube.com")) return;
+    ytChanDoan("Boot", String(location.hostname) + String(location.pathname || "").slice(0, 20) + "|" + document.readyState);
+    if (!/(^|\.)youtube(-nocookie)?\.com$/.test(location.hostname)) return;
     ytTuTatKhiMatKetNoi();
     await ytNapCaiDatKieu();
 
@@ -2302,7 +2396,7 @@ async function ytKhoiDong() {
                     ytSubStyle = ytChuanHoaKieu({ ...ytSubStyle, ...changes.subStyle.newValue });
                     // a stale mirror must not override dualMode (popup writes dualMode alone)
                     ytSubStyle.mode = state.dualMode ? "dual" : "single";
-                    const player = document.querySelector("#movie_player") || document.querySelector(".html5-video-player");
+                    const player = ytPlayerEl();
                     const overlay = document.querySelector(YT_OVERLAY);
                     if (player && overlay) {
                         ytApDungKieuPhuDe(overlay);
@@ -2340,6 +2434,7 @@ async function ytKhoiDong() {
         });
     } catch (e) {}
 
+    ytChanDoan("Player", ytPlayerEl() ? "found" : "none");
     ytTaoNutThanhDieuKhien();
     ytTheoDoi();
     // Tự dịch sớm; ytTuDongDich tự chờ trình phát có danh sách phụ đề

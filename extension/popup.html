@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vietnamese Subtitle Translator</title>
+    <link href="ui-tokens.css" rel="stylesheet">
+    <link href="theme-colors.css" rel="stylesheet">
     <link href="popup.css" rel="stylesheet">
     <script src="chrome-shim.js"></script>
     <script src="theme.js"></script>
@@ -34,7 +36,7 @@
                     </div>
                 </div>
             </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
+            <div class="header-actions">
                 <button id="headerSettingsBtn" class="header-settings-btn" type="button" title="Mở cài đặt & API Key">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3"></circle>
@@ -42,7 +44,7 @@
                     </svg>
                     Cài đặt
                 </button>
-                <span class="brand-badge" title="Cập nhật lúc 23:13 23/10/2026">v3.0.8</span>
+                <span class="brand-badge" title="Cập nhật lúc 19:12 25/10/2026">v3.0.9</span>
             </div>
         </header>
 
@@ -155,6 +157,7 @@
             </div>
 
             <!-- What is missing before the first click: no Gemini key, or no VieNeu voice server -->
+            <div class="ready-steps" id="readySteps" role="status" aria-label="Việc cần có trước khi dịch" hidden></div>
             <p class="ready-hint" id="readyHint" role="status" hidden>
                 <span id="readyText"></span> <button type="button" class="link-btn" id="readyFix"></button>
             </p>
@@ -166,6 +169,7 @@
 
     </div>
 
+    <script src="build-stamp.js"></script>
     <script src="version-check.js"></script>
     <script src="cost-policy.js"></script>
     <script src="shortcuts.js"></script>

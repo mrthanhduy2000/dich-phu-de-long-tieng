@@ -6,6 +6,7 @@
     <title>Cài đặt & Tùy chỉnh Phụ đề</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap&subset=vietnamese" rel="stylesheet">
+    <link href="theme-colors.css" rel="stylesheet">
     <style>
         /* The design tokens (--primary, --bg-page, ...) are defined once, in the "Claude style" block
            further down, with its dark-mode overrides. */
@@ -85,6 +86,8 @@
             flex-direction: column;
             gap: 6px;
         }
+        /* The tab row is a wrapper for ARIA only: its tabs stay direct flex items of .sidebar */
+        .nav-tabs { display: contents; }
 
         .nav-tab {
             display: flex;
@@ -113,7 +116,30 @@
 
         .tab-panel.active {
             display: block;
+            animation: panel-in .22s ease both;
         }
+        @keyframes panel-in {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: none; }
+        }
+
+        /* Readiness strip: Gemini and VieNeu state at a glance, each chip jumps to its tab */
+        .readiness { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 18px; }
+        .ready-chip { display: inline-flex; align-items: center; gap: 10px; min-height: 36px; padding: 6px 14px 6px 12px;
+            border: 1px solid var(--border); border-radius: 999px; background: var(--bg-card); color: var(--text-main);
+            font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+            transition: border-color .2s ease, background-color .2s ease; }
+        .ready-chip:hover { border-color: var(--primary-border); background: var(--bg-soft); }
+        .ready-chip:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+        .ready-name { font-weight: 600; }
+        .ready-text { color: var(--text-sub); }
+        .ready-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-sub); flex-shrink: 0;
+            transition: background-color .2s ease, box-shadow .2s ease; }
+        .ready-chip[data-state="ok"] .ready-dot { background: var(--success); box-shadow: 0 0 0 3px rgba(79, 122, 58, .18); }
+        .ready-chip[data-state="warn"] .ready-dot { background: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+        .ready-chip[data-state="err"] .ready-dot { background: #b3281a; box-shadow: 0 0 0 3px rgba(179, 40, 26, .16); }
+        .ready-chip[data-state="pending"] .ready-dot { animation: ready-pulse 1.4s ease-in-out infinite; }
+        @keyframes ready-pulse { 50% { opacity: .3; } }
 
         /* Section Cards */
         .card {
@@ -730,11 +756,32 @@
         .cost-kpi { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; background: var(--bg-card); min-width: 0; }
         .cost-kpi-label { font-size: 12px; color: var(--text-sub); }
         .cost-kpi-value { font-family: var(--font-serif); font-size: 21px; color: var(--text-main); margin-top: 4px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+        .cost-kpi-note { margin: 8px 0 12px; }
+        .pos-pick { display: flex; gap: 8px; }
+        .pos-pick-btn { flex: 1; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); color: var(--text-main); font: inherit; font-size: 13px; cursor: pointer; transition: border-color var(--motion-fast), background var(--motion-fast); }
+        .pos-pick-btn:hover { border-color: var(--primary); }
+        .pos-pick-btn[aria-pressed="true"] { border-color: var(--primary); background: var(--primary-light); font-weight: 600; }
+        .pos-pick-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+        .pos-screen { position: relative; width: 34px; height: 20px; border-radius: 3px; background: #1d1b18; flex: none; }
+        .pos-screen i { position: absolute; left: 20%; right: 20%; height: 3px; border-radius: 2px; background: #fff; }
+        .cost-trend { display: inline-block; font-size: 11.5px; font-weight: 600; margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
+        .cost-trend.up { color: var(--tc-warning); }
+        .cost-trend.down { color: var(--tc-success); }
         .cost-kpi-sub { font-size: 11.5px; color: var(--text-sub); margin-top: 2px; font-variant-numeric: tabular-nums; }
         .cost-meter { height: 6px; border-radius: 3px; background: var(--bg-soft); overflow: hidden; margin-top: 12px; }
         .cost-meter i { display: block; height: 100%; background: var(--success); border-radius: 3px; }
         .cost-meter.warn i, .cost-meter.over i { background: var(--primary); }
         .cost-money-sub { display: block; font-size: 11px; color: var(--text-sub); }
+        .tok-split { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--bg-soft); margin: 10px 0 8px; gap: 2px; }
+        .tok-split i { display: block; min-width: 4px; border-radius: 3px; }
+        .tok-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--text-sub); }
+        .tok-legend span { display: inline-flex; align-items: center; gap: 6px; }
+        .tok-legend b { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+        .tok-legend em { font-style: normal; color: var(--text-main); font-variant-numeric: tabular-nums; }
+        .cost-chart { width: 100%; height: auto; display: block; margin: 8px 0 4px; }
+        .cost-bar { fill: var(--primary); opacity: 0.45; }
+        .cost-bar-today { opacity: 1; }
+        .cost-bar-label { font-size: 11px; fill: var(--text-sub); }
         .cost-section { grid-column: 1 / -1; font-size: 13px; font-weight: 600; color: var(--text-main); margin-top: 8px; padding-top: 14px; border-top: 1px solid var(--border); }
         .preview-dub-badge { position: absolute; top: 46px; left: 14px; z-index: 3; padding: 4px 10px; border-radius: 4px;
             background: rgba(0,0,0,.65); color: #fff; font-family: var(--font-sans); font-size: 12px; letter-spacing: .2px; }
@@ -772,6 +819,14 @@
         .cst-note.err { border-color: color-mix(in srgb, #c0392b 55%, transparent); background: color-mix(in srgb, #c0392b 9%, transparent); }
         .cst-note-title { font-weight: 600; font-size: 13px; }
         .cst-note-body { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
+        .key-details summary { margin-top: 6px; font-size: 12px; color: var(--text-sub); cursor: pointer; }
+        /* Advanced options: closed by default, one quiet line to open them */
+        details.adv { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+        details.adv > summary { cursor: pointer; font-size: 13px; color: var(--text-sub); font-weight: 500; }
+        details.adv > summary:hover { color: var(--text-main); }
+        details.adv > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+        details.adv[open] > summary { margin-bottom: 12px; }
+        .key-details summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
         .cst-stale-warning { border-color: var(--primary) !important; background: var(--primary-light) !important; }
         .cst-stale-warning button { background: var(--primary) !important; }
 
@@ -791,6 +846,11 @@
         .sidebar { gap: 2px; }
         .nav-tab { width: 100%; }
         .nav-tab-quiet { margin-top: 10px; font-size: 13px; }
+        /* "Giới thiệu" sits under the four work tabs and opens the version history panel */
+        .nav-about { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 8px 12px; border: 0; border-radius: 8px; background: none; color: var(--text-sub); font: inherit; font-size: 13px; cursor: pointer; }
+        .nav-about svg { width: 16px; height: 16px; flex: none; }
+        .nav-about:hover, .nav-about.active { background: var(--bg-soft); color: var(--text-main); }
+        .nav-about:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
         .input-row { display: flex; gap: 8px; }
         .input-row .btn { white-space: nowrap; }
         .card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
@@ -894,32 +954,42 @@
                 <button type="button" class="theme-btn" data-theme-set="dark" title="Luôn dùng giao diện tối">Tối</button>
                 <button type="button" class="theme-btn" data-theme-set="auto" title="Theo cài đặt sáng/tối của máy">Theo máy</button>
             </div>
-            <span class="header-badge" title="Cập nhật lúc 23:13 23/10/2026">Phiên bản v3.0.8 · cập nhật 23:13 23/10/2026</span>
+            <span class="header-badge" title="Cập nhật lúc 19:12 25/10/2026">Phiên bản v3.0.9 · cập nhật 19:12 25/10/2026</span>
         </div>
     </header>
 
     <!-- Main 2-Column Content -->
     <main class="layout-main">
         <!-- Sidebar Navigation -->
-        <aside class="sidebar" role="tablist" aria-orientation="horizontal" aria-label="Nhóm cài đặt">
+        <aside class="sidebar">
+            <div class="nav-tabs" role="tablist" aria-label="Nhóm cài đặt">
             <button class="nav-tab active" id="navtab-tab-subtitle" role="tab" aria-selected="true" aria-controls="tab-subtitle" tabindex="0" data-tab="tab-subtitle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M6 15h4M14 15h4M6 11h12"></path></svg>Phụ đề</button>
             <button class="nav-tab" id="navtab-tab-dubbing" role="tab" aria-selected="false" aria-controls="tab-dubbing" tabindex="-1" data-tab="tab-dubbing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>Lồng tiếng</button>
             <button class="nav-tab" id="navtab-tab-gemini" role="tab" aria-selected="false" aria-controls="tab-gemini" tabindex="-1" data-tab="tab-gemini"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3c.4 4.6 3.9 8.1 8.5 8.5-4.6.4-8.1 3.9-8.5 8.5-.4-4.6-3.9-8.1-8.5-8.5C8.1 11.1 11.6 7.6 12 3Z"></path></svg>Dịch &amp; AI</button>
             <button class="nav-tab" id="navtab-tab-data" role="tab" aria-selected="false" aria-controls="tab-data" tabindex="-1" data-tab="tab-data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"></ellipse><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"></path></svg>Chi phí &amp; dữ liệu</button>
-            <button class="nav-tab nav-tab-quiet" id="navtab-tab-history" role="tab" aria-selected="false" aria-controls="tab-history" tabindex="-1" data-tab="tab-history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15.5 14"></polyline></svg>Phiên bản</button>
+            </div>
+            <button class="nav-about" id="navtab-tab-history" type="button" aria-controls="tab-history" data-tab="tab-history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15.5 14"></polyline></svg>Giới thiệu &amp; lịch sử phiên bản</button>
         </aside>
 
         <!-- Content Area -->
         <section class="content-area">
 
+            <!-- Readiness: label text is Vietnamese; state is also in the text, not only the dot colour -->
+            <div class="readiness" aria-live="polite">
+                <button type="button" class="ready-chip" id="readyGemini" data-goto="navtab-tab-gemini" data-state="off" title="Mở mục Dịch &amp; AI">
+                    <span class="ready-dot" aria-hidden="true"></span>
+                    <span class="ready-name">Gemini AI</span>
+                    <span class="ready-text">Chưa có API key</span>
+                </button>
+                <button type="button" class="ready-chip" id="readyVieneu" data-goto="navtab-tab-dubbing" data-state="pending" title="Mở mục Lồng tiếng">
+                    <span class="ready-dot" aria-hidden="true"></span>
+                    <span class="ready-name">Giọng VieNeu</span>
+                    <span class="ready-text">Đang kiểm tra máy chủ</span>
+                </button>
+            </div>
+
             <!-- PHỤ ĐỀ -->
             <div id="tab-subtitle" class="tab-panel active" role="tabpanel" aria-labelledby="navtab-tab-subtitle">
-                <!-- Segmented Mode Control -->
-                <div class="segmented-control">
-                    <button type="button" id="subModeSingle" class="mode-btn active">Chỉ bản dịch</button>
-                    <button type="button" id="subModeDual" class="mode-btn">Song ngữ</button>
-                </div>
-
                 <!-- Live Interactive Subtitle Preview Box (100% YouTube Authentic Mockup) -->
                 <div class="field-hint warn" id="legibilityHint" role="status" hidden></div>
                 <div class="preview-container" id="previewContainer">
@@ -978,6 +1048,13 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- The mode switch sits under the preview it changes, not above it -->
+                <div class="segmented-control">
+                    <button type="button" id="subModeSingle" class="mode-btn active">Chỉ bản dịch</button>
+                    <button type="button" id="subModeDual" class="mode-btn">Song ngữ</button>
+                </div>
+
 
                 <div class="card">
                     <h2 class="card-title">Chữ</h2>
@@ -1087,8 +1164,12 @@
                     <h2 class="card-title">Vị trí và nền</h2>
                     <div class="form-grid">
                         <div class="form-group">
-                            <label class="form-label" for="subPosition">Vị trí</label>
-                            <select id="subPosition" class="form-select">
+                            <span class="form-label" id="subPositionLabel">Vị trí</span>
+                            <div class="pos-pick" role="group" aria-labelledby="subPositionLabel">
+                                <button type="button" class="pos-pick-btn" data-pos="top" aria-pressed="false"><span class="pos-screen" aria-hidden="true"><i style="top:14%"></i></span>Trên</button>
+                                <button type="button" class="pos-pick-btn" data-pos="bottom" aria-pressed="true"><span class="pos-screen" aria-hidden="true"><i style="bottom:14%"></i></span>Dưới (mặc định)</button>
+                            </div>
+                            <select id="subPosition" class="form-select" hidden aria-hidden="true" tabindex="-1">
                                 <option value="bottom" selected>Dưới (Mặc định)</option>
                                 <option value="top">Trên</option>
                             </select>
@@ -1146,6 +1227,10 @@
                             <label class="form-label" for="dubLocalVoice">Giọng chính</label>
                             <select id="dubLocalVoice" class="form-select"></select>
                         </div>
+                    </div>
+                    <details class="adv">
+                        <summary>Nhiều người nói trong video</summary>
+                        <div class="form-grid form-gap">
                         <div class="form-group">
                             <label class="form-label" for="dubSpeakers">Giọng theo người nói</label>
                             <select id="dubSpeakers" class="form-select">
@@ -1158,11 +1243,12 @@
                             <select id="dubLocalVoice2" class="form-select"></select>
                             <div class="field-hint">Người thứ ba trở đi được chọn giọng khác hẳn.</div>
                         </div>
-                    </div>
+                        </div>
                     <label class="toggle">
                         <span class="toggle-text"><span class="toggle-title">Dùng Gemini nhận ra ai đang nói</span><span class="toggle-hint">Đọc lời gốc một lần mỗi video YouTube (vài chục đồng), lưu cho lần xem sau.</span></span>
                         <input type="checkbox" id="dubSpeakerAi" checked>
                     </label>
+                    </details>
                     <div class="card-actions">
                         <button type="button" class="btn btn-secondary" id="testVoice">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
@@ -1184,6 +1270,10 @@
                             <label class="form-label" for="dubVolume">Âm lượng lồng tiếng <span class="value-pill" id="dubVolumeValue">100%</span></label>
                             <input type="range" id="dubVolume" class="form-slider" min="40" max="100" step="5" value="100">
                         </div>
+                    </div>
+                    <details class="adv">
+                        <summary>Tốc độ đọc và chế độ dự phòng</summary>
+                        <div class="form-grid form-gap">
                         <div class="form-group">
                             <label class="form-label" for="dubMaxRate">Tốc độ đọc tối đa</label>
                             <select id="dubMaxRate" class="form-select">
@@ -1196,7 +1286,7 @@
                             </select>
                             <div class="field-hint">Thấp hơn thì rõ hơn nhưng có thể trễ vài giây; không bao giờ bỏ chữ.</div>
                         </div>
-                    </div>
+                        </div>
                     <label class="toggle">
                         <span class="toggle-text"><span class="toggle-title">Chờ giọng sẵn sàng rồi mới phát</span><span class="toggle-hint">Khi mở video hoặc tua, dừng tối đa 5 giây để câu đầu có tiếng.</span></span>
                         <input type="checkbox" id="dubPrepareWait" checked>
@@ -1205,6 +1295,7 @@
                         <span class="toggle-text"><span class="toggle-title">Dùng giọng tiếng Việt của trình duyệt khi không có VieNeu</span><span class="toggle-hint">Máy không chạy được VieNeu vẫn có tiếng. Khi VieNeu chạy, tự chuyển lại.</span></span>
                         <input type="checkbox" id="dubSystemFallback" checked>
                     </label>
+                    </details>
                 </div>
             </div>
 
@@ -1315,6 +1406,7 @@
                         <p class="card-desc">Đếm token Google tính tiền cho từng lượt, kể cả lượt hỏng. Hóa đơn thật xem ở Google AI Studio.</p>
                     </div>
                     <div id="costKpis" class="cost-kpis"></div>
+                    <p class="field-hint cost-kpi-note">Đây là ước tính từ số token tiện ích đếm được. Hóa đơn thật xem ở Google AI Studio.</p>
                     <div id="costMeter" class="cost-meter" hidden><i></i></div>
                     <div class="field-hint" id="costSummary" style="margin-top: 10px;">Đang đọc...</div>
                     <div id="costTables"></div>
@@ -1426,6 +1518,7 @@
         <button type="button" class="btn btn-secondary" id="resetDefaultBtn">Khôi phục mặc định</button>
     </div>
 
+    <script src="build-stamp.js"></script>
     <script src="version-check.js"></script>
     <script src="version-history.js"></script>
     <script src="glossary.js"></script>

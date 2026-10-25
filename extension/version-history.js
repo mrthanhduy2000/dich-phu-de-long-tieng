@@ -4,6 +4,41 @@
 (function (root) {
     const HISTORY = [
         {
+            v: "3.0.9", luc: "25/10/2026", ten: "Trang Cài đặt hiện đúng commit và giờ cập nhật mới nhất và 13 cải tiến khác",
+            y: [
+                "Trang Cài đặt và popup hiện commit đang có trên máy và giờ commit, thay cho số phiên bản chỉ đổi khi phát hành.",
+                "Khi file trên máy mới hơn bản Chrome đang chạy (kể cả khi chưa đổi số phiên bản), trang Cài đặt hiện nhắc \"Nạp lại tiện ích ngay\".",
+                "Có thanh tiến trình ba mốc (Khóa, Lồng tiếng, Thử) ở đầu trang. Mốc và đường nối chuyển xanh khi bạn lưu khóa Gemini hoặc bật được giọng VieNeu.",
+                "Các bước hiện lần lượt khi mở trang, và dấu tích hiện ra với hiệu ứng ngắn. Máy bật \"giảm chuyển động\" sẽ không thấy hiệu ứng.",
+                "Nội dung ngắn hơn: bớt câu chữ lặp lại trong ba bước, giữ nguyên hướng dẫn lấy khóa và link dữ liệu.",
+                "Thanh bên chỉ còn bốn mục công việc: Phụ đề, Lồng tiếng, Dịch & AI, Chi phí & dữ liệu.",
+                "\"Giới thiệu & lịch sử phiên bản\" nằm dưới bốn mục đó, mở toàn bộ lịch sử phiên bản như trước. Không mất bản ghi nào.",
+                "Tab Chi phí & dữ liệu có thêm biểu đồ chi phí mỗi ngày (14 ngày gần nhất), lấy từ lịch sử đã lưu trên máy. Ngày không có chi phí vẫn có cột để dễ so sánh.",
+                "Dòng trạng thái giọng VieNeu rút gọn còn một câu, bỏ đoạn giải thích nhịp nói.",
+                "Hai thẻ trên đầu trang cài đặt cho biết ngay Gemini AI và giọng VieNeu đã sẵn sàng chưa. Bấm thẻ để mở đúng mục cần sửa.",
+                "Gemini chỉ hiện \"Gọi được\" cho đúng khóa API vừa kiểm tra thành công trong lần mở trang này; đổi khóa thì hiện lại \"Có key, chưa kiểm tra\".",
+                "Giọng VieNeu hiện \"Đang chạy trên máy này\" hoặc \"Chưa sẵn sàng\", tự cập nhật theo cùng kiểm tra máy chủ sẵn có.",
+                "Đổi qua lại các mục cài đặt có hiệu ứng trượt nhẹ; tắt hẳn khi máy bật chế độ giảm chuyển động.",
+                "Dòng phụ đề mới hiện dần trong 0,16 giây thay vì đổi cắt cụt. Áp dụng cho YouTube và Coursera.",
+                "Người dùng bật \"giảm chuyển động\" trong hệ thống sẽ chỉ thấy mờ dần, không có chuyển động trượt nhẹ.",
+                "Popup hiện từng việc cần có trước khi dịch thành một dấu riêng: Gemini, giọng VieNeu. Xanh là sẵn sàng, cam là còn thiếu.",
+                "Dòng chữ hướng dẫn và nút sửa vẫn như cũ, chỉ hiện khi còn thiếu việc.",
+                "Thẻ \"Đang chuẩn bị phụ đề và giọng Việt…\" có hai thanh: phụ đề đã dịch và giọng đọc đã sẵn sàng quanh vị trí đang xem, kèm số đoạn (ví dụ 2/4). Số liệu lấy từ bộ đọc lồng tiếng thật, không chạy theo thời gian.",
+                "Thẻ hiện nhẹ nhàng khi xuất hiện; người dùng bật \"giảm chuyển động\" trong hệ điều hành thì không có hiệu ứng.",
+                "Thông báo trên video trượt lên 8 px khi hiện; cũng tắt chuyển động khi người dùng bật \"giảm chuyển động\".",
+                "Mở lại bản dịch đã lưu, menu trên trình phát giờ hiện đúng nguồn phụ đề đã dùng.",
+                "Video YouTube mà phụ đề gốc gần như không có chữ (chỉ có nhạc, hoặc phụ đề tự động nghe nhầm sang tiếng khác) giờ có thông báo nói rõ lý do, ví dụ chỉ có khoảng 19 chữ trong 14 phút, kèm ngôn ngữ YouTube đã nhận. Trước đây nút vẫn sáng, menu ghi đang dịch nhưng màn hình trống mà không có lời giải thích.",
+                "Menu trên trình phát ghi nguồn là \"phụ đề gần như không có lời\". Phần có chữ vẫn được dịch như cũ.",
+                "Trên TED, video được giữ tạm dừng tối đa 15 giây (thay vì 5 giây) cho đến khi phụ đề và giọng Việt sẵn sàng.",
+                "Phụ đề của TED được tải song song nên sẵn sàng nhanh hơn nhiều, bài nói dài cũng tự bật dịch và lồng tiếng sớm hơn.",
+                "Các trang của tiện ích dùng chung một nhịp chuyển động, góc bo và độ nổi của thẻ. Giao diện không đổi màu hay bố cục.",
+                "Khi máy bật \"giảm chuyển động\", mọi hiệu ứng được tắt như trước.",
+                "Trình phát YouTube nhúng (bài TEDx) không có thanh điều khiển cũ, nên nút của tiện ích nay nổi ở góc trên bên phải của trình phát.",
+                "Các bài TEDx nhúng video YouTube trong khung riêng giờ cũng được dịch phụ đề và lồng tiếng như trên YouTube.",
+                "Video YouTube nói tiếng Anh nhưng trang có phụ đề tiếng Việt: dòng gốc giờ là phụ đề tiếng Anh, dòng dịch là phụ đề tiếng Việt có sẵn. Không còn hai dòng tiếng Việt, và không tốn lượt Gemini cho video này."
+            ]
+        },
+        {
             v: "3.0.8", luc: "23/10/2026", ten: "Máy chủ giọng VieNeu chỉ nghe tiện ích và 1 cải tiến khác",
             y: [
                 "Máy chủ giọng trên máy bạn từ chối mọi yêu cầu đến từ trang web khác, nên một trang lạ không thể dùng ngầm giọng của bạn. Tiện ích vẫn dùng bình thường.",

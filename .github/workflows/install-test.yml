@@ -9,10 +9,10 @@
 name: Install test
 
 on:
-  # staging: a release is pushed there first and reaches main (and friends' updaters, which read
-  # main only) once this test is green on it (tools/publish-share.js --stage, then --promote)
+  # share-staging: a build is pushed there first and reaches share (and friends' updaters, which read
+  # share only) once this test is green on it (tools/publish-share.js --stage, then --promote)
   push:
-    branches: [main, staging]
+    branches: [share, share-staging]
   workflow_dispatch:
 
 concurrency:

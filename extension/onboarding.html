@@ -6,23 +6,24 @@
     <title>Chào mừng - Vietnamese Subtitle Translator</title>
     <script src="chrome-shim.js"></script>
     <script src="theme.js"></script>
+    <link href="ui-tokens.css" rel="stylesheet">
     <style>
         :root {
             --bg: #FAF9F5; --card: #FFFFFF; --subtle: #F6F4EE; --text: #262420; --text-2: #57524A;
             --border: #E8E4DC; --accent-fill: #B4573A; --accent-fill-hover: #A24C31; --link: #A24C31;
-            --ok: #2E7D32; --ok-bg: #E8F5E9; --err: #B3261E; --err-bg: #FDF2F2; --focus: #B4573A;
+            --ok: #2E7D32; --ok-bg: #E8F5E9; --err: #B3261E; --err-bg: #FDF2F2; --focus: #B4573A; --on-ok: #FFFFFF;
         }
         @media (prefers-color-scheme: dark) {
             :root:not([data-theme="light"]) {
                 --bg: #1F1E1B; --card: #282622; --subtle: #23211E; --text: #ECE8E1; --text-2: #A8A39A;
                 --border: #3A3732; --accent-fill: #B4573A; --accent-fill-hover: #A24C31; --link: #E8A590;
-                --ok: #81C784; --ok-bg: #1B2E1D; --err: #F2A6A0; --err-bg: #3A1F1D; --focus: #E8A590;
+                --ok: #81C784; --ok-bg: #1B2E1D; --err: #F2A6A0; --err-bg: #3A1F1D; --focus: #E8A590; --on-ok: #10200F;
             }
         }
         :root[data-theme="dark"] {
             --bg: #1F1E1B; --card: #282622; --subtle: #23211E; --text: #ECE8E1; --text-2: #A8A39A;
             --border: #3A3732; --accent-fill: #B4573A; --accent-fill-hover: #A24C31; --link: #E8A590;
-            --ok: #81C784; --ok-bg: #1B2E1D; --err: #F2A6A0; --err-bg: #3A1F1D; --focus: #E8A590;
+            --ok: #81C784; --ok-bg: #1B2E1D; --err: #F2A6A0; --err-bg: #3A1F1D; --focus: #E8A590; --on-ok: #10200F;
         }
         * { box-sizing: border-box; }
         body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
@@ -30,22 +31,26 @@
         h1 { font: 600 30px/1.25 Georgia, "Iowan Old Style", serif; margin: 0 0 8px; }
         .lead { color: var(--text-2); margin: 0 0 32px; }
         ol { list-style: none; margin: 0; padding: 0; counter-reset: step; }
-        li.step { counter-increment: step; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 20px 20px 64px; margin-bottom: 14px; position: relative; }
-        li.step::before { content: counter(step); position: absolute; left: 20px; top: 20px; width: 28px; height: 28px; border-radius: 50%; background: var(--accent-fill); color: #fff; font-weight: 600; text-align: center; line-height: 28px; font-size: 14px; }
-        li.step.done::before { content: "\2713"; background: var(--ok); color: #fff; }
-        :root[data-theme="dark"] li.step.done::before { color: #10200f; }
+        li.step { counter-increment: step; background: var(--card); border: 1px solid var(--border); border-radius: var(--cst-radius-md); padding: 20px 20px 20px 64px; margin-bottom: 14px; position: relative; animation: rise var(--cst-dur-slow) var(--cst-ease-out) both; }
+        li.step:nth-child(2) { animation-delay: .08s; }
+        li.step:nth-child(3) { animation-delay: .16s; }
+        li.step::before { content: counter(step); position: absolute; left: 20px; top: 20px; width: 28px; height: 28px; border-radius: 50%; background: var(--accent-fill); color: #fff; font-weight: 600; text-align: center; line-height: 28px; font-size: 14px; transition: background-color var(--cst-dur-base); }
+        li.step.done::before { content: "\2713"; background: var(--ok); color: var(--on-ok); animation: pop var(--cst-dur-slow) var(--cst-ease-spring); }
         h2 { font-size: 17px; margin: 0 0 6px; }
         p { margin: 0 0 10px; }
         .muted { color: var(--text-2); font-size: 14px; }
         a { color: var(--link); }
         .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-        input[type="password"], input[type="text"] { flex: 1 1 240px; min-width: 0; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--subtle); color: var(--text); font: inherit; }
-        .btn { padding: 9px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
+        input[type="password"], input[type="text"] { flex: 1 1 240px; min-width: 0; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--cst-radius-sm); background: var(--subtle); color: var(--text); font: inherit; transition: border-color var(--cst-dur-fast); }
+        input[type="password"]:focus, input[type="text"]:focus { border-color: var(--focus); }
+        .btn { padding: 9px 16px; border: 1px solid var(--border); border-radius: var(--cst-radius-sm); background: var(--card); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; transition: background-color var(--cst-dur-fast), transform var(--cst-dur-fast); }
+        .btn:hover { background: var(--subtle); }
+        .btn:active { transform: scale(.98); }
         .btn-primary { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
         .btn-primary:hover { background: var(--accent-fill-hover); }
         .btn[disabled] { opacity: .6; cursor: default; }
         input:focus-visible, .btn:focus-visible, a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-        .status { margin-top: 10px; padding: 8px 12px; border-radius: 8px; font-size: 14px; background: var(--subtle); color: var(--text); }
+        .status { margin-top: 10px; padding: 8px 12px; border-radius: var(--cst-radius-sm); font-size: 14px; background: var(--subtle); color: var(--text); }
         .status:empty { display: none; }
         .status.ok { background: var(--ok-bg); color: var(--ok); }
         .status.err { background: var(--err-bg); color: var(--err); }
@@ -53,20 +58,49 @@
         summary { cursor: pointer; color: var(--link); }
         code { background: var(--subtle); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
         footer { margin-top: 24px; display: flex; gap: 16px; flex-wrap: wrap; }
+
+        /* Progress: three stops, the line fills to the stop the user has reached */
+        .stepper { position: relative; display: flex; justify-content: space-between; margin: 0 0 40px; padding-bottom: 30px; animation: rise var(--cst-dur-slow) var(--cst-ease-out) both; }
+        .stepper::before, .stepper-fill { content: ""; position: absolute; left: 14px; top: 13px; height: 2px; border-radius: 2px; }
+        .stepper::before { right: 14px; background: var(--border); }
+        .stepper-fill { width: 0; background: var(--ok); transition: width var(--cst-dur-slow) var(--cst-ease-out); }
+        .stepper[data-done="1"] .stepper-fill { width: calc((100% - 28px) / 2); }
+        .stepper[data-done="2"] .stepper-fill { width: calc(100% - 28px); }
+        .stepper-node { position: relative; width: 28px; }
+        .dot { position: relative; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border); background: var(--card); color: var(--text-2); font-size: 13px; font-weight: 600; transition: background-color var(--cst-dur-base), border-color var(--cst-dur-base), color var(--cst-dur-base); }
+        .dot.done { background: var(--ok); border-color: var(--ok); color: var(--on-ok); font-size: 0; }
+        .dot.done::after { content: "\2713"; font-size: 13px; animation: pop var(--cst-dur-slow) var(--cst-ease-spring); }
+        .stepper-label { position: absolute; top: 36px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 13px; color: var(--text-2); }
+        .stepper-node:first-child .stepper-label { left: 0; transform: none; }
+        .stepper-node:last-child .stepper-label { left: auto; right: 0; transform: none; }
+
+        @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+        @keyframes pop { 0% { transform: scale(.5); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+        @media (max-width: 480px) {
+            main { padding: 32px 16px 48px; }
+            h1 { font-size: 26px; }
+        }
         @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
     </style>
 </head>
 <body>
 <main>
     <h1>Cài xong rồi, còn ba bước nhỏ</h1>
-    <p class="lead">Làm một lần là xong. Bước 1 và 3 đủ để dịch phụ đề; bước 2 chỉ cần nếu bạn muốn nghe lồng tiếng.</p>
+    <p class="lead">Bước 1 và 3 là đủ để dịch phụ đề. Bước 2 chỉ cho lồng tiếng.</p>
+
+    <div class="stepper" id="stepper" data-done="0" aria-hidden="true">
+        <div class="stepper-fill"></div>
+        <div class="stepper-node"><span class="dot" id="dotKey">1</span><span class="stepper-label">Khóa</span></div>
+        <div class="stepper-node"><span class="dot" id="dotVoice">2</span><span class="stepper-label">Lồng tiếng</span></div>
+        <div class="stepper-node"><span class="dot">3</span><span class="stepper-label">Thử</span></div>
+    </div>
 
     <ol>
         <li class="step" id="stepKey">
             <h2>Nhập khóa Gemini để dịch tự nhiên hơn</h2>
-            <p class="muted">Khóa miễn phí. Chưa có khóa vẫn dịch được bằng Google Dịch, chỉ kém sát ngữ cảnh hơn.</p>
+            <p class="muted">Khóa miễn phí. Chưa có khóa vẫn dịch được bằng Google Dịch.</p>
             <ol class="muted" style="list-style: decimal; padding-left: 20px; margin: 0 0 8px;">
-                <li>Mở <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> và đăng nhập tài khoản Google.</li>
+                <li>Mở <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> và đăng nhập.</li>
                 <li>Bấm "Create API key", rồi sao chép chuỗi bắt đầu bằng <code>AIza</code>.</li>
                 <li>Dán vào ô bên dưới và bấm "Lưu và kiểm tra".</li>
             </ol>
@@ -81,7 +115,7 @@
 
         <li class="step" id="stepVoice">
             <h2>Muốn nghe lồng tiếng? Bật giọng VieNeu</h2>
-            <p class="muted">Giọng đọc tiếng Việt chạy ngay trên máy bạn, miễn phí. Có thể bỏ qua nếu chỉ cần phụ đề.</p>
+            <p class="muted">Giọng tiếng Việt chạy ngay trên máy bạn, miễn phí. Bỏ qua nếu chỉ cần phụ đề.</p>
             <div class="status" id="voiceStatus" role="status" aria-live="polite">Đang kiểm tra...</div>
             <details id="voiceHelp" hidden>
                 <summary>Cách bật</summary>
@@ -92,7 +126,7 @@
 
         <li class="step" id="stepTry">
             <h2>Thử với một video mẫu</h2>
-            <p class="muted">Mở video ngắn có phụ đề tiếng Anh, rồi bấm nút phụ đề Việt trên thanh điều khiển của trình phát. Nên ghim tiện ích lên thanh công cụ (biểu tượng mảnh ghép, chọn ghim) để mở menu nhanh.</p>
+            <p class="muted">Mở video có phụ đề tiếng Anh, rồi bấm nút phụ đề Việt trên thanh điều khiển. Ghim tiện ích lên thanh công cụ để mở menu nhanh.</p>
             <div class="row"><a class="btn btn-primary" id="sampleLink" href="https://www.youtube.com/watch?v=jNQXAC9IVRw" target="_blank" rel="noopener">Mở video mẫu</a></div>
         </li>
     </ol>

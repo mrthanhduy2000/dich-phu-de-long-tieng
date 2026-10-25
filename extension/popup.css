@@ -107,31 +107,37 @@
     padding: 0;
 }
 
+/* hidden must win over any display set by a class below */
+[hidden] {
+    display: none !important;
+}
+
 body {
-    width: 330px;
+    width: 360px;
     background-color: var(--claude-bg);
     color: var(--claude-text);
     font-family: var(--claude-font-sans);
     font-size: 13px;
     line-height: 1.5;
-    padding: 16px;
+    padding: var(--space-2);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     user-select: none;
     overflow-x: hidden;
 }
 
+/* Spacing: 16px between sections, 8px inside a section */
 .container {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--space-2);
 }
 
-/* Staggered Entrance Animations */
+/* Entrance motion: one short slide per block, staggered by --delay */
 .anim-entry {
     opacity: 0;
     transform: translateY(8px);
-    animation: claudeSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: claudeSlideUp var(--cst-dur-base) var(--cst-ease-out) forwards;
     animation-delay: var(--delay, 0s);
 }
 
@@ -146,36 +152,39 @@ body {
     }
 }
 
-/* 1. Header Section */
+/* 1. Header */
 .header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-bottom: 2px;
+    gap: var(--space-1);
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
 }
 
 .brand-wrap {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--space-1);
+    min-width: 0;
 }
 
 .sparkle-wrap {
     position: relative;
     width: 28px;
     height: 28px;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: var(--claude-radius-sm);
     background-color: var(--claude-accent-subtle);
     border: 1px solid var(--claude-accent-border);
-    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     cursor: default;
-}
-
-.sparkle-wrap:hover {
-    transform: scale(1.08);
 }
 
 .claude-sparkle {
@@ -183,13 +192,13 @@ body {
     height: 17px;
     color: var(--claude-accent);
     flex-shrink: 0;
-    transition: transform 0.25s ease;
 }
 
 .brand-text-block {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 2px;
+    min-width: 0;
 }
 
 .brand-title {
@@ -201,11 +210,11 @@ body {
     line-height: 1.15;
 }
 
-/* Live Detection Radar Pill */
+/* Live connection indicator */
 .live-pill {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
 }
 
 .live-dot {
@@ -240,77 +249,156 @@ body {
 }
 
 .live-text {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--claude-text-muted);
     font-weight: 400;
-    letter-spacing: 0.1px;
 }
 
 .brand-badge {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
     color: var(--claude-text-muted);
-    background-color: transparent;
-    border: 1px solid var(--claude-border);
-    padding: 2px 7px;
-    border-radius: 999px;
-    letter-spacing: 0.2px;
-    transition: transform 0.2s ease, background-color 0.2s ease;
-}
-
-.brand-badge:hover {
-    transform: scale(1.05);
-}
-
-/* 2. Description / Context Note */
-.description-card {
     background-color: var(--claude-card-subtle);
-    border: 1px solid var(--claude-border);
+    padding: 2px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.header-settings-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
     border-radius: var(--claude-radius-sm);
-    padding: 8px 10px;
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    transition: border-color 0.2s ease, background-color 0.2s ease;
-}
-
-.description-card:hover {
-    background-color: var(--claude-card-hover);
-    border-color: var(--claude-border-hover);
-}
-
-.card-icon {
-    width: 14px;
-    height: 14px;
-    color: var(--claude-text-muted);
-    flex-shrink: 0;
-    margin-top: 2px;
-}
-
-.note {
-    font-size: 12px;
+    border: none;
+    background: var(--claude-card);
+    box-shadow: var(--claude-shadow-subtle);
     color: var(--claude-text-secondary);
-    line-height: 1.42;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color var(--cst-dur-fast) ease, color var(--cst-dur-fast) ease;
 }
 
-.note strong {
+.header-settings-btn:hover {
+    background: var(--claude-card-hover);
     color: var(--claude-text);
+}
+
+/* 2. "Đang xem": the page in front of you */
+.now-card {
+    padding: 14px 16px;
+    border: 1px solid var(--claude-border);
+    border-radius: var(--claude-radius-md);
+    background: var(--claude-card);
+}
+
+.now-kicker {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-1);
+    font-size: 12px;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: var(--claude-text-muted);
+}
+
+.now-site {
+    font-size: 12px;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--claude-accent-fill);
     font-weight: 600;
 }
 
-/* 3. Settings Group Card */
+.now-title {
+    margin: 6px 0 0;
+    font-family: var(--claude-font-serif);
+    font-size: 15px;
+    line-height: 1.35;
+    color: var(--claude-text);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.now-progress {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-top: 12px;
+}
+
+.now-bar {
+    flex: 1;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--claude-border);
+    overflow: hidden;
+}
+
+.now-bar > i {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: 999px;
+    background: var(--claude-accent);
+    transition: width var(--cst-dur-base) var(--cst-ease-out);
+}
+
+.now-count {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--claude-text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.now-voice {
+    margin: 8px 0 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--claude-text-secondary);
+}
+.now-voice.warn { color: #8A5A0C; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .now-voice.warn { color: #E8B84B; } }
+:root[data-theme="dark"] .now-voice.warn { color: #E8B84B; }
+/* "Đang xem" site name: the dark brand fill reads on light cards; dark cards keep the bright accent */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .now-site { color: var(--claude-accent); } }
+:root[data-theme="dark"] .now-site { color: var(--claude-accent); }
+
+/* Cost of today: one quiet row, coloured only when the budget is close or over */
+.cost-today {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-1);
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: var(--claude-radius-sm);
+    border: 1px solid transparent;
+    background: var(--claude-card-subtle);
+    color: var(--claude-text-secondary);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--cst-dur-fast) ease;
+}
+.cost-today:hover { background: var(--claude-card-hover); }
+.cost-today strong { color: var(--claude-text); font-weight: 600; }
+.cost-today.warn { border-color: #d97706; }
+.cost-today.over { border-color: #c0392b; }
+.cost-today .cost-bar { flex: 0 0 56px; height: 4px; border-radius: 2px; background: var(--claude-border); overflow: hidden; }
+.cost-today .cost-bar > i { display: block; height: 100%; background: var(--claude-accent, #c96442); }
+
+/* 3. Settings: one card, hairline dividers, no nested borders */
 .settings-group {
     background-color: var(--claude-card);
     border: 1px solid var(--claude-border);
     border-radius: var(--claude-radius-md);
-    box-shadow: var(--claude-shadow-subtle);
     overflow: hidden;
-    transition: box-shadow 0.2s ease, border-color 0.2s ease;
-}
-
-.settings-group:hover {
-    box-shadow: var(--claude-shadow-card);
-    border-color: var(--claude-border-hover);
 }
 
 .setting-row {
@@ -318,13 +406,13 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 12px;
+    padding: 12px 16px;
     cursor: pointer;
-    transition: background-color 0.16s ease;
+    transition: background-color var(--cst-dur-fast) ease;
     border-bottom: 1px solid var(--claude-border);
 }
 
-.setting-row:last-child {
+.settings-group > .setting-row:last-child {
     border-bottom: none;
 }
 
@@ -340,8 +428,8 @@ body {
     justify-content: center;
     color: var(--claude-text-muted);
     flex-shrink: 0;
-    margin-right: 9px;
-    transition: color 0.15s ease, transform 0.15s ease;
+    margin-right: var(--space-1);
+    transition: color var(--cst-dur-fast) ease;
 }
 
 .setting-icon-box svg {
@@ -350,15 +438,15 @@ body {
 }
 
 .setting-row:hover .setting-icon-box {
-    color: var(--claude-accent);
-    transform: scale(1.06);
+    color: var(--claude-accent-fill);
 }
 
 .setting-label-wrap {
     display: flex;
     flex-direction: column;
-    padding-right: 10px;
+    padding-right: 12px;
     flex: 1;
+    min-width: 0;
 }
 
 .setting-title {
@@ -369,56 +457,49 @@ body {
 }
 
 .setting-desc {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--claude-text-muted);
-    line-height: 1.3;
-    margin-top: 1px;
+    line-height: 1.35;
+    margin-top: 2px;
 }
 
-/* Accordion Smooth Sub-Options Container */
+/* Sub-option group: slides open under its parent, tinted, no border of its own */
 .sub-options-wrapper {
     max-height: 0;
     opacity: 0;
     overflow: hidden;
     transform: translateY(-4px);
-    transition: max-height 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-                opacity 0.24s cubic-bezier(0.16, 1, 0.3, 1),
-                transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
-    background-color: rgba(0, 0, 0, 0.015);
+    transition: max-height var(--cst-dur-base) var(--cst-ease-out),
+                opacity var(--cst-dur-fast) ease,
+                transform var(--cst-dur-base) var(--cst-ease-out);
+    background-color: var(--claude-card-subtle);
 }
 
 .sub-options-wrapper.expanded {
     max-height: 100px;
     opacity: 1;
     transform: translateY(0);
-    border-top: 1px dashed var(--claude-border);
-    border-bottom: 1px solid var(--claude-border);
 }
 
 .sub-option {
-    padding-left: 18px;
+    padding-left: 16px;
     background: transparent;
-    border-bottom: 1px dashed var(--claude-border);
-}
-
-.sub-option:last-child {
-    border-bottom: none;
+    border-bottom: 1px solid var(--claude-border);
 }
 
 .sub-tree-indicator {
     width: 8px;
     height: 14px;
-    border-left: 1.5px solid var(--claude-border);
-    border-bottom: 1.5px solid var(--claude-border);
-    margin-right: 6px;
+    border-left: 1.5px solid var(--claude-border-hover);
+    border-bottom: 1.5px solid var(--claude-border-hover);
+    margin-right: 8px;
     flex-shrink: 0;
-    opacity: 0.7;
 }
 
 .sub-icon {
     width: 20px;
     height: 20px;
-    margin-right: 7px;
+    margin-right: 8px;
 }
 
 .sub-icon svg {
@@ -427,11 +508,12 @@ body {
 }
 
 .sub-option .setting-title {
-    font-size: 12.5px;
+    font-size: 13px;
+    font-weight: 400;
     color: var(--claude-text-secondary);
 }
 
-/* Minimalist Tactile Claude Toggle Switch */
+/* Toggle switch */
 .switch-box {
     position: relative;
     width: 36px;
@@ -454,7 +536,7 @@ body {
     right: 0;
     bottom: 0;
     background-color: var(--claude-border-hover);
-    transition: background-color 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: background-color var(--cst-dur-base) var(--cst-ease-out);
     border-radius: 999px;
 }
 
@@ -466,8 +548,8 @@ body {
     left: 2px;
     bottom: 2px;
     background-color: #FFFFFF;
-    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
-                width 0.15s ease;
+    transition: transform var(--cst-dur-base) var(--cst-ease-spring),
+                width var(--cst-dur-fast) ease;
     border-radius: 50%;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
 }
@@ -489,12 +571,11 @@ body {
     outline-offset: 2px;
 }
 
-/* 4. Action Buttons */
+/* 4. Actions: one clear primary button, one secondary, status below */
 .actions-wrap {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin-top: 2px;
+    gap: var(--space-1);
 }
 
 .button-primary {
@@ -503,31 +584,30 @@ body {
     align-items: center;
     justify-content: center;
     width: 100%;
-    padding: 10px 14px;
+    min-height: 44px;
+    padding: 12px 16px;
     background-color: var(--claude-accent-fill);
     color: #FFFFFF;
     font-family: var(--claude-font-sans);
-    font-size: 13.5px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 600;
     border-radius: var(--claude-radius-sm);
     border: none;
     cursor: pointer;
-    box-shadow: var(--claude-shadow-glow);
-    transition: background-color 0.18s ease, transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease;
+    transition: background-color var(--cst-dur-fast) ease, transform var(--cst-dur-fast) ease, box-shadow var(--cst-dur-base) ease;
     overflow: hidden;
     outline: none;
 }
 
 .button-primary:hover {
     background-color: var(--claude-accent-fill-hover);
-    transform: translateY(-1.5px);
-    box-shadow: 0 6px 18px var(--claude-accent-shadow);
+    box-shadow: 0 4px 12px var(--claude-accent-shadow);
 }
 
 .button-primary:active {
-    transform: translateY(0.5px) scale(0.985);
+    transform: scale(0.99);
     background-color: var(--claude-accent-fill-active);
-    box-shadow: 0 2px 6px var(--claude-accent-shadow);
+    box-shadow: none;
 }
 
 .btn-content {
@@ -536,47 +616,21 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: var(--space-1);
 }
 
 .btn-icon {
     width: 16px;
     height: 16px;
     flex-shrink: 0;
-    transition: transform 0.25s ease;
 }
 
-.button-primary:hover .btn-icon {
-    transform: scale(1.1);
-}
-
-/* Shimmer Sweep Animation on Button */
+/* The idle sheen was a constant animation; it is gone to keep the button calm */
 .btn-shimmer {
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 60%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    transform: skewX(-20deg);
-    z-index: 1;
-    pointer-events: none;
+    display: none;
 }
 
-.button-primary:hover .btn-shimmer {
-    animation: btnShine 1.1s ease-in-out infinite;
-}
-
-@keyframes btnShine {
-    0% {
-        left: -100%;
-    }
-    100% {
-        left: 200%;
-    }
-}
-
-/* Dynamic Translating State */
+/* Translating: the icon spins, the button stays in its hover colour */
 .button-primary.is-translating {
     background-color: var(--claude-accent-fill-hover);
     cursor: wait;
@@ -595,79 +649,56 @@ body {
     }
 }
 
-/* Dynamic Success State */
+/* Success: green fill with one short pulse */
 .button-primary.is-success {
     background-color: var(--claude-success-fill);
-    box-shadow: 0 4px 14px rgba(46, 125, 50, 0.25);
-    animation: successPulse 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: none;
+    animation: successPulse var(--cst-dur-base) var(--cst-ease-out);
 }
 
 @keyframes successPulse {
     0% {
-        transform: scale(0.96);
+        transform: scale(0.98);
     }
     50% {
-        transform: scale(1.02);
+        transform: scale(1.01);
     }
     100% {
         transform: scale(1);
     }
 }
 
-/* Secondary Button */
+/* Secondary button: outlined, quieter than the primary one */
 .button-secondary {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
     width: 100%;
-    padding: 8.5px 14px;
-    background-color: var(--claude-card);
-    color: var(--claude-text-secondary);
-    font-family: var(--claude-font-sans);
-    font-size: 12.5px;
-    font-weight: 500;
+    padding: 10px 16px;
     border-radius: var(--claude-radius-sm);
     border: 1px solid var(--claude-border);
-    text-decoration: none;
+    background: var(--claude-card);
+    color: var(--claude-text);
+    font-family: var(--claude-font-sans);
+    font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
-    box-shadow: var(--claude-shadow-subtle);
-    transition: all 0.16s ease;
-}
-
-.btn-sec-icon {
-    width: 14px;
-    height: 14px;
-    color: var(--claude-text-muted);
-    transition: color 0.16s ease, transform 0.16s ease;
+    transition: background-color var(--cst-dur-fast) ease, border-color var(--cst-dur-fast) ease;
 }
 
 .button-secondary:hover {
-    background-color: var(--claude-card-subtle);
+    background: var(--claude-card-hover);
     border-color: var(--claude-border-hover);
-    color: var(--claude-text);
-    transform: translateY(-0.5px);
 }
 
-.button-secondary:hover .btn-sec-icon {
-    color: var(--claude-accent);
-    transform: rotate(30deg);
-}
-
-.button-secondary:active {
-    transform: translateY(0);
-}
-
-/* Status Alert Card with Smooth Collapse/Expand */
+/* Status line: a tinted strip, only when there is something to say */
 .status-container {
     display: none;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-1);
     font-size: 12px;
     line-height: 1.4;
-    padding: 7px 11px;
+    padding: 8px 12px;
     border-radius: var(--claude-radius-sm);
-    animation: statusSlideDown 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    border: 1px solid transparent;
+    animation: statusSlideDown var(--cst-dur-base) var(--cst-ease-out);
 }
 
 .status-container.visible {
@@ -704,213 +735,120 @@ body {
     font-size: 12px;
 }
 
-/* Status Alert Variants */
 .status-container.is-info {
     background-color: var(--claude-accent-subtle);
-    border: 1px solid var(--claude-accent-border);
-    color: var(--claude-accent);
+    border-color: var(--claude-accent-border);
+    color: var(--claude-accent-fill);
 }
 
 .status-container.is-success {
     background-color: var(--claude-success-subtle);
-    border: 1px solid var(--claude-success-border);
+    border-color: var(--claude-success-border);
     color: var(--claude-success);
 }
 
 .status-container.is-error {
     background-color: var(--claude-warning-subtle);
-    border: 1px solid var(--claude-warning-border);
+    border-color: var(--claude-warning-border);
     color: var(--claude-warning);
 }
 
-/* 5. Collapsible Tips Drawer */
-.tips-drawer {
-    border: 1px solid var(--claude-border);
-    border-radius: var(--claude-radius-sm);
-    background-color: var(--claude-card);
-    overflow: hidden;
-    transition: border-color 0.2s ease;
-}
-
-.tips-drawer:hover {
-    border-color: var(--claude-border-hover);
-}
-
-.tips-header {
-    width: 100%;
+/* Readiness chips: one per requirement (key, voice), so the state reads before any text */
+.ready-steps {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 7px 11px;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    font-family: var(--claude-font-sans);
-    font-size: 12px;
-    color: var(--claude-text-secondary);
-    transition: background-color 0.15s ease;
+    flex-wrap: wrap;
+    gap: 6px;
+    animation: ready-in var(--cst-dur-base) var(--cst-ease-out) both;
 }
 
-.tips-header:hover {
-    background-color: var(--claude-card-subtle);
+.ready-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    line-height: 1.4;
+    background: var(--claude-card-subtle);
+    color: var(--claude-text-secondary);
+}
+
+.ready-step::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--claude-border-hover);
+}
+
+.ready-step.ok { color: var(--claude-success); background: var(--claude-success-subtle); }
+.ready-step.ok::before { background: var(--claude-success); }
+.ready-step.todo { color: var(--claude-warning); background: var(--claude-warning-subtle); }
+.ready-step.todo::before { background: var(--claude-warning); }
+
+@keyframes ready-in {
+    from { opacity: 0; transform: translateY(-3px); }
+    to { opacity: 1; transform: none; }
+}
+
+.ready-hint {
+    margin: 0;
+    padding: 8px 12px;
+    border-radius: var(--claude-radius-sm);
+    font-size: 12px;
+    line-height: 1.45;
+    background: var(--claude-card-subtle);
+    color: var(--claude-text-secondary);
+}
+
+.ready-hint .link-btn {
+    padding: 0 2px;
+    font-size: inherit;
     color: var(--claude-text);
 }
 
-.tips-title-wrap {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-weight: 500;
-}
-
-.tips-icon {
-    width: 14px;
-    height: 14px;
-    color: var(--claude-accent);
-}
-
-.tips-chevron {
-    width: 14px;
-    height: 14px;
-    color: var(--claude-text-muted);
-    transition: transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.tips-drawer.open .tips-chevron {
-    transform: rotate(180deg);
-}
-
-.tips-content-wrap {
-    max-height: 0;
-    opacity: 0;
-    overflow: hidden;
-    transition: max-height 0.26s cubic-bezier(0.16, 1, 0.3, 1),
-                opacity 0.2s ease,
-                padding 0.2s ease;
-    padding: 0 11px;
-    background-color: var(--claude-card-subtle);
-}
-
-.tips-drawer.open .tips-content-wrap {
-    max-height: 120px;
-    opacity: 1;
-    padding: 8px 11px 9px 11px;
-    border-top: 1px dashed var(--claude-border);
-}
-
-.tips-list {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.tips-list li {
-    display: flex;
-    align-items: flex-start;
-    gap: 6px;
-    font-size: 11.5px;
-    color: var(--claude-text-secondary);
-    line-height: 1.35;
-}
-
-.tip-bullet {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background-color: var(--claude-accent);
-    margin-top: 6px;
-    flex-shrink: 0;
-}
-
-/* 6. Minimal Footer */
-.footer-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-top: 8px;
-    border-top: 1px solid var(--claude-border);
-    margin-top: 2px;
-}
-
-.platform-tags {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 11px;
-    color: var(--claude-text-muted);
-}
-
-.platform-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background-color: var(--claude-accent);
-}
-
-.sep-dot {
-    opacity: 0.5;
-}
-
-.footer-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    color: var(--claude-text-muted);
-    font-size: 11.5px;
-    text-decoration: none;
-    transition: color 0.15s ease, transform 0.15s ease;
-}
-
-.footer-link:hover {
-    color: var(--claude-accent);
-    transform: translateY(-0.5px);
-}
-
-/* Chi phí ước tính hôm nay */
-.cost-today {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    width: 100%;
-    margin: 0 0 12px;
-    padding: 8px 12px;
-    border-radius: 10px;
-    border: 1px solid var(--claude-border);
-    background: var(--claude-card);
-    color: var(--claude-text-secondary);
-    font: inherit;
-    font-size: 11.5px;
-    text-align: left;
-    cursor: pointer;
-}
-.cost-today strong { color: var(--claude-text); font-weight: 600; }
-.cost-today.warn { border-color: #d97706; }
-.cost-today.over { border-color: #c0392b; }
-.cost-today .cost-bar { flex: 0 0 56px; height: 4px; border-radius: 2px; background: var(--claude-border); overflow: hidden; }
-.cost-today .cost-bar > i { display: block; height: 100%; background: var(--claude-accent, #c96442); }
-
-/* Liên kết phụ (chỉ hiện trên tab YouTube): nhẹ, không tranh chỗ nút chính */
+/* Secondary text links: quiet, but still 12px and AA on the card */
 .link-btn {
     align-self: center;
     background: none;
     border: none;
-    padding: 5px 6px;
+    padding: 6px 8px;
     color: var(--claude-text-secondary);
     font-family: var(--claude-font-sans);
-    font-size: 11.5px;
+    font-size: 12px;
     text-decoration: underline;
     text-underline-offset: 2px;
     cursor: pointer;
 }
+
 .link-btn:hover { color: var(--claude-text); }
-.link-btn[hidden] { display: none; }
-.cost-today[hidden] { display: none; }
 
+/* Shortcut hint and page status: centred, 12px, one line each when possible */
+.hint-row {
+    margin: 0;
+    text-align: center;
+    font-size: 12px;
+    color: var(--claude-text-muted);
+}
 
-/* Bàn phím: luôn thấy rõ phần tử đang được chọn (Tab). Chrome không vẽ viền mặc định
-   trên nền tối nên trước đây không biết mình đang ở đâu trong bảng điều khiển. */
+.hint-row kbd {
+    font-family: var(--claude-font-sans);
+    font-size: 12px;
+    padding: 0 6px;
+    border-radius: 4px;
+    border: 1px solid var(--claude-border);
+    background: var(--claude-card);
+    color: var(--claude-text-secondary);
+}
+
+.page-status {
+    margin: 0;
+    text-align: center;
+    font-size: 12px;
+    color: var(--claude-text-secondary);
+}
+
+/* Keyboard: the focused element is always visible, on light and dark backgrounds */
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
@@ -920,7 +858,7 @@ input:focus-visible,
     border-radius: var(--claude-radius-sm, 8px);
 }
 
-/* Tôn trọng cài đặt "giảm chuyển động" của hệ điều hành */
+/* Respect the operating system's "reduce motion" setting */
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
         animation-duration: 0.001ms !important;
@@ -928,90 +866,3 @@ input:focus-visible,
         transition-duration: 0.001ms !important;
     }
 }
-
-/* Gợi ý phím tắt: người dùng không biết là có nếu không nói ra */
-.hint-row {
-    margin: 2px 0 0;
-    text-align: center;
-    font-size: 11px;
-    color: var(--claude-text-muted);
-}
-.hint-row kbd {
-    font-family: var(--claude-font-sans);
-    font-size: 10.5px;
-    padding: 1px 5px;
-    border-radius: 4px;
-    border: 1px solid var(--claude-border);
-    background: var(--claude-card-subtle);
-    color: var(--claude-text-secondary);
-}
-
-/* Trạng thái trang đang xem: biết ngay tiện ích đang làm gì, không phải đoán */
-.page-status {
-    margin: 2px 0 0;
-    text-align: center;
-    font-size: 11.5px;
-    color: var(--claude-text-secondary);
-}
-.page-status[hidden] { display: none; }
-
-/* Nút Cài đặt ở đầu bảng: dùng MÀU THEO GIAO DIỆN. Trước đây tô cứng chữ trắng trên nền
-   trắng mờ nên ở giao diện sáng nút gần như tàng hình. */
-.header-settings-btn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    border-radius: 6px;
-    border: 1px solid var(--claude-border);
-    background: var(--claude-card);
-    color: var(--claude-text-secondary);
-    font-family: inherit;
-    font-size: 11px;
-    cursor: pointer;
-}
-.header-settings-btn:hover {
-    background: var(--claude-card-hover);
-    color: var(--claude-text);
-}
-
-
-/* ---- "Đang xem": the page in front of you, set like the front matter of a paper ---- */
-.now-card { margin: 0 0 12px; padding: 14px 16px 13px; border: 1px solid var(--claude-border);
-    border-radius: var(--claude-radius-md); background: var(--claude-card); box-shadow: var(--claude-shadow-subtle); }
-.now-card[hidden] { display: none; }
-.now-kicker { display: flex; justify-content: space-between; align-items: baseline; font-size: 10.5px;
-    letter-spacing: .6px; text-transform: uppercase; color: var(--claude-text-muted); }
-.now-site { letter-spacing: .2px; text-transform: none; font-size: 11px; color: var(--claude-accent-fill); font-weight: 600; }
-.now-title { margin: 6px 0 0; font-family: var(--claude-font-serif); font-size: 15px; line-height: 1.35; color: var(--claude-text);
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.now-title[hidden] { display: none; }
-.now-progress { display: flex; align-items: center; gap: 10px; margin-top: 11px; }
-.now-progress[hidden] { display: none; }
-.now-bar { flex: 1; height: 4px; border-radius: 999px; background: var(--claude-card-subtle); overflow: hidden;
-    box-shadow: inset 0 0 0 1px var(--claude-border); }
-.now-bar > i { display: block; height: 100%; width: 0; border-radius: 999px; background: var(--claude-accent);
-    transition: width .5s cubic-bezier(.16,1,.3,1); }
-.now-count { flex-shrink: 0; font-size: 11.5px; color: var(--claude-text-secondary); font-variant-numeric: tabular-nums; }
-.now-voice { margin: 9px 0 0; padding-top: 9px; border-top: 1px dashed var(--claude-border); font-size: 12px;
-    line-height: 1.45; color: var(--claude-text-secondary); }
-.now-voice[hidden] { display: none; }
-.now-voice.warn { color: #8A5A0C; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .now-voice.warn { color: #E8B84B; } }
-:root[data-theme="dark"] .now-voice.warn { color: #E8B84B; }
-/* "Đang xem" site name: the dark brand fill reads on light cards; dark cards keep the bright accent */
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .now-site { color: var(--claude-accent); } }
-:root[data-theme="dark"] .now-site { color: var(--claude-accent); }
-
-/* Secondary action under the primary button */
-.button-secondary {
-    width: 100%; padding: 9px 12px; border-radius: var(--claude-radius-sm); cursor: pointer;
-    background: var(--claude-card); color: var(--claude-text); border: 1px solid var(--claude-border);
-    font-family: var(--claude-font-sans); font-size: 13px; font-weight: 500;
-}
-.button-secondary:hover { background: var(--claude-card-hover); border-color: var(--claude-border-hover); }
-.button-secondary[hidden] { display: none; }
-.ready-hint { margin: 0; padding: 8px 10px; border-radius: var(--claude-radius-sm); font-size: 12px; line-height: 1.45;
-    background: var(--claude-card-subtle); border: 1px solid var(--claude-border); color: var(--claude-text-secondary); }
-.ready-hint[hidden] { display: none; }
-.ready-hint .link-btn { padding: 0 2px; font-size: inherit; color: var(--claude-text); }

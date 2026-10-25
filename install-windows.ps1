@@ -1,8 +1,8 @@
 # Cai (hoac cap nhat) tien ich "Dich Phu De & Long Tieng AI" va may chu giong VieNeu tren Windows.
-#   irm https://raw.githubusercontent.com/mrthanhduy2000/dich-phu-de-long-tieng/main/install-windows.ps1 | iex
+#   irm https://raw.githubusercontent.com/mrthanhduy2000/vietnamese-subtitle-translator/share/install-windows.ps1 | iex
 # Chay lai bat cu luc nao de cap nhat: cai dat va khoa API trong trinh duyet duoc giu nguyen.
 # Go bo:
-#   $env:DPD_UNINSTALL='1'; irm https://raw.githubusercontent.com/mrthanhduy2000/dich-phu-de-long-tieng/main/install-windows.ps1 | iex
+#   $env:DPD_UNINSTALL='1'; irm https://raw.githubusercontent.com/mrthanhduy2000/vietnamese-subtitle-translator/share/install-windows.ps1 | iex
 #
 # ASCII only on purpose: Windows PowerShell 5.1 reads a BOM-less script as ANSI. Everything sits in
 # one script block that throws instead of calling exit, because `irm | iex` runs in the user's own
@@ -17,7 +17,7 @@ $ProgressPreference = 'SilentlyContinue'   # the 5.1 progress bar makes download
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $global:DPD_RESULT = 'running'
 
-$Repo = 'mrthanhduy2000/dich-phu-de-long-tieng'
+$Repo = 'mrthanhduy2000/vietnamese-subtitle-translator'
 # VieNeu is pinned: vieneu\openai_speech.py is a patched copy of this exact commit's file.
 $VieNeuCommit = 'd350c63fceb0792d7b2db9a51d61cc040b1f8efa'
 $ExtDir = if ($env:DPD_EXT_DIR) { $env:DPD_EXT_DIR } else { Join-Path $env:USERPROFILE 'DichPhuDe' }
@@ -122,7 +122,7 @@ try {
     if ($env:DPD_SRC) { $src = $env:DPD_SRC }
     else {
         Say 'Dang tai ban moi nhat...'
-        $ref = if ($env:DPD_REF) { $env:DPD_REF } else { 'refs/heads/main' }
+        $ref = if ($env:DPD_REF) { $env:DPD_REF } else { 'refs/heads/share' }
         Invoke-WebRequest -UseBasicParsing "https://codeload.github.com/$Repo/zip/$ref" -OutFile "$tmp\share.zip"
         Expand-Archive "$tmp\share.zip" -DestinationPath "$tmp\share"
         $src = (Get-ChildItem "$tmp\share" -Directory | Select-Object -First 1).FullName

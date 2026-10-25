@@ -1,0 +1,55 @@
+/* Shared design tokens for the extension's own pages (popup, options, onboarding).
+   Motion, spacing, radius and elevation live here: colours stay in each page's :root, because
+   the palettes differ on purpose (popup warm card, on-player menu, dark mode). */
+:root {
+    /* Motion: one easing curve and three durations, so pages move with the same rhythm */
+    --cst-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --cst-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --cst-dur-fast: 0.15s;
+    --cst-dur-base: 0.25s;
+    --cst-dur-slow: 0.4s;
+
+    /* Short aliases used by new UI code: 150ms for hover/focus, 200ms for panels */
+    --motion-fast: 150ms;
+    --motion-base: 200ms;
+
+    /* Spacing on an 8px grid: --space-1 is 8px, --space-6 is 48px */
+    --space-1: 8px;
+    --space-2: 16px;
+    --space-3: 24px;
+    --space-4: 32px;
+    --space-5: 40px;
+    --space-6: 48px;
+
+    /* Radius scale */
+    --cst-radius-sm: 8px;
+    --cst-radius-md: 12px;
+    --cst-radius-lg: 16px;
+    --radius-sm: var(--cst-radius-sm);
+    --radius-md: var(--cst-radius-md);
+    --radius-lg: var(--cst-radius-lg);
+
+    /* Elevation: a subtle lift for cards and a stronger one for floating surfaces */
+    --cst-elev-1: 0 1px 2px rgba(38, 36, 32, 0.04);
+    --cst-elev-2: 0 2px 8px rgba(38, 36, 32, 0.06), 0 1px 2px rgba(38, 36, 32, 0.03);
+    --cst-elev-3: 0 8px 24px rgba(38, 36, 32, 0.12);
+    --shadow-sm: var(--cst-elev-1);
+    --shadow-md: var(--cst-elev-2);
+}
+
+/* Motion off when the OS asks for it: every page inherits this rule from here */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --cst-dur-fast: 0.001ms;
+        --cst-dur-base: 0.001ms;
+        --cst-dur-slow: 0.001ms;
+        --motion-fast: 0.001ms;
+        --motion-base: 0.001ms;
+    }
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}

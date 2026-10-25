@@ -313,6 +313,21 @@
         }
     }
 
+    // Line change: the new cue fades in over 160 ms instead of cutting in. `key` identifies the
+    // text on screen. Skipped when the overlay was empty (its own opacity transition fades it in),
+    // when the text did not change (a resize repaints the same line), and when the browser has no
+    // Web Animations API. Reduced motion keeps the fade and drops the small rise.
+    function fadeInCue(overlay, key) {
+        const prev = overlay.cstCueKey || "";
+        overlay.cstCueKey = key || "";
+        if (!key || !prev || key === prev) return;
+        const rise = prefersReducedMotion() ? "none" : "translateY(0.25em)";
+        for (const child of overlay.children || []) {
+            if (typeof child.animate !== "function") continue;
+            child.animate([{ opacity: 0, transform: rise }, { opacity: 1, transform: "none" }], { duration: 160, easing: "ease-out" });
+        }
+    }
+
     // ---------- Legibility check for the chosen colours ----------
     // The overlay sits on arbitrary video, so what must hold is the worst frame. Two failures a
     // viewer can set up by accident: text and an opaque box of nearly the same colour, and no box
@@ -349,7 +364,7 @@
     const api = {
         legibilityIssue, contrastRatio,
         FONTS, STROKES, DEFAULT_STYLE, resolveDual, SIZE_UNIT, sizeFactor, lingerCues,
-        MIN_FONT_PX, overlayFontPx, overlayTransition, prefersReducedMotion,
+        MIN_FONT_PX, overlayFontPx, overlayTransition, prefersReducedMotion, fadeInCue,
         getFont, normalizeStyle, fontStack, ensureFont, isLocalFontAvailable,
         textShadow, backgroundColor, hexToRgba, googleFontsUrl,
         fitLines, textWidth

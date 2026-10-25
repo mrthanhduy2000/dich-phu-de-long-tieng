@@ -15,6 +15,9 @@
 // (1.7.6: the pause shaping reads the text's structure: segmenter, syllable count, prosody model)
 try { importScripts("cst-cache.js", "cost-policy.js", "vi-segmenter.js", "dub-planner.js", "dub-prosody.js", "dub-speech.js", "dub-audio.js"); } catch (e) { /* chạy ngoài service worker (kiểm thử) */ }
 
+// Dấu commit lúc Chrome khởi động (tools/git-autoupdate.js ghi file này; bản cài không có git thì không có)
+try { importScripts("build-stamp.js"); } catch (e) { /* không có file: không có dấu commit */ }
+
 const COST = CST_COST;
 const AUDIO = typeof CST_DUB_AUDIO !== "undefined" ? CST_DUB_AUDIO : null;
 
@@ -2111,6 +2114,7 @@ async function reinjectOpenTabs() {
         const kind = pageKind(tab.url || "");
         if (!kind || tab.discarded) continue;
         for (const g of groups) {
+            if (g.all_frames) continue;                  // embed-frame groups: the tab-level injection cannot reach a frame
             if (!(g.matches || []).some(m => m.includes(kind === "youtube" ? "youtube.com" : "coursera.org"))) continue;
             try {
                 await chrome.scripting.executeScript({ target: { tabId: tab.id }, world: g.world === "MAIN" ? "MAIN" : "ISOLATED", files: g.js });
@@ -2215,6 +2219,7 @@ const ROUTES = {
     testKey: handleTestKey,
     analyzeSpeakers: handleAnalyzeSpeakers,
     readScreenText: handleReadScreenText,
+    buildStamp: async () => ({ ok: true, stamp: typeof CST_STAMP !== "undefined" ? CST_STAMP : null }),
     openOptions: handleOpenOptions,
     costStats: handleCostStats,
     localTtsStatus: handleLocalTtsStatus,

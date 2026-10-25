@@ -40,8 +40,8 @@ import unicodedata
 import urllib.request
 import zipfile
 
-REPO = "mrthanhduy2000/dich-phu-de-long-tieng"
-REF = os.environ.get("DPD_REF", "")
+REPO = "mrthanhduy2000/vietnamese-subtitle-translator"
+REF = os.environ.get("DPD_REF", "refs/heads/share")
 HERE = os.path.dirname(os.path.abspath(__file__))           # the VieNeu folder
 STAGE = os.path.join(HERE, ".dpd-staged")
 STATE = os.path.join(HERE, ".dpd-update.json")
@@ -218,7 +218,7 @@ def stage(remote):
     tmp = tempfile.mkdtemp(prefix="dpd-")
     try:
         zpath = os.path.join(tmp, "share.zip")
-        with fetch("https://codeload.github.com/%s/zip/%s" % (REPO, REF or "refs/heads/main"), 300) as r, \
+        with fetch("https://codeload.github.com/%s/zip/%s" % (REPO, REF or "refs/heads/share"), 300) as r, \
                 open(zpath, "wb") as f:
             shutil.copyfileobj(r, f)
         with zipfile.ZipFile(zpath) as z:
@@ -409,7 +409,7 @@ def main():
     local = manifest_version(ext)
     state = load_state()
     if now or time.time() - state.get("checked", 0) > CHECK_EVERY_S:
-        with fetch("https://raw.githubusercontent.com/%s/%s/extension/manifest.json" % (REPO, REF or "main"), 30) as r:
+        with fetch("https://raw.githubusercontent.com/%s/%s/extension/manifest.json" % (REPO, REF or "share"), 30) as r:
             remote = json.load(r)["version"]
         state["checked"] = time.time()
         save_state(state)

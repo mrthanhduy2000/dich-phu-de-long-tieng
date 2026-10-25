@@ -1,0 +1,47 @@
+/* Semantic colour tokens shared by the extension's own pages (popup, options).
+   Light is the default; dark follows the OS when the page is in auto mode, or the
+   explicit choice in the options page (data-theme on <html>). Each page keeps its own
+   brand palette (--claude-*); these are the status and focus colours on top of it.
+   Text tokens must pass WCAG AA (4.5:1) on their *-bg token; tests/theme-colors.test.js
+   checks every pair. The coral fill is for buttons and bars only, never for small text. */
+:root,
+:root:not([data-theme="dark"]) {
+    --tc-success: #26693F;
+    --tc-success-bg: #E6F4EC;
+    --tc-warning: #8A5A00;
+    --tc-warning-bg: #FFF4DB;
+    --tc-danger: #B42318;
+    --tc-danger-bg: #FDECEA;
+    --tc-focus: #B4573A;
+    --tc-accent-fill: #B4573A;
+    --tc-accent-fill-text: #FFFFFF;
+    --tc-accent-text: #A34A2E;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --tc-success: #7BD39A;
+        --tc-success-bg: #1F3A2A;
+        --tc-warning: #F2C46D;
+        --tc-warning-bg: #3A2F18;
+        --tc-danger: #F28B82;
+        --tc-danger-bg: #3D1F1D;
+        --tc-focus: #F0A082;
+        --tc-accent-fill: #D97757;
+        --tc-accent-fill-text: #1E1C19;
+        --tc-accent-text: #F0A082;
+    }
+}
+
+:root[data-theme="dark"] {
+    --tc-success: #7BD39A;
+    --tc-success-bg: #1F3A2A;
+    --tc-warning: #F2C46D;
+    --tc-warning-bg: #3A2F18;
+    --tc-danger: #F28B82;
+    --tc-danger-bg: #3D1F1D;
+    --tc-focus: #F0A082;
+    --tc-accent-fill: #D97757;
+    --tc-accent-fill-text: #1E1C19;
+    --tc-accent-text: #F0A082;
+}

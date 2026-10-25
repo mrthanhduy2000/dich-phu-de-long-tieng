@@ -169,6 +169,25 @@
         return { broken: false, why: "" };
     }
 
+    // A transcript that heard almost nothing: a long video whose captions hold sound notes and a
+    // handful of scattered words. YouTube's Arabic machine transcript of a Pashto/Dari documentary
+    // (14.5 min) held 35 lines, 21 of them "[موسيقى]" and about 19 words in all (~6 letters of
+    // speech a minute): the button showed on, the menu "6/29 translated" and the screen nothing,
+    // with no word of why. Letters of speech (sound notes, (...), music signs, ">>" out) per minute
+    // of the video, from minMinutes on. The 133 saved videos: median 775 a minute; 6 under 30, all
+    // music-only or misheard (0, 0, 0, 3, 17, 21 a minute: "[Music]", "oh all m a", "mahaarunuusumusum",
+    // "Foreign! Foreign speech"); the lowest above is 46. The notice only explains: what little there
+    // is still gets translated. { sparse, letters, perMinute }
+    const SPARSE = { minMinutes: 2, perMinute: 30 };
+    function sparseTranscript(texts, seconds) {
+        const t = (texts || []).join(" ").replace(/\[[^\]]*\]|\([^)]*\)|[♪♫]|>>/g, " ");
+        const letters = (t.match(/\p{L}/gu) || []).length;
+        const minutes = (Number(seconds) || 0) / 60;
+        if (!(minutes >= SPARSE.minMinutes)) return { sparse: false, letters, perMinute: null };
+        const perMinute = letters / minutes;
+        return { sparse: perMinute < SPARSE.perMinute, letters, perMinute: Math.round(perMinute) };
+    }
+
     // Can the voice read a site's own Vietnamese captions? Only when the page also offers captions in
     // another language: that is the sign the speech is not Vietnamese. A Vietnamese-only page is
     // taken as a Vietnamese video, which gets no voice. langs: the language codes of the page's tracks.
@@ -178,7 +197,7 @@
         return { offer: codes.includes("vi") && foreign.length > 0, spoken: foreign[0] || "" };
     }
 
-    const api = { viVoiceSource, normCode, detectText, decide, spokenLanguage, hearsVietnameseDub, dubTranscripts, brokenTranscript, TRANSLATED_MARK };
+    const api = { viVoiceSource, normCode, detectText, decide, spokenLanguage, hearsVietnameseDub, dubTranscripts, brokenTranscript, sparseTranscript, SPARSE, TRANSLATED_MARK };
     if (typeof module === "object" && module.exports) module.exports = api;
     if (root) root.CST_LANG = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

@@ -1728,6 +1728,18 @@
             return true;
         }
 
+        // Counts behind the "preparing" card: subtitle groups translated and speech plans rendered
+        // in the same window isReadyAt looks at. Real counts, so the bars never run ahead of the work.
+        readyCounts(t, ahead = 4) {
+            this.refresh();
+            const groups = (this.d.getGroups() || []).filter(g => g && g.end > t && g.start < t + ahead);
+            const plans = this.plans.filter(x => x.end > t + 0.2 && x.start < t + ahead);
+            return {
+                subs: { done: groups.filter(g => g.viText).length, total: groups.length },
+                voice: { done: plans.filter(p => this.rendered.has(p.id)).length, total: plans.length }
+            };
+        }
+
         // Ảnh chụp trạng thái để chẩn đoán (chỉ khi bật cờ gỡ lỗi): đoạn quanh vị trí xem, đoạn đã nói
         debugSnapshot() {
             const t = this.d.video.currentTime;

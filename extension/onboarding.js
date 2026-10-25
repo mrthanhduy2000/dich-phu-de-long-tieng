@@ -8,6 +8,19 @@
     });
     const setStatus = (el, kind, text) => { el.className = "status" + (kind ? " " + kind : ""); el.textContent = text; };
 
+    // Progress: a step's card and its stepper dot turn done together; the line counts the two set-up steps
+    const STEPS = { key: { card: "stepKey", dot: "dotKey" }, voice: { card: "stepVoice", dot: "dotVoice" } };
+    const done = { key: false, voice: false };
+    function markDone(name, on) {
+        done[name] = on;
+        for (const id of [STEPS[name].card, STEPS[name].dot]) {
+            const el = $(id);
+            if (el) el.classList[on ? "add" : "remove"]("done");
+        }
+        const bar = $("stepper");
+        if (bar) bar.dataset.done = String((done.key ? 1 : 0) + (done.voice ? 1 : 0));
+    }
+
     // Plain Vietnamese reason for a failed key test
     function keyProblem(r) {
         if (!r) return "Không liên lạc được với tiện ích. Hãy bấm Reload ở chrome://extensions rồi thử lại.";
@@ -30,9 +43,9 @@
         if (r && r.ok) {
             try { await chrome.storage.sync.set({ geminiApiKey: key }); } catch (e) { /* storage unavailable */ }
             setStatus(st, "ok", "Khóa hoạt động" + (r.model ? " (model " + r.model + ")" : "") + ", đã lưu.");
-            $("stepKey").classList.add("done");
+            markDone("key", true);
         } else {
-            $("stepKey").classList.remove("done");
+            markDone("key", false);
             setStatus(st, "err", keyProblem(r));
         }
     }
@@ -45,12 +58,12 @@
         if (r && r.running) {
             setStatus(st, "ok", "Giọng VieNeu đang chạy trên máy này, sẵn sàng lồng tiếng.");
             $("voiceHelp").hidden = true;
-            $("stepVoice").classList.add("done");
+            markDone("voice", true);
         } else {
             setStatus(st, "", "Chưa thấy giọng VieNeu. Không sao nếu bạn chỉ cần phụ đề.");
             if (L && L.startHint) $("voiceCmd").textContent = L.startHint();
             $("voiceHelp").hidden = false;
-            $("stepVoice").classList.remove("done");
+            markDone("voice", false);
         }
     }
 
@@ -61,7 +74,7 @@
     try {
         chrome.storage.sync.get({ geminiApiKey: "" }, c => {
             if (c && c.geminiApiKey) {
-                $("stepKey").classList.add("done");
+                markDone("key", true);
                 setStatus($("keyStatus"), "ok", "Đã có khóa được lưu. Dán khóa mới nếu muốn đổi.");
             }
         });

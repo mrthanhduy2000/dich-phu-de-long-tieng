@@ -1,6 +1,6 @@
 document.addEventListener("DOMContentLoaded", async () => {
     // Chrome chưa nạp lại tiện ích sau khi cập nhật file: báo rõ + nút nạp lại
-    if (window.CST_VERSION_CHECK) window.CST_VERSION_CHECK.check(document, chrome, ".header-badge", ".content-area");
+    if (window.CST_VERSION_CHECK) window.CST_VERSION_CHECK.checkBuild(document, chrome, ".header-badge", ".content-area");
 
     // ========================================================
     // 1. CHUYỂN TAB ĐIỀU HƯỚNG
@@ -8,26 +8,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     const navTabs = document.querySelectorAll(".nav-tab");
     const tabPanels = document.querySelectorAll(".tab-panel");
 
-    // WAI-ARIA tabs: the active tab is the only one in the Tab order, arrow keys / Home / End move between tabs
-    const selectTab = (tab, focus) => {
+    // WAI-ARIA tabs: the active tab is the only one in the Tab order, arrow keys / Home / End move between tabs.
+    // Shown by panel id, so the About link (outside the tab row) can open the same panel.
+    const selectPanel = (panelId, focusTab) => {
         navTabs.forEach(t => {
-            const on = t === tab;
+            const on = t.dataset.tab === panelId;
             t.classList.toggle("active", on);
             t.setAttribute("aria-selected", on ? "true" : "false");
             t.tabIndex = on ? 0 : -1;
+            if (on && focusTab) t.focus();
         });
-        tabPanels.forEach(p => p.classList.toggle("active", p.id === tab.dataset.tab));
-        if (focus) tab.focus();
+        document.querySelectorAll(".nav-about").forEach(a => a.classList.toggle("active", a.dataset.tab === panelId));
+        tabPanels.forEach(p => p.classList.toggle("active", p.id === panelId));
     };
     navTabs.forEach((tab, i) => {
-        tab.addEventListener("click", () => selectTab(tab, false));
+        tab.addEventListener("click", () => selectPanel(tab.dataset.tab, false));
         tab.addEventListener("keydown", e => {
             const last = navTabs.length - 1;
             const to = { ArrowRight: i === last ? 0 : i + 1, ArrowLeft: i === 0 ? last : i - 1, Home: 0, End: last }[e.key];
             if (to === undefined) return;
             e.preventDefault();
-            selectTab(navTabs[to], true);
+            selectPanel(navTabs[to].dataset.tab, true);
         });
+    });
+    document.querySelectorAll(".nav-about").forEach(link => {
+        link.addEventListener("click", () => selectPanel(link.dataset.tab, false));
     });
 
     // ========================================================
@@ -45,6 +50,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     const previewViLine = $("previewViLine");
 
     const subPosition = $("subPosition");
+    // Position picker: two visual buttons drive the same select that the saved settings use
+    const posPicks = document.querySelectorAll(".pos-pick-btn");
+    const syncPosPick = () => posPicks.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.pos === subPosition.value)));
+    posPicks.forEach(b => b.addEventListener("click", () => {
+        subPosition.value = b.dataset.pos;
+        subPosition.dispatchEvent(new Event("change"));
+        syncPosPick();
+    }));
+    subPosition.addEventListener("change", syncPosPick);
     const subOffset = $("subOffset");
     const subOffsetVal = $("subOffsetVal");
     const subPinBottom = $("subPinBottom");
@@ -229,6 +243,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function populateStyleInputs() {
         const s = currentStyle;
         if (subPosition) subPosition.value = s.position;
+        syncPosPick();
         if (subOffset) subOffset.value = s.offset;
         if (subPinBottom) subPinBottom.checked = !!s.pinBottom;
         if (subFontFamily) subFontFamily.value = s.fontFamily;
@@ -582,18 +597,23 @@ document.addEventListener("DOMContentLoaded", async () => {
             // Kiểm tra qua service worker: dùng đúng chuỗi model sẽ dùng khi dịch và ghi nhận
             // model nào key này gọi được (nguồn sự thật là kết quả gọi generateContent thật)
             const r = await bgSend({ action: "testKey", key, model });
+            geminiTest = { key, ok: !!(r && r.ok) };
+            renderReadiness();
             const skipped = r && r.skipped && r.skipped.length
                 ? `<br>• Không khả dụng với key này nên đã bỏ qua: <b>${r.skipped.map(x => esc(COST.modelLabel(x))).join(", ")}</b>` : "";
             if (r && r.ok) {
                 aiKeyStatus.style.color = "";
+                // One line for the result; the model id, latency and sample sit behind "Chi tiết"
                 aiKeyStatus.innerHTML = `
                     <div class="cst-note ok">
-                        <div class="cst-note-title">✓ API Key hoạt động</div>
-                        <div class="cst-note-body">
-                            • Model trả lời: <b>${esc(COST.modelLabel(r.model))}</b> (${esc(r.model)})<br>
-                            • Tốc độ phản hồi: <b>${esc(r.latency)} ms</b>${skipped}<br>
-                            • Kết quả dịch mẫu: <i>"${esc(r.sample || "")}"</i>
-                        </div>
+                        <div class="cst-note-title">✓ Gemini đang hoạt động · ${esc(COST.modelLabel(r.model))} · ${esc(r.latency)} ms</div>
+                        <details class="key-details">
+                            <summary>Chi tiết</summary>
+                            <div class="cst-note-body">
+                                Model: <b>${esc(r.model)}</b>${skipped}<br>
+                                Kết quả dịch mẫu: <i>"${esc(r.sample || "")}"</i>
+                            </div>
+                        </details>
                     </div>`;
             } else {
                 aiKeyStatus.style.color = "";
@@ -620,11 +640,39 @@ document.addEventListener("DOMContentLoaded", async () => {
     const table = (caption, head, rows) => `<div class="cost-cap">${caption}</div><div class="cost-scroll"><table class="ver-table">` +
         `<tr>${head.map((h, i) => `<th${i ? ' class="num"' : ""}>${h}</th>`).join("")}</tr>` +
         rows.map(r => `<tr>${r.map((c, i) => `<td${i ? ' class="num"' : ""}>${c}</td>`).join("")}</tr>`).join("") + "</table></div>";
-    const kpi = (label, usd, sub) => {
+    // One bar per saved day, height = estimated USD from the same per-day history the table reads.
+    // No extra data is stored for the chart, and days with no spend still get a slot.
+    const dailyCostChart = (points, today) => {
+        const W = 640, H = 150, pad = 8, gap = 6;
+        const max = Math.max(...points.map(p => p.usd), 1e-9);
+        const bw = (W - pad * 2 - gap * (points.length - 1)) / points.length;
+        const bars = points.map((p, i) => {
+            const h = Math.max(2, (p.usd / max) * (H - 36));
+            const x = pad + i * (bw + gap);
+            const label = ddmm(p.k);
+            return `<g><title>${label}: ${esc(fm(p.usd))}</title>` +
+                `<rect class="cost-bar${p.k === today ? " cost-bar-today" : ""}" x="${x.toFixed(1)}" y="${(H - 20 - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="4"></rect>` +
+                `<text class="cost-bar-label" x="${(x + bw / 2).toFixed(1)}" y="${H - 4}" text-anchor="middle">${label}</text></g>`;
+        }).join("");
+        return `<div class="cost-cap">Chi phí mỗi ngày (ước tính)</div><svg class="cost-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Biểu đồ chi phí ${points.length} ngày gần nhất">${bars}</svg>`;
+    };
+    // Today against the previous saved day in the history; null when there is no earlier day to compare
+    function trendVsPrevious(history, today, usd) {
+        const earlier = Object.keys(history || {}).filter(k => k < today).sort().pop();
+        if (!earlier) return null;
+        const prev = (history[earlier].trUsd || 0) + (history[earlier].ttsUsd || 0);
+        if (!(prev > 0)) return null;
+        return { pct: (usd - prev) / prev * 100, against: `ngày ${ddmm(earlier)}` };
+    }
+    // trend: { pct } compares today with the previous saved day; shown as one coloured chip, never a claim without data
+    const kpi = (label, usd, sub, trend) => {
         const m = usd == null ? null : COST.money(usd, moneyO);
         const value = !m ? "Chưa đủ dữ liệu" : m.vnd;
         const second = m ? `<div class="cost-kpi-sub">${m.usd}</div>` : "";
-        return `<div class="cost-kpi"><div class="cost-kpi-label">${label}</div><div class="cost-kpi-value">${value}</div>${second}${sub ? `<div class="cost-kpi-sub">${sub}</div>` : ""}</div>`;
+        const chip = trend && trend.pct != null
+            ? `<span class="cost-trend ${trend.pct > 0 ? "up" : "down"}">${trend.pct > 0 ? "▲" : "▼"} ${Math.abs(Math.round(trend.pct))}% so với ${esc(trend.against)}</span>`
+            : "";
+        return `<div class="cost-kpi"><div class="cost-kpi-label">${label}</div><div class="cost-kpi-value">${value}</div>${second}${chip}${sub ? `<div class="cost-kpi-sub">${sub}</div>` : ""}</div>`;
     };
     // This month by the machine's calendar, from the days the ledger has recorded. The projection is
     // only an extrapolation of the average so far, shown from 3 days of records.
@@ -651,7 +699,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const dayUsd = (d.trUsd || 0) + (d.ttsUsd || 0);
         const mon = monthOf(r.history, r.today);
         if (kpiEl) kpiEl.innerHTML = [
-            kpi(`Hôm nay (${ddmm(d.day)})`, dayUsd, `${d.trCalls || 0} lượt · ${toks((d.inTok || 0) + (d.outTok || 0))} token`),
+            kpi(`Hôm nay (${ddmm(d.day)})`, dayUsd, `${d.trCalls || 0} lượt · ${toks((d.inTok || 0) + (d.outTok || 0))} token`, trendVsPrevious(r.history, d.day, dayUsd)),
             mon ? kpi(`Tháng ${mon.month}`, mon.total, mon.first.endsWith("-01") ? "" : `ghi từ ${ddmm(mon.first)}`) : "",
             mon ? kpi("Dự kiến cả tháng", mon.projected, mon.projected == null ? "cần ít nhất 3 ngày số liệu" : `nếu dùng đều như ${mon.span} ngày qua`) : "",
             d.trCalls ? kpi("Trung bình mỗi lượt dịch", d.trUsd / d.trCalls, m ? esc(m.label) : "") : ""
@@ -710,8 +758,18 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (cached) rows.push(["Token vào Google lấy từ bộ nhớ đệm (giá rẻ hơn)", toks(cached), cell(cached * (p.cache ?? p.in) / 1e6)]);
             rows.push(["Token ra: bản dịch", toks(d.outTok - thought), cell((d.outTok - thought) * p.out / 1e6)]);
             rows.push(['Token "suy nghĩ" của model (giá như token ra)', toks(thought), cell(thought * p.out / 1e6)]);
-            html += table("Hôm nay theo loại token", ["Loại", "Token", "Chi phí"], rows);
+            // Visual first: one bar of today's tokens by kind; the exact table sits behind a disclosure
+            const parts = [["Lời nhắc và ngữ cảnh", d.inTok - cached, "var(--primary)"], ["Bộ nhớ đệm", cached, "var(--tc-success)"],
+                ["Bản dịch", d.outTok - thought, "var(--tc-warning)"], ["Suy nghĩ của model", thought, "var(--text-sub)"]].filter(x => x[1] > 0);
+            const all = parts.reduce((a, x) => a + x[1], 0) || 1;
+            html += `<div class="tok-split" role="img" aria-label="Tỷ lệ token hôm nay">` + parts.map(([name, n, col]) =>
+                `<i style="width:${(n / all * 100).toFixed(2)}%;background:${col}" title="${esc(name)}: ${toks(n)}"></i>`).join("") + `</div>` +
+                `<div class="tok-legend">` + parts.map(([name, n, col]) =>
+                `<span><b style="background:${col}"></b>${esc(name)} <em>${Math.round(n / all * 100)}%</em></span>`).join("") + `</div>` +
+                `<details class="adv"><summary>Bảng chi tiết theo loại token</summary>${table("Hôm nay theo loại token", ["Loại", "Token", "Chi phí"], rows)}</details>`;
         }
+        const chartDays = Object.keys(r.history || {}).sort().slice(-14);
+        if (chartDays.length > 1) html += dailyCostChart(chartDays.map(k => ({ k, usd: (r.history[k].trUsd || 0) + (r.history[k].ttsUsd || 0) })), r.today);
         const days = Object.keys(r.history || {}).sort().reverse().slice(0, 7);
         if (days.length) html += table("7 ngày gần nhất",
             ["Ngày", "Lượt", "Token vào", "Token ra", "Chi phí"],
@@ -850,6 +908,30 @@ document.addEventListener("DOMContentLoaded", async () => {
         dubLocalVoice: "", dubLocalVoice2: ""
     });
 
+    // ---- Readiness strip: the two chips on top. Gemini is "ready" only for the key that passed the last
+    // check in this page visit (nothing is stored); VieNeu follows the server check below ----
+    let geminiTest = null; // { key, ok } of the last "Kiểm tra" click
+    let vieneuRunning = null; // null until the first server check answers
+    const readyChips = document.querySelectorAll(".ready-chip[data-goto]");
+    function setReadyChip(id, state, text) {
+        const chip = document.getElementById(id);
+        if (!chip) return;
+        chip.dataset.state = state;
+        chip.querySelector(".ready-text").textContent = text;
+    }
+    function renderReadiness() {
+        const key = (geminiKeyInput?.value || "").trim();
+        if (!key) setReadyChip("readyGemini", "off", "Chưa có API key");
+        else if (geminiTest && geminiTest.key === key) {
+            setReadyChip("readyGemini", geminiTest.ok ? "ok" : "err", geminiTest.ok ? "Gọi được Gemini" : "Chưa gọi được Gemini");
+        } else setReadyChip("readyGemini", "warn", "Có key, chưa kiểm tra");
+        if (vieneuRunning === null) setReadyChip("readyVieneu", "pending", "Đang kiểm tra máy chủ");
+        else setReadyChip("readyVieneu", vieneuRunning ? "ok" : "err", vieneuRunning ? "Đang chạy trên máy này" : "Chưa sẵn sàng");
+    }
+    readyChips.forEach(chip => chip.addEventListener("click", () => selectTab(document.getElementById(chip.dataset.goto), false)));
+    geminiKeyInput?.addEventListener("input", renderReadiness);
+    renderReadiness();
+
     // ---- Giọng Việt trên máy (VieNeu): danh sách giọng theo vùng + trạng thái máy chủ ----
     const LOCAL = COST.LOCAL_TTS;
     function fillLocalVoices(sel, current, fallback) {
@@ -874,6 +956,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!localStatusEl) return false;
         const r = await bgSend({ action: "localTtsStatus" });
         const running = !!(r && r.running);
+        vieneuRunning = running;
+        renderReadiness();
         localStatusEl.className = "cst-note " + (running ? "ok" : "err");
         // Tốc độ tạo giọng thật: dưới 0,4 là thoải mái; gần 1 thì giọng sẽ trễ dần
         const rtf = Number(r && r.rtf) || 0;
@@ -884,7 +968,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const tocChamLai = HW && HW.sustainableRate(rtf) ? ` Phát video ở tốc độ ${String(HW.sustainableRate(rtf)).replace(".", ",")}× thì giọng theo kịp.` : "";
         const tocDo = rtf ? `<br>Tốc độ tạo giọng đo được: <b>${rtf.toFixed(2)}</b> (tạo 1 giây lời nói mất ${rtf.toFixed(2)} giây).${mayTa} ${rtf < 0.4 ? "Tốt." : rtf < 0.8 ? "Hơi chậm, giọng vẫn kịp." : "Quá chậm, giọng sẽ trễ dần: kiểm tra mục ProcessType trong tệp tự khởi động, phải là Interactive." + tocChamLai}` : "";
         localStatusEl.innerHTML = running
-            ? `<div class="cst-note-title">✓ Máy chủ VieNeu đang chạy trên máy này (${r.model === LOCAL.model ? LOCAL.modelLabel : esc(r.model || "không rõ model")})</div><div class="cst-note-body">Lồng tiếng dùng giọng Việt miễn phí, không gửi lời thoại ra ngoài. Nhịp nói tự đều theo từng giọng (giọng chậm được tăng tốc nhẹ, giữ cao độ).${tocDo}</div>`
+            ? `<div class="cst-note-title">✓ Máy chủ VieNeu đang chạy trên máy này (${r.model === LOCAL.model ? LOCAL.modelLabel : esc(r.model || "không rõ model")})</div><div class="cst-note-body">Miễn phí, chạy trên máy này, lời thoại không gửi ra ngoài.${tocDo}</div>`
             : `<div class="cst-note-title">Máy chủ VieNeu chưa sẵn sàng</div><div class="cst-note-body">${autostartSteps()}</div>`;
         return running;
     }

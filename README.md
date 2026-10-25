@@ -1,6 +1,6 @@
 # Dịch Phụ Đề & Lồng Tiếng AI
 
-[![Cài thử tự động](https://github.com/mrthanhduy2000/dich-phu-de-long-tieng/actions/workflows/install-test.yml/badge.svg)](https://github.com/mrthanhduy2000/dich-phu-de-long-tieng/actions/workflows/install-test.yml)
+[![Cài thử tự động](https://github.com/mrthanhduy2000/vietnamese-subtitle-translator/actions/workflows/install-test.yml/badge.svg)](https://github.com/mrthanhduy2000/vietnamese-subtitle-translator/actions/workflows/install-test.yml)
 
 Tiện ích cho trình duyệt nhân Chromium (Chrome, Cốc Cốc, Edge, Brave, Opera, Vivaldi, Arc) dịch phụ
 đề YouTube và Coursera sang tiếng Việt bằng Gemini, và đọc lồng tiếng Việt bằng giọng
@@ -39,13 +39,13 @@ nút chép sẵn). Từ đó giọng đọc tự chạy cùng máy và tiện í
 **Mac:** mở ứng dụng **Terminal**, dán lệnh này, nhấn Enter.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mrthanhduy2000/dich-phu-de-long-tieng/main/install-mac.sh | bash
+curl -fsSL https://raw.githubusercontent.com/mrthanhduy2000/vietnamese-subtitle-translator/share/install-mac.sh | bash
 ```
 
 **Windows:** bấm Start, gõ `PowerShell`, mở **Windows PowerShell**, dán lệnh này, nhấn Enter.
 
 ```powershell
-irm https://raw.githubusercontent.com/mrthanhduy2000/dich-phu-de-long-tieng/main/install-windows.ps1 | iex
+irm https://raw.githubusercontent.com/mrthanhduy2000/vietnamese-subtitle-translator/share/install-windows.ps1 | iex
 ```
 
 Lần đầu mất 5 đến 15 phút, cần khoảng 3 GB trống, không cần quyền quản trị. Bộ cài tự tải tiện ích
@@ -76,7 +76,7 @@ cài vào lần mở trình duyệt kế tiếp.
 Gửi nguyên đoạn này cho AI chạy được lệnh trên máy (Claude Code, Codex...):
 
 ```text
-Cài cho tôi tiện ích theo https://github.com/mrthanhduy2000/dich-phu-de-long-tieng : xác định máy
+Cài cho tôi tiện ích theo https://github.com/mrthanhduy2000/vietnamese-subtitle-translator : xác định máy
 là Mac hay Windows rồi chạy đúng MỘT lệnh cài ở mục "Cài đặt: một lệnh" (lần đầu tới 15 phút, đặt
 giới hạn thời gian 20 phút hoặc chạy nền). Nếu bộ cài báo "LỖI"/"LOI", tra bảng "Khi gặp lỗi" ở trang
 đó, sửa đúng nguyên nhân rồi chạy lại lệnh cài; việc gì cần tôi đồng ý thì hỏi trước. Xong thì chỉ tôi
@@ -121,7 +121,7 @@ Bản mới chỉ tới máy bạn sau khi lần cài thử đó đạt.
 ## Giọng đọc chạy không cần mạng
 
 Mô hình giọng (khoảng 600 MB) được tải một lần từ mục
-[Releases](https://github.com/mrthanhduy2000/dich-phu-de-long-tieng/releases) của trang này, đúng một
+[Releases](https://github.com/mrthanhduy2000/vietnamese-subtitle-translator/releases) của trang này, đúng một
 phiên bản đã khóa, và bộ cài kiểm từng tệp bằng mã băm sha256 trước khi dùng. Sau đó máy chủ giọng
 đọc mô hình ngay trong thư mục `VieNeu-TTS`, không hỏi Hugging Face hay trang nào khác, nên giọng
 không tự đổi khi bên ngoài cập nhật và vẫn đọc được khi mất mạng. Mỗi lần khởi động, máy chủ giọng
@@ -153,9 +153,9 @@ trang tiện ích (bản tự cập nhật thì không cần: nó chỉ chép kh
 
 ## Gỡ bỏ
 
-**Mac:** `curl -fsSL https://raw.githubusercontent.com/mrthanhduy2000/dich-phu-de-long-tieng/main/install-mac.sh | bash -s -- --uninstall`
+**Mac:** `curl -fsSL https://raw.githubusercontent.com/mrthanhduy2000/vietnamese-subtitle-translator/share/install-mac.sh | bash -s -- --uninstall`
 
-**Windows:** `$env:DPD_UNINSTALL='1'; irm https://raw.githubusercontent.com/mrthanhduy2000/dich-phu-de-long-tieng/main/install-windows.ps1 | iex`
+**Windows:** `$env:DPD_UNINSTALL='1'; irm https://raw.githubusercontent.com/mrthanhduy2000/vietnamese-subtitle-translator/share/install-windows.ps1 | iex`
 
 Lệnh gỡ tắt VieNeu và tự cập nhật, xóa thư mục `DichPhuDe`, `VieNeu-TTS` (mô hình giọng nằm trong đó)
 và bản mô hình mà các bản cài cũ để trong thư mục `.cache`. Cuối cùng bấm **Xóa** trên thẻ

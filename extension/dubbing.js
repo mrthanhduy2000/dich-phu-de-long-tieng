@@ -305,7 +305,7 @@
                 }, 0);
             },
             log: (...a) => console.warn("[Lồng tiếng]", ...a)
-        }, { duck: level(s.dubDuck, 0.2), volume: level(s.dubVolume, 1), playerOwnsVolume: /(^|\.)youtube\.com$/.test(location.hostname), secondVoice: s.dubSpeakers !== "one", maxRate: Number(s.dubMaxRate) || null, prefetchMax: smartPrefetch(mode, opts.video) });
+        }, { duck: level(s.dubDuck, 0.2), volume: level(s.dubVolume, 1), playerOwnsVolume: /(^|\.)youtube(-nocookie)?\.com$/.test(location.hostname), secondVoice: s.dubSpeakers !== "one", maxRate: Number(s.dubMaxRate) || null, prefetchMax: smartPrefetch(mode, opts.video) });
         dub.engine = engine;
         dub.enabled = true;
         dub.starting = false;
@@ -337,7 +337,7 @@
         // what the reading did, for the debug snapshot (startDebug): skipped and why, asking, read
         const note = x => { dub.speakerRead = { ...x, at: Date.now() }; };
         if (!PLAN || !PLAN.speakerLines || s.dubSpeakers === "one" || s.dubSpeakerAi === false || !(s.useAi && s.geminiApiKey)) return note({ state: "skip", why: "off" });
-        if (!/(^|\.)youtube\.com$/.test(location.hostname)) return note({ state: "skip", why: "site" });
+        if (!/(^|\.)youtube(-nocookie)?\.com$/.test(location.hostname)) return note({ state: "skip", why: "site" });
         const groups = (opts.getGroups && opts.getGroups()) || [];
         const lines = PLAN.speakerLines(groups);
         if (lines.length < 8) return note({ state: "skip", why: "lines", lines: lines.length, groups: groups.length });
@@ -601,6 +601,76 @@
     // sẵn sàng (hoặc hết 5 giây). Người xem tự bấm phát trong lúc chờ: tôn trọng, bỏ chờ.
     // opts.initial: video mới mở (chưa phát): chặn lần tự phát đầu tiên của YouTube.
     const hold = { active: false };
+
+    // The "preparing" card: two bars that fill with what is really ready around the playhead, the
+    // subtitles translated and the voice rendered. Read on each tick from the engine, so the bars
+    // move with the work. Dark surface like the toast and the quick menu, in both themes.
+    const PREPARE_CSS = "@keyframes cst-prep-in{from{opacity:0;transform:translate(-50%,-46%) scale(.97)}" +
+        "to{opacity:1;transform:translate(-50%,-50%) scale(1)}}" +
+        "@media (prefers-reduced-motion: reduce){.cst-prepare-note{animation:none!important}}";
+    function ensurePrepareCss() {
+        const host = document.head || document.documentElement;
+        if (!host || document.querySelector("#cst-prepare-css")) return;
+        const st = document.createElement("style");
+        st.id = "cst-prepare-css";
+        st.textContent = PREPARE_CSS;
+        host.appendChild(st);
+    }
+    function readyCounts(t) {
+        const e = dub.engine;
+        return e && typeof e.readyCounts === "function" ? e.readyCounts(t) : null;
+    }
+    function buildPrepareCard() {
+        ensurePrepareCss();
+        const still = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+        const el = document.createElement("div");
+        el.className = "cst-prepare-note";
+        el.setAttribute("role", "status");
+        el.setAttribute("aria-live", "polite");
+        // Fixed on the page, not inside the player: YouTube's own controls sit above the player's
+        // stacking context, so a card inside it is painted under them. place() moves it over the video.
+        el.style.cssText = "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);min-width:260px;padding:12px 16px 13px;" +
+            "border-radius:14px;background:rgba(40,38,34,.94);color:#ECE8E1;border:1px solid #3A3732;" +
+            "box-shadow:0 18px 46px rgba(0,0,0,.5);font:500 13px/1.4 -apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif;" +
+            (still ? "" : "animation:cst-prep-in .22s cubic-bezier(.16,1,.3,1) both;") +
+            "z-index:2147483000;pointer-events:none";
+        const title = document.createElement("div");
+        title.textContent = "Đang chuẩn bị phụ đề và giọng Việt…";
+        title.style.cssText = "margin-bottom:6px;font-weight:600";
+        el.appendChild(title);
+        const bars = {};
+        for (const [key, label] of [["subs", "Phụ đề"], ["voice", "Giọng đọc"]]) {
+            const row = document.createElement("div");
+            row.style.cssText = "display:flex;align-items:center;gap:10px;margin-top:7px;font-size:12px;color:#A8A39A";
+            const name = document.createElement("span");
+            name.textContent = label;
+            name.style.cssText = "width:74px;flex-shrink:0;white-space:nowrap";
+            const track = document.createElement("div");
+            track.style.cssText = "flex:1;height:4px;border-radius:999px;background:#48453F;overflow:hidden";
+            const fill = document.createElement("div");
+            fill.style.cssText = "height:100%;width:0%;border-radius:999px;background:#D97757;" +
+                (still ? "" : "transition:width .35s cubic-bezier(.16,1,.3,1);");
+            const count = document.createElement("span");
+            count.textContent = "–";
+            count.style.cssText = "width:38px;flex-shrink:0;text-align:right;font-variant-numeric:tabular-nums";
+            track.appendChild(fill);
+            row.appendChild(name);
+            row.appendChild(track);
+            row.appendChild(count);
+            el.appendChild(row);
+            bars[key] = { fill, count };
+        }
+        const paint = counts => {
+            for (const key of Object.keys(bars)) {
+                const c = counts[key];
+                if (!c) continue;
+                bars[key].fill.style.width = (c.total ? Math.round(100 * c.done / c.total) : 0) + "%";
+                bars[key].count.textContent = c.total ? `${c.done}/${c.total}` : "–";
+            }
+        };
+        return { el, paint };
+    }
+
     function prepareHold(video, ready, opts = {}) {
         if (!video || hold.active) return false;
         if (document.querySelector(".ad-showing")) return false;       // đang quảng cáo: chuẩn bị trong lúc đó
@@ -619,23 +689,40 @@
             else end(false);                                            // người xem tự bấm phát
         };
         video.addEventListener("play", onPlay);
-        const note = document.createElement("div");
-        note.className = "cst-prepare-note";
-        note.textContent = "Đang chuẩn bị phụ đề và giọng Việt…";
-        // Same card as the toast and the quick menu: the product's dark surface, not a bare black box
-        note.style.cssText = "position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:10px 16px;" +
-            "border-radius:12px;background:rgba(40,38,34,.94);color:#ECE8E1;border:1px solid #3A3732;" +
-            "box-shadow:0 18px 46px rgba(0,0,0,.5);font:500 13px/1.4 -apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif;" +
-            "z-index:2147483000;pointer-events:none";
-        const box = opts.container || video.parentElement;
-        try { box && box.appendChild(note); } catch (e) { /* bỏ qua */ }
-        const iv = setInterval(() => { if (ready() || performance.now() - t0 >= maxMs) end(true); }, 100);
+        const card = buildPrepareCard();
+        const first = readyCounts(video.currentTime);
+        if (first) card.paint(first);
+        // Centred over the player frame (the video element itself can sit off-screen inside an embed),
+        // kept inside the viewport, and re-read each tick so it follows a resize or a scroll.
+        const place = () => {
+            const frame = (video.closest && (video.closest("#movie_player") || video.closest(".html5-video-player"))) || video;
+            const r = frame.getBoundingClientRect ? frame.getBoundingClientRect() : null;
+            if (!r || !r.width) return;
+            const vw = window.innerWidth || r.width, vh = window.innerHeight || r.height;
+            const cx = Math.min(Math.max(r.left + r.width / 2, 0), vw);
+            const cy = Math.min(Math.max(r.top + r.height / 2, 56), Math.max(vh - 56, 56));
+            card.el.style.left = cx + "px";
+            card.el.style.top = cy + "px";
+        };
+        place();
+        // In fullscreen only the fullscreen element is painted, so the card moves into it (and back out)
+        const mountCard = () => { try { (document.fullscreenElement || document.body).appendChild(card.el); } catch (e) { /* bỏ qua */ } };
+        mountCard();
+        const canListen = typeof document.addEventListener === "function";
+        if (canListen) document.addEventListener("fullscreenchange", mountCard);
+        const iv = setInterval(() => {
+            place();
+            const counts = readyCounts(video.currentTime);
+            if (counts) card.paint(counts);
+            if (ready() || performance.now() - t0 >= maxMs) end(true);
+        }, 100);
         function end(resume) {
             if (!hold.active) return;
             hold.active = false;
             clearInterval(iv);
             video.removeEventListener("play", onPlay);
-            note.remove();
+            card.el.remove();
+            if (canListen) document.removeEventListener("fullscreenchange", mountCard);
             hold.lastWaitMs = Math.round(performance.now() - t0);
             console.log(`[Lồng tiếng] Chờ chuẩn bị ${hold.lastWaitMs} ms${resume ? "" : " (người xem tự phát)"}`);
             // Video MỚI mở: YouTube thường tự phát 0,2 đến 0,4 giây trước khi kịp tạm dừng (đo thật) -> câu

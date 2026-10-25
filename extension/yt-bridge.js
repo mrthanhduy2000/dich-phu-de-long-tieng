@@ -27,6 +27,14 @@
     const clients = new Map();  // v -> { pot, c, cver, ... }
     const MAX_BODIES = 12;
 
+    // Readable from the isolated world and from outside (data-cst-bridge on <html>): what this frame's
+    // player exposes. The embed player (youtube-nocookie.com/embed) could not be inspected live.
+    function chanDoan(text) {
+        try { document.documentElement.dataset.cstBridge = String(text).slice(0, 300); } catch (e) { /* no <html> yet */ }
+    }
+    function trinhPhat() { return document.querySelector("#movie_player") || document.querySelector(".html5-video-player"); }
+    chanDoan("loaded;path=" + String(location.pathname || "").slice(0, 40));
+
     // variant (2.6.5): a dub's transcript ("timing-optimized") and the original speech's can share
     // language and kind (qSlxe4hA66g: two "ko" ASR tracks); without it one body served for both
     function khoa(v, lang, kind, variant) { return `${v}|${lang}|${kind === "asr" ? "asr" : ""}|${variant || ""}`; }
@@ -102,7 +110,7 @@
     function docAmThanh(response) {
         const out = { original: "", current: "", currentDubbed: false, tracks: [] };
         try {
-            const player = document.querySelector("#movie_player");
+            const player = trinhPhat();
             if (player && typeof player.getAvailableAudioTracks === "function") {
                 out.tracks = (player.getAvailableAudioTracks() || []).map(describeAudioTrack).filter(Boolean);
             }
@@ -127,7 +135,7 @@
 
         // Cach 1: hoi truc tiep trinh phat (dung ca khi chuyen video khong tai lai trang)
         try {
-            const player = document.querySelector("#movie_player");
+            const player = trinhPhat();
             if (player && typeof player.getPlayerResponse === "function") {
                 response = player.getPlayerResponse();
             }
@@ -138,13 +146,18 @@
             response = window.ytInitialPlayerResponse;
         }
 
-        if (!response) return { error: "Chua doc duoc du lieu trinh phat" };
+        if (!response) {
+            const p = trinhPhat();
+            chanDoan("no-response;player=" + !!p + ";getPlayerResponse=" + (p ? typeof p.getPlayerResponse : "-") + ";global=" + !!window.ytInitialPlayerResponse);
+            return { error: "Chua doc duoc du lieu trinh phat" };
+        }
 
         const list =
             response.captions &&
             response.captions.playerCaptionsTracklistRenderer &&
             response.captions.playerCaptionsTracklistRenderer.captionTracks;
 
+        chanDoan("response;tracks=" + ((list && list.length) || 0) + ";video=" + ((response.videoDetails || {}).videoId || ""));
         if (!list || list.length === 0) {
             return { tracks: [], videoId: (response.videoDetails || {}).videoId || "" };
         }
@@ -179,7 +192,7 @@
     // Bat phu de cua trinh phat dung track can lay de trinh phat tu gui yeu cau (co pot),
     // cho toi da ~7 giay, roi tra phu de trinh phat ve nhu cu
     async function nhoTrinhPhatTai(v, lang, kind, variant) {
-        const player = document.querySelector("#movie_player");
+        const player = trinhPhat();
         if (!player || typeof player.setOption !== "function") return false;
         try {
             const cur = player.getVideoData && player.getVideoData();
@@ -219,7 +232,7 @@
     async function layNoiDungPhuDe(baseUrl) {
         const u = new URL(baseUrl, location.href);
         // Only YouTube's own caption endpoint: this fetch sends the viewer's cookies.
-        if (u.protocol !== "https:" || !/(^|\.)youtube\.com$/.test(u.hostname) || !u.pathname.startsWith("/api/timedtext")) {
+        if (u.protocol !== "https:" || !/(^|\.)youtube(-nocookie)?\.com$/.test(u.hostname) || !u.pathname.startsWith("/api/timedtext")) {
             return { text: "", via: "none", reason: "bad-url" };
         }
         if (!u.searchParams.get("fmt")) u.searchParams.set("fmt", "json3");
@@ -252,7 +265,7 @@
     // setAudioTrack(track object from getAvailableAudioTracks()) returns true and takes effect.
     function chonAmThanhGoc() {
         try {
-            const player = document.querySelector("#movie_player");
+            const player = trinhPhat();
             if (!player || typeof player.getAvailableAudioTracks !== "function" || typeof player.setAudioTrack !== "function") return false;
             const list = player.getAvailableAudioTracks() || [];
             const orig = list.find(t => { const d = describeAudioTrack(t); return d && d.isDefault && !d.isAutoDubbed; }) ||
@@ -267,7 +280,7 @@
     let lastAudioKey = null;
     if (typeof setInterval === "function") setInterval(() => {
         try {
-            const player = document.querySelector("#movie_player");
+            const player = trinhPhat();
             if (!player || typeof player.getAudioTrack !== "function") return;
             const cur = describeAudioTrack(player.getAudioTrack());
             const key = cur ? `${cur.lang}|${cur.isAutoDubbed}` : "";

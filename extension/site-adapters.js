@@ -81,17 +81,30 @@
         return out;
     }
 
+    // Runs fn over items with at most `limit` in flight; results keep the order of items.
+    async function mapLimit(items, limit, fn) {
+        const out = new Array(items.length);
+        let next = 0;
+        const worker = async () => { while (next < items.length) { const i = next++; out[i] = await fn(items[i], i); } };
+        await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+        return out;
+    }
+
+    // A talk has ~100 segments; fetched one by one the captions took longer than the 5 s the player is
+    // held for, so they are fetched in parallel (order kept, the dedupe below depends on it).
     async function loadHlsVtt(uri, fetchText) {
         const cues = [], seen = new Set();
-        for (const seg of parseHlsTimeline(await fetchText(uri), uri)) {
-            for (const c of parseVtt(await fetchText(seg.url))) {
+        const timeline = parseHlsTimeline(await fetchText(uri), uri);
+        const parsed = await mapLimit(timeline, 8, async seg => parseVtt(await fetchText(seg.url)));
+        timeline.forEach((seg, i) => {
+            for (const c of parsed[i]) {
                 // a cue crossing a segment boundary is repeated at the start of the next segment
                 const key = c.start + "|" + c.end + "|" + c.text;
                 if (seen.has(key)) continue;
                 seen.add(key);
                 cues.push(seg.offset ? { start: c.start + seg.offset, end: c.end + seg.offset, text: c.text } : c);
             }
-        }
+        });
         return cues;
     }
 
@@ -134,8 +147,10 @@
             if (have.length) return have.length;
             const sources = await adapter.sources(doc, { loc, fetchText });
             let added = 0;
-            for (const s of choose(sources || [])) {
-                const cues = await s.load();
+            const picked = choose(sources || []);
+            const loaded = await Promise.all(picked.map(s => s.load()));
+            for (let i = 0; i < picked.length; i++) {
+                const s = picked[i], cues = loaded[i];
                 if (!cues.length) continue;
                 const tt = video.addTextTrack("subtitles", TRACK_MARK + (s.label || s.lang), s.lang || "");
                 tt.mode = "hidden";

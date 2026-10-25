@@ -1,6 +1,6 @@
 document.addEventListener("DOMContentLoaded", async () => {
     // Chrome chưa nạp lại tiện ích sau khi cập nhật file: báo rõ + nút nạp lại
-    if (window.CST_VERSION_CHECK) window.CST_VERSION_CHECK.check(document, chrome, ".brand-badge", "body > *:first-child");
+    if (window.CST_VERSION_CHECK) window.CST_VERSION_CHECK.checkBuild(document, chrome, ".brand-badge", "body > *:first-child");
 
     const translateBtn = document.getElementById("translateBtn");
     const btnLabel = document.getElementById("btnLabel");
@@ -267,10 +267,21 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch (e) { showStatus("Chưa tắt được: dùng menu trên video.", "error"); }
     });
 
-    // One line on what is missing before the first click (it was found out only after clicking)
+    // What is ready before the first click, as one chip per requirement, plus one line for the first fix
     async function veSanSang() {
         const box = document.getElementById("readyHint");
-        if (!box) return;
+        const strip = document.getElementById("readySteps");
+        if (!box || !strip) return;
+        const chips = [];
+        const paint = () => {
+            strip.replaceChildren(...chips.map(c => {
+                const el = document.createElement("span");
+                el.className = "ready-step " + c.state;
+                el.textContent = c.label;
+                return el;
+            }));
+            strip.hidden = chips.length === 0;
+        };
         const show = (text, fixLabel) => {
             document.getElementById("readyText").textContent = text;
             const fix = document.getElementById("readyFix");
@@ -280,13 +291,26 @@ document.addEventListener("DOMContentLoaded", async () => {
         };
         try {
             const ai = await chrome.storage.sync.get({ geminiApiKey: "", useAi: true });
-            if (ai.useAi !== false && !String(ai.geminiApiKey || "").trim()) {
+            const hasKey = !!String(ai.geminiApiKey || "").trim();
+            if (ai.useAi === false) chips.push({ state: "off", label: "Google Dịch" });
+            else if (hasKey) chips.push({ state: "ok", label: "Gemini sẵn sàng" });
+            else chips.push({ state: "todo", label: "Thiếu khóa Gemini" });
+            paint();
+            if (ai.useAi !== false && !hasKey) {
                 show("Chưa có API Key Gemini nên đang dịch bằng Google Dịch, kém tự nhiên hơn.", "Thêm khóa");
                 return;
             }
             if (dubbingBox.checked) {
                 chrome.runtime.sendMessage({ action: "localTtsStatus" }, r => {
-                    if (chrome.runtime.lastError || !r || r.running !== false) return;
+                    if (chrome.runtime.lastError || !r) return;
+                    if (r.running) {
+                        chips.push({ state: "ok", label: "VieNeu chạy" });
+                        paint();
+                        return;
+                    }
+                    if (r.running !== false) return;
+                    chips.push({ state: "todo", label: "VieNeu chưa chạy" });
+                    paint();
                     show("Giọng VieNeu chưa chạy, lồng tiếng sẽ chờ máy chủ.", "Cách bật");
                 });
             }
